@@ -1,0 +1,9 @@
+{
+  "schemaPath": "schema.json",
+  "extensions": {
+    "endpoints": {
+      "dev": "https://api.dev.bloom.firstfoundry.net/graphql",
+      "prod": "https://api.bloom.firstfoundry.net/graphql"
+    }
+  }
+}

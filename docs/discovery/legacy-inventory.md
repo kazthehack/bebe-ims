@@ -1,0 +1,877 @@
+# Legacy Discovery Inventory
+
+Generated from:
+- legacy backend: `bebe-ims/legacy/bloom-api-final`
+- legacy frontend: `bebe-ims/legacy/bloom-portal-final`
+
+## Backend Models (Objects)
+- auth
+- brand
+- changelog
+- compliance
+- customer
+- demo
+- discount
+- hardware
+- integration
+- inventory_report
+- notification
+- online_menu
+- order
+- permissions
+- receipt
+- reward
+- sales_export
+- sales_report
+- sales_type
+- shift
+- shift_report
+- store
+- strain
+- task
+- tax
+- transaction_history_report
+- types
+- units
+- users
+
+## Backend Controllers (Workflow Modules)
+- analytics.py
+- analytics_budtender.py
+- analytics_product.py
+- auth.py
+- changelog/event.py
+- changelog/handler.py
+- changelog/package_changelog.py
+- changelog/presenter.py
+- clone_utils/brand.py
+- clone_utils/changelog.py
+- clone_utils/compliance.py
+- clone_utils/customer.py
+- clone_utils/discount.py
+- clone_utils/hardware.py
+- clone_utils/integrations.py
+- clone_utils/inventory.py
+- clone_utils/loyalty.py
+- clone_utils/notification.py
+- clone_utils/order.py
+- clone_utils/permissions.py
+- clone_utils/price.py
+- clone_utils/receipt.py
+- clone_utils/reward.py
+- clone_utils/shift.py
+- clone_utils/store.py
+- clone_utils/strain.py
+- clone_utils/tax.py
+- clone_utils/users.py
+- compliance.py
+- dashboard.py
+- discount.py
+- inventory_report.py
+- inventory_reports/categories_report.py
+- inventory_reports/detail_report.py
+- inventory_reports/invalid_packages_report.py
+- inventory_reports/projection_report.py
+- inventory_reports/report_data_cannabis.py
+- inventory_reports/report_data_non_cannabis.py
+- inventory_reports/report_data_projection.py
+- inventory_reports/report_template.py
+- inventory_reports/utility.py
+- menu.py
+- online_menu.py
+- package.py
+- permission.py
+- pos_notification.py
+- product.py
+- provider/package.py
+- receipt.py
+- sales_export.py
+- sales_report.py
+- sales_report_file/constants.py
+- sales_report_file/report_writer.py
+- screen.py
+- settings.py
+- shift.py
+- shift_report.py
+- shift_report_file/constants.py
+- shift_report_file/report_writer.py
+- store.py
+- store_notification.py
+- strain.py
+- tax.py
+- terminal.py
+- transaction_history_report.py
+- transaction_history_report_file/constants.py
+- transaction_history_report_file/report_writer.py
+- users.py
+
+## Controller Actions (Function-level)
+- analytics.py
+  - 11: get_start_end_time(store, start_time, end_time):
+  - 25: get_summary_metrics(store, start_time=None, end_time=None):
+  - 46: get_top10_employee_sales(store, start_time=None, end_time=None):
+- analytics_budtender.py
+  - 11: get_budtender_report(store, start_time=None, end_time=None):
+  - 33: get_budtender_report_detail(
+  - 66: get_budtender_product_report(
+- analytics_product.py
+  - 14: get_product_totals(
+  - 43: get_product_sales(
+- auth.py
+  - 27: login(email, password, from_terminal=False, force=False):
+  - 71: logout():
+  - 89: refresh(token_string):
+  - 118: load_token(token) -> Optional[AuthToken]:
+  - 137: create_refresh_token(user):
+  - 160: create_employee_token(user, refresh_token):
+  - 172: create_terminal_setup_token(user, refresh_token):
+  - 186: create_terminal_token(terminal):
+  - 199: delete_employee_tokens(employee, current_token=None):
+  - 230: send_reset_password_email(employee_email):
+  - 243: reset_password(reset_password_token, new_password):
+  - 251: _get_current_token():
+  - 257: authenticated_reset_password(employee, password, new_password):
+- changelog/event.py
+  - 11: change_log_event(fn):
+- changelog/package_changelog.py
+  - 9: get_package_changelog_query(package_id, start_dt, end_dt=None):
+- changelog/presenter.py
+  - 92: flatten_payload(payload, parent_key=ChangeLogTokens.EMPTY_TOKEN):
+- clone_utils/__init__.py
+  - 24: _get_mapped_value(
+  - 40: _clone_and_map(
+  - 97: generate_random_password():
+- clone_utils/brand.py
+  - 7: clone_brand_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/changelog.py
+  - 7: clone_changelog_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/compliance.py
+  - 7: clone_compliance_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/customer.py
+  - 7: clone_customer_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/discount.py
+  - 7: clone_discount_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/hardware.py
+  - 7: clone_hardware_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/integrations.py
+  - 31: _generate_store_link(faker=None):
+  - 40: _generate_valid_store_link():
+  - 53: clone_integration_models(
+- clone_utils/inventory.py
+  - 14: clone_inventory_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/loyalty.py
+  - 8: clone_loyalty_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/notification.py
+  - 7: clone_notification_models(
+- clone_utils/order.py
+  - 8: clone_order_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/permissions.py
+  - 11: clone_permission_models(
+- clone_utils/price.py
+  - 7: clone_price_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/receipt.py
+  - 24: clone_receipt_models(
+  - 252: _emit_demo_receipts_to_analytics(store_id):
+- clone_utils/reward.py
+  - 7: clone_reward_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/shift.py
+  - 10: clone_shift_models(
+- clone_utils/store.py
+  - 14: clone_store_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/strain.py
+  - 7: clone_strain_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/tax.py
+  - 7: clone_tax_models(data_relationship_map, base_store_id, layer, show_progress):
+- clone_utils/users.py
+  - 16: clone_user_models(
+  - 115: clone_store_specific_employee(
+- compliance.py
+  - 29: get_compliance_limit(id):
+  - 42: get_compliance_limits(store, archived=False, transactional_only=False):
+  - 59: create_compliance_limit(store, compliance_data):
+  - 74: _update_compliance_limit(compliance_limit: ComplianceLimit, compliance_data):
+  - 104: update_compliance_limit(compliance_limit: ComplianceLimit, compliance_data):
+  - 124: delete_compliance_limit(compliance_limit: ComplianceLimit):
+  - 140: archive_compliance_limit(compliance_limit: ComplianceLimit, when: datetime = None):
+  - 161: get_medical_compliance_limit_usage(
+  - 190: report_violation_stopped(store, compliance_limit_id):
+  - 201: _get_medical_compliance_limit_sold_quantity(
+- dashboard.py
+  - 45: get_metrc_data(store, fields):
+  - 70: get_todays_sales(store, fields):
+  - 215: get_todays_adjustments(store, fields):
+  - 314: get_todays_best_sellers(store, fields):
+  - 398: get_todays_top_budtenders(store, fields):
+  - 421: get_todays_top_categories(store, fields):
+  - 451: get_customer_data(store, fields):
+  - 487: get_compliance_data(store, fields):
+  - 514: get_todays_hourly_sales(store, fields):
+  - 596: get_transactions_over_time(store, fields):
+  - 606: get_gross_sales_over_time(store, fields):
+  - 616: _get_data_from_receipts(store, fields, data):
+  - 726: _get_gross_sales(store_id, start_dt, end_dt):
+  - 743: _get_med_rec_column_by_day(store, start_dt, end_dt, query, column):
+  - 792: _get_roi_from_receipts(store_id, start_dt, end_dt):
+  - 838: _get_net_sales_from_sales(store_id, start_dt, end_dt):
+  - 878: _categorize_sales_by_sales_types(sales_by_sales_type):
+  - 893: _get_recurring_customers(store):
+  - 941: _get_gross_sales_by_hour(store, today_start_dt, today_end_dt):
+  - 992: _get_opening_and_closing_time(store, today_start_dt, today_end_dt):
+  - 1024: _get_todays_dt(store):
+- discount.py
+  - 20: create_discount(store, discount_data):
+  - 32: get_discount(id):
+  - 44: _update_discount(discount: Discount, discount_data: dict) -> Discount:
+  - 97: update_discount(discount: Discount, discount_data: dict) -> Discount:
+  - 112: delete_discount(discount):
+  - 122: get_discounts(store, active=None, archived=False):
+  - 137: archive_discount(discount: Discount, when: datetime = None):
+- inventory_report.py
+  - 23: async_generate_inventory_report(store, report_type, start_date, end_date):
+  - 64: generate_inventory_report_url(store, report_id):
+- inventory_reports/categories_report.py
+  - 41: create_inventory_report_categories(store, inventory_report):
+  - 86: get_categories_cannabis_data(store, start_dt, end_dt):
+- inventory_reports/detail_report.py
+  - 41: create_inventory_report_detail(store, inventory_report):
+  - 85: get_sales_type_cannabis_data(store, start_dt, end_dt):
+- inventory_reports/invalid_packages_report.py
+  - 31: get_invalid_packages_data(store):
+  - 91: _format_report_invalid_package_sheet(worksheet):
+  - 101: create_invalid_packages_template(title, package_data):
+- inventory_reports/projection_report.py
+  - 22: create_inventory_report_projection(store, inventory_report):
+- inventory_reports/report_data_cannabis.py
+  - 23: _get_sales_type_values(store_id, sales_type, category_unit, start_dt, end_dt):
+  - 81: _get_beginning_values(store_id, sales_type, category_unit, start_dt):
+  - 228: _get_purchased_values(store_id, sales_type, category_unit, start_dt, end_dt):
+  - 347: _get_sold_values(
+  - 439: _get_adjusted_values(
+  - 539: _get_package_initial_quantity(
+  - 594: _get_reference_product(package, related_packages):
+  - 607: _get_retail_price_per_unit(category_unit, product, price_list):
+  - 652: _get_price_list(related_products):
+  - 666: _find_price(price_list, price_group_id, customer_type, quantitiy_amount=None):
+  - 691: _get_nested_dict_value(nested_dict, package_id, product_id):
+  - 699: _get_product_list(query_result):
+  - 711: _get_sold_per_product_per_package(query_result):
+- inventory_reports/report_data_non_cannabis.py
+  - 24: get_non_cannabis_data(store, start_dt, end_dt):
+  - 108: _get_beginning_merchandise_values(product, start_date, quantity_per_event_type):
+  - 174: _get_purchased_merchandise_values(
+  - 214: _get_sold_merchandise_values(
+  - 252: _get_adjusted_merchandise_values(
+  - 318: _get_product_price(product):
+- inventory_reports/report_data_projection.py
+  - 44: get_projection_report_data(store_id):
+  - 261: _get_compressed_product_data(query_result):
+  - 318: _get_compressed_projection_data(query_result):
+  - 327: _convert_package_quantity_to_category_unit(
+  - 359: _get_total_sold_per_package_in_category_unit(
+- inventory_reports/report_template.py
+  - 245: _get_column_header_values(columns):
+  - 249: _get_quantity_columns():
+  - 257: _get_header_columns(columns):
+  - 261: _get_summable_columns():
+  - 269: _get_value_column_count():
+  - 280: _get_column_format_by_letter(column_letter, columns):
+  - 291: _format_invetory_report_sheet(worksheet, sum_rows):
+  - 358: _format_invetory_projection_report_sheet(worksheet, args):
+  - 401: _create_inventory_report_template(title, report_data):
+  - 461: _create_inventory_report_projection_template(title, report_data):
+  - 475: _create_workbook(workbook_data):
+  - 510: _get_report_filename(store, report_type, start_date, end_date):
+- inventory_reports/utility.py
+  - 9: _s3_upload_workbook(store, subdir, workbook, filename):
+- menu.py
+  - 24: _get_packages_with_product(store):
+  - 57: check_menu_perms(store):
+  - 64: get_menu(store):
+  - 114: modified_since(store, event_ts):
+  - 129: fetch_packages_with_product(store):
+  - 135: fetch_active_managed_inventory(store):
+- online_menu.py
+  - 22: add_order(store, order_data, last_updating_source):
+  - 52: upsert_order(store, order_data, last_updating_source):
+  - 147: get_orders(store, status=None, updated_since=None):
+  - 155: modified_since(store, event_ts):
+  - 168: _get_order_query(store, status=None, updated_since=None):
+- package.py
+  - 74: _has_active_packages(product):
+  - 82: _check_package_not_on_hold(package, metrc_package_data=None):
+  - 107: _update_definite_package_fields(package, metrc_package_data=None):
+  - 157: _sync_all_packages_definite_fields(store):
+  - 191: _compare_manually_updated_metrc_fields(package, metrc_package_data):
+  - 263: _check_all_packages_synced(store):
+  - 308: _compare_metrc_package(package):
+  - 419: get_package(package_id):
+  - 430: _check_empty_inventory_on_update_package(was_active, package):
+  - 459: _update_package(package, package_data):
+  - 504: update_package(package, package_data):
+  - 527: _check_empty_inventory_on_finish_package(was_active, package):
+  - 554: _calculate_sales(package):
+  - 572: _finish_package(package, when):
+  - 601: finish_package(package, when=None):
+  - 652: _unfinish_package(package):
+  - 658: unfinish_package(package):
+  - 685: get_adjust_reasons(store):
+  - 710: _adjust_package(package, quantity):
+  - 719: adjust_package(package, quantity, reason, when=None, note=None):
+  - 782: _check_for_package_sold_out(package: Package):
+  - 805: _check_empty_inventory_on_reassign(previous_product, package):
+  - 833: _assign_package_and_product(package, product):
+  - 844: assign_package_and_product(package, product):
+  - 861: fetch_metrc_packages(store):
+  - 880: _import_packages(store_id, start_date=None, end_date=None):
+  - 923: import_packages(store):
+  - 944: create_package_from_provider(store, provider_id, package_data=None):
+  - 969: sync_package_from_provider(store, package):
+  - 977: _sync_package_from_provider(
+  - 1032: get_metrc_package(package):
+  - 1046: get_package_by_metrc_label(store_id: int, label: str) -> Package:
+  - 1058: get_packages_query(store, filter_by, search, sort_by):
+- permission.py
+  - 12: get_org_permissions():
+  - 18: get_store_permissions():
+  - 24: get_pos_permissions():
+- pos_notification.py
+  - 14: _create_pos_notification(
+  - 43: create_pos_notification(
+  - 63: get_pos_notifications(store, last_seen_id=0):
+- product.py
+  - 52: get_product(product_id):
+  - 63: get_products_query(store, filter_by, search, sort_by):
+  - 179: create_product(store, product_data):
+  - 194: _update_product(product, product_data):
+  - 277: _check_empty_inventory_on_update_product(was_active, product):
+  - 309: update_product(product, product_data):
+  - 324: _get_managed_inventory_events(product):
+  - 329: _update_inventory_levels(levels, event_data=None, receipt_data=None):
+  - 404: _create_managed_inventory_levels(product):
+  - 509: get_managed_inventory_levels(product):
+  - 522: get_managed_inventory_event(id):
+  - 536: get_managed_inventory_events_query(product, filter_by):
+  - 564: create_managed_inventory_event(product, event_data):
+  - 572: _create_managed_inventory_event(product, event_data):
+  - 581: delete_managed_inventory_event(event):
+  - 598: _update_managed_inventory_event(event, event_data):
+  - 638: update_managed_inventory_event(event, event_data):
+  - 651: archive_product(product: Product, when: datetime = datetime.now(timezone.utc)):
+- provider/package.py
+  - 12: get_provider(store):
+  - 16: denormalize_quantity(quantity, package):
+  - 26: normalize_quantity(quantity, store, unit):
+  - 34: preemptive_denormalize_quantity(quantity, package):
+- receipt.py
+  - 75: get_receipts_query(store, start_dt=None, end_dt=None, receipt_uuid=None):
+  - 81: get_receipt(store, receipt_id=None, receipt_uuid=None):
+  - 95: _get_receipts_sales(
+  - 121: get_receipts_recreational_sales(store, start_dt=None, end_dt=None):
+  - 131: get_receipts_medical_sales(store, start_dt=None, end_dt=None):
+  - 139: get_receipts_cash_recreational_sales(store, start_dt=None, end_dt=None):
+  - 149: get_receipts_cash_medical_sales(store, start_dt=None, end_dt=None):
+  - 159: get_receipts_cashless_recreational_sales(store, start_dt=None, end_dt=None):
+  - 169: get_receipts_cashless_medical_sales(store, start_dt=None, end_dt=None):
+  - 179: get_receipts_sales_collected(store, start_dt=None, end_dt=None):
+  - 187: get_receipts_cash_sales_collected(store, start_dt=None, end_dt=None):
+  - 197: get_receipts_cashless_sales_collected(store, start_dt=None, end_dt=None):
+  - 211: _get_receipts_tax(store, start_dt=None, end_dt=None, payment_type=None):
+  - 222: get_receipts_tax(store, start_dt=None, end_dt=None):
+  - 230: get_receipts_cash_tax(store, start_dt=None, end_dt=None):
+  - 238: get_receipts_cashless_tax(store, start_dt=None, end_dt=None):
+  - 246: add_receipt(store, receipt_data, emit_analytics=True):
+  - 251: _add_receipt(store, receipt_data, emit_analytics=True):
+  - 554: add_adjustment(store, receipt_uuid, adjustment_data, emit_analytics=True):
+  - 591: add_adjustments(store: Store, adjustments_data: List[dict], emit_analytics=True):
+  - 623: _add_adjustment(adjustment_data: dict):
+  - 710: _emit_adjustment_analytics(
+  - 724: _get_receipts_query(store, start_dt=None, end_dt=None, receipt_uuid=None):
+  - 737: add_failed_receipt(store, receipt_data, notes=None):
+- sales_export.py
+  - 29: generate_sales_export(store, start_dt, end_dt):
+  - 129: _write_csv_file(content):
+  - 140: _s3_upload_csv(store, csv_file, filename):
+  - 161: generate_presigned_sales_export_url(sales_export):
+- sales_report.py
+  - 611: async_create_sales_report(sales_report_type, store, start_date, end_date):
+  - 660: generate_sales_report_url(store, sales_report_id):
+  - 679: _generate_sales_report(store, sales_report):
+  - 707: _get_sales_report_filename(store, sales_report_type, start_date, end_date):
+  - 719: _get_sold_amount_cost(sales_breakdown, package_ids):
+  - 741: _get_roi_percent(net_sales, sold_amount_cost):
+  - 750: _get_roi_cash(net_sales, sold_amount_cost):
+  - 754: _check_for_invalid_packages(package_ids):
+- screen.py
+  - 12: get_screen(store: Store, screen_id: int) -> StoreScreen:
+  - 18: get_screens(store: Store) -> StoreScreen:
+  - 25: _update_screen(screen, screen_data):
+  - 41: create_screen(store: Store, screen_data) -> StoreScreen:
+  - 54: update_screen(screen: StoreScreen, screen_data) -> StoreScreen:
+  - 68: delete_screen(screen: StoreScreen):
+- settings.py
+  - 11: get_settings(store):
+  - 29: modified_since(store, event_ts):
+- shift.py
+  - 15: get_shift_by_uuid(store, shift_uuid):
+  - 21: get_shifts(store: Store, start_dt: datetime, end_dt: datetime):
+  - 32: create_shift(store, shift_uuid, terminal_id, terminal_name, open_ts, data_version):
+  - 48: create_shift_event(store, shift_uuid, shift_data, request_version):
+- shift_report.py
+  - 194: async_create_shift_report(shift_report_type, store, start_date, end_date):
+  - 243: generate_shift_report_url(store, shift_report_id):
+  - 262: _generate_shift_report(store, shift_report):
+  - 290: _get_shift_report_filename(store, shift_report_type, start_date, end_date):
+- store.py
+  - 62: get_store(store_id):
+  - 86: _get_all_stores_filtered_query(store_ids=None, check_metrc_integration=False):
+  - 97: _get_notifiable_store_settings(store):
+  - 109: _get_notifiable_pos_settings(store):
+  - 127: update_store(store, **new_data):
+  - 216: update_store_owner(store: Store, employee) -> Store:
+  - 233: set_logo(store, logo_url):
+  - 250: generate_presigned_logo_url(store, filename):
+  - 275: _create_organization_from_config(config, defaults):
+  - 284: _create_stores_from_config(organization, config, defaults):
+  - 388: _create_organization(organization_config):
+  - 392: _create_employee(organization, employee_config, employee_defaults=None):
+  - 425: _create_store(organization, organization_owner, store_config, store_defaults):
+  - 440: _create_store_settings(store, store_setting_config, store_setting_defaults):
+  - 455: _create_pos_setting(store, store_pos_setting_config, store_pos_setting_defaults):
+  - 478: _create_store_screens(
+  - 495: _create_store_screen(store, store_screen_config, store_screen_default):
+  - 517: _create_store_portal_roles(
+  - 535: _create_store_portal_role(store, store_portal_role_config):
+  - 547: _create_store_pos_roles(store, store_pos_roles_config, store_pos_roles_defaults):
+  - 562: _create_store_pos_role(store, store_pos_role_config):
+  - 573: _create_store_employee(store, store_employee_config, store_employee_defaults=None):
+  - 585: _create_store_employee_portal(store, employee, store_employee_config):
+  - 597: _create_store_employee_pos(
+- store_notification.py
+  - 24: get_portal_notification_types():
+  - 30: get_portal_notification(notification_id):
+  - 43: get_portal_notifications_query(store: Store, filter_by=None):
+  - 103: _create_store_portal_notification(
+  - 189: update_portal_notification_dismissal(notification: PortalNotification, when=None):
+  - 208: update_portal_notifications_seen(store: Store):
+  - 221: dismiss_all_portal_notifications(store: Store, when=None):
+  - 241: _get_undismissed_notifications_query(store, employee):
+  - 253: _create_metrc_connection_notification(
+- strain.py
+  - 13: get_strains(store):
+  - 20: _get_or_create_strain(store, name):
+  - 28: get_or_create_strain(store, name):
+- tax.py
+  - 29: create_tax(store, tax_data):
+  - 53: _update_tax(tax, tax_data):
+  - 75: update_tax(tax, tax_data):
+  - 104: delete_tax(tax):
+  - 116: archive_tax(tax, when=datetime.now(timezone.utc)):
+  - 143: get_taxes(store, archived=False):
+  - 154: get_monthly_tax_reports(store, start_date, end_date):
+  - 163: get_quarterly_tax_reports(store, start_date, end_date):
+  - 173: regenerate_tax_report(tax_report):
+  - 193: generate_presigned_tax_report_url(tax_report):
+- terminal.py
+  - 25: get_terminal(terminal_id):
+  - 37: check_terminal(store, idfv):
+  - 54: set_terminal(store, terminal_data):
+  - 88: _update_terminal(terminal: Terminal, terminal_data: dict) -> Terminal:
+  - 114: update_terminal(terminal, terminal_data):
+  - 127: archive_terminal(terminal: Terminal, when: datetime = None):
+  - 150: get_terminals(store, archived=False):
+- transaction_history_report.py
+  - 282: async_create_transaction_history_report(report_type, store, start_date, end_date):
+  - 331: generate_transaction_history_report_url(store, report_id):
+  - 350: _generate_report(store, report):
+  - 376: _get_report_filename(store, report_type, start_date, end_date):
+  - 388: _get_payment_type(payment_type: str) -> str:
+  - 397: _get_invalid_packages_reasons(sales_breakdown):
+  - 410: _get_roi_per_receipt(sales_breakdown):
+  - 451: _get_hashed_models_from_ids(table: db.Model, ids: List[int]) -> dict:
+- users.py
+  - 35: _employee_self_permission_check(employee, store):
+  - 42: get_users(store):
+  - 53: create_store_employee(
+  - 84: get_store_employees(store):
+  - 89: get_store_employee(employee, store):
+  - 97: get_pos_role_employee(employee, store):
+  - 105: get_user(employee_id):
+  - 120: _update_employee(employee: Employee, employee_data: dict) -> Employee:
+  - 142: update_employee(employee: Employee, employee_data):
+  - 182: _set_portal_role_employee(store, employee, role):
+  - 283: set_portal_role_employee(store, employee, role):
+  - 294: _set_pos_role_employee(store, employee, role):
+  - 330: set_pos_role_employee(store, employee, role):
+  - 341: get_organization_role(role_id):
+  - 348: get_store_portal_roles(store):
+  - 354: get_store_pos_roles(store):
+  - 360: get_store_employee_portal_role(employee, store):
+  - 368: get_store_employee_pos_role(employee, store):
+  - 376: get_employee_pin_code(pos_role_employee):
+  - 388: _update_store_employee(store, employee, store_employee_data):
+  - 406: update_store_employee(store, employee, store_employee_data):
+  - 416: remove_store_employee(store, employee):
+  - 431: _generate_pin_code(pin_length: int):
+  - 436: _generate_valid_pin(store, pin_length_override=None):
+  - 459: generate_new_pin(store):
+  - 465: set_employee_pin(store, employee, pin_code):
+  - 490: reset_employee_pin(store, employee):
+
+## JSON-RPC Methods
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/loyalty.py:17:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/loyalty.py:18:    name="loyalty_member.get",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/loyalty.py:45:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/loyalty.py:46:    name="loyalty_member.create",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/integrations.py:12:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/integrations.py:13:    name="integrations.metrc_connected",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/receipt.py:12:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/receipt.py:13:    name="receipt.get_by_uuid",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/receipt.py:36:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/receipt.py:37:    name="receipt.add",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/receipt.py:54:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/receipt.py:55:    name="receipt.add_adjustment",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/receipt.py:75:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/receipt.py:76:    name="receipt.add_adjustments",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/receipt.py:94:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/receipt.py:95:    name="receipt.add_failed_receipt",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/settings.py:12:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/settings.py:13:    name="settings.get",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/settings.py:30:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/settings.py:31:    name="settings.modified_since",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:26:@use_jrpc(dispatcher=menu_api_dispatcher)
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:37:@use_jrpc(params={"link": fields.String(required=True)}, dispatcher=menu_api_dispatcher)
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:48:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:49:    name="bloom_online_menu.get_menu",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:68:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:69:    name="bloom_online_menu.get_menu_last_update",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:84:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:85:    name="bloom_online_menu.get_store",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:116:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:117:    name="bloom_online_menu.add_order",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:140:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:141:    name="bloom_online_menu.upsert_order",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:162:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:163:    name="bloom_online_menu.get_orders",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:185:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/third_party.py:186:    name="bloom_online_menu.modified_since",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/shift.py:13:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/shift.py:14:    name="shift.add_events",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/menu.py:17:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/menu.py:18:    name="menu.get",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/menu.py:44:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/menu.py:45:    name="menu.modified_since",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/menu.py:63:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/menu.py:64:    name="menu.fetch_levels",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/stores.py:11:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/stores.py:12:    name="stores.list",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/pos_notification.py:13:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/pos_notification.py:14:    name="pos_notification.get",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/terminal.py:12:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/terminal.py:13:    name="terminal.set",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/terminal.py:51:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/terminal.py:52:    name="terminal.update",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/terminal.py:73:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/terminal.py:74:    name="terminal.check",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/compliance.py:13:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/compliance.py:14:    name="compliance.get_medical_usage",
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/compliance.py:46:@use_jrpc(
+- bebe-ims/legacy/bloom-api-final/bloom_api/app/jrpc/handlers/compliance.py:47:    name="compliance.report_violation_stopped",
+
+## GraphQL Modules
+- analytics/budtender.py
+- analytics/package.py
+- analytics/product.py
+- analytics/sales.py
+- analytics/schema.py
+- analytics/shift.py
+- analytics/summary.py
+- analytics/types.py
+- auth.py
+- brand.py
+- changelog.py
+- compliance.py
+- dashboard.py
+- dataloader.py
+- demo.py
+- discount.py
+- employee.py
+- integrations.py
+- inventory_report.py
+- loyalty.py
+- permission.py
+- receipt.py
+- reward.py
+- sales_export.py
+- sales_report.py
+- sales_type.py
+- scalars.py
+- screen.py
+- shift_report.py
+- store.py
+- store_logo.py
+- store_notification.py
+- strain.py
+- tax.py
+- terminal.py
+- transaction_history_report.py
+- types.py
+
+## Frontend App Routes
+- bebe-ims/frontend/src/components/AppRouter/index.js:67:        <Route exact path="/" render={() => <Redirect to="/daily" />} />
+- bebe-ims/frontend/src/components/AppRouter/index.js:68:        <Route
+- bebe-ims/frontend/src/components/AppRouter/index.js:70:          path="/daily"
+- bebe-ims/frontend/src/components/AppRouter/index.js:73:        <Route
+- bebe-ims/frontend/src/components/AppRouter/index.js:74:          path="/inventory"
+- bebe-ims/frontend/src/components/AppRouter/index.js:77:        <Route
+- bebe-ims/frontend/src/components/AppRouter/index.js:78:          path="/employees"
+- bebe-ims/frontend/src/components/AppRouter/index.js:81:        <Route exact path="/profile" component={UserProfilePage} />
+- bebe-ims/frontend/src/components/AppRouter/index.js:82:        <Route exact path="/notifications" component={AlertsPage} />
+- bebe-ims/frontend/src/components/AppRouter/index.js:83:        <Route
+- bebe-ims/frontend/src/components/AppRouter/index.js:84:          path="/reports"
+- bebe-ims/frontend/src/components/AppRouter/index.js:87:        <Route
+- bebe-ims/frontend/src/components/AppRouter/index.js:88:          path="/crm"
+- bebe-ims/frontend/src/components/AppRouter/index.js:91:        <Route
+- bebe-ims/frontend/src/components/AppRouter/index.js:92:          path="/settings"
+- bebe-ims/frontend/src/components/AppRouter/index.js:95:        <Route
+- bebe-ims/frontend/src/components/AppRouter/index.js:96:          path="/packagelogs"
+- bebe-ims/frontend/src/components/AppRouter/index.js:99:        <Route
+- bebe-ims/frontend/src/components/AppRouter/index.js:100:          path="/productlogs"
+- bebe-ims/frontend/src/components/AppRouter/index.js:103:        <Route
+- bebe-ims/frontend/src/components/AppRouter/index.js:104:          path="/pricegrouplogs"
+- bebe-ims/frontend/src/components/AppRouter/index.js:107:        <Route
+- bebe-ims/frontend/src/components/AppRouter/index.js:108:          path="/inventorymanifest"
+- bebe-ims/frontend/src/components/AppRouter/index.js:112:        <Route component={PageNotFound(true, true)} />
+- bebe-ims/frontend/src/components/AppRouter/index.js:129:      <Route path="/login" component={LoginPage} />
+- bebe-ims/frontend/src/components/AppRouter/index.js:130:      { APP_ENABLE_PUBLIC_DEMO_MODE && <Route path="/try" component={TryPage} /> }
+- bebe-ims/frontend/src/components/AppRouter/index.js:131:      {TestRoutes && <Route path="/test" component={TestRoutes} />}
+- bebe-ims/frontend/src/components/AppRouter/index.js:133:      <Route path="/" component={AuthRoutes} />
+- bebe-ims/frontend/src/components/AppRouter/index.js:135:      <Route component={PageNotFound(false)} />
+- bebe-ims/frontend/src/components/AppRouter/index.js:142:    <Routes store={store} client={client} TestRoutes={TestRoutes} />
+- bebe-ims/frontend/src/components/pages/login/LoginPage.js:86:        <Route exact path={match.url} component={LoginFragment} />
+- bebe-ims/frontend/src/components/pages/login/LoginPage.js:87:        <Route exact path={`${match.url}/reset`} component={PasswordResetFragment} />
+- bebe-ims/frontend/src/components/pages/login/LoginPage.js:88:        <Route exact path={`${match.url}/request`} component={RequestPasswordResetLinkFragment} />
+- bebe-ims/frontend/src/components/pages/login/LoginPage.js:89:        <Route component={PageNotFound(true)} />
+- bebe-ims/frontend/src/components/pages/logs/package/PackageLogsPage.js:14:      <Route
+- bebe-ims/frontend/src/components/pages/logs/package/PackageLogsPage.js:16:        path="/packagelogs/:id"
+- bebe-ims/frontend/src/components/pages/logs/package/PackageLogsPage.js:22:      <Route component={PageNotFound(true)} />
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:22:      <Route exact path="/crm" component={CustomersTab} />
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:23:      <Route exact path="/crm/customer/:id" component={CustomerDetail} />
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:24:      <Route exact path="/crm/discounts" component={DiscountsTab} />
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:25:      <Route
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:27:        path="/crm/discounts/new/lineitem"
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:34:      <Route
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:36:        path="/crm/discounts/new/subtotal"
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:43:      <Route
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:45:        path="/crm/discounts/:id/edit"
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:48:      <Route exact path="/crm/rewards" component={RewardsTab} />
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:50:      {/* <Route
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:52:        path="/crm/rewards/new/lineitem"
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:55:      <Route
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:57:        path="/crm/rewards/new/subtotal"
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:60:      <Route
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:62:        path="/crm/rewards/:id/edit"
+- bebe-ims/frontend/src/components/pages/crm/CrmPage.js:65:      <Route component={PageNotFound(true)} />
+- bebe-ims/frontend/src/components/pages/logs/product/ProductLogsPage.js:14:      <Route
+- bebe-ims/frontend/src/components/pages/logs/product/ProductLogsPage.js:16:        path="/productlogs/:id"
+- bebe-ims/frontend/src/components/pages/logs/product/ProductLogsPage.js:22:      <Route component={PageNotFound(true)} />
+- bebe-ims/frontend/src/components/pages/logs/pricegroup/PriceGroupLogsPage.js:14:      <Route
+- bebe-ims/frontend/src/components/pages/logs/pricegroup/PriceGroupLogsPage.js:16:        path="/pricegrouplogs/:id"
+- bebe-ims/frontend/src/components/pages/logs/pricegroup/PriceGroupLogsPage.js:22:      <Route component={PageNotFound(true)} />
+- bebe-ims/frontend/src/components/pages/home/HomePage.js:15:const SafePlaceToRedirect = () => <Redirect to="/inventory/products" />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:28:      <Route exact path="/inventory/products" component={Products} />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:29:      <Route exact path="/inventory/products/new/:grouping" component={NewProductDetailsEnhanced} />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:30:      <Route exact path="/inventory/products/edit/:id" component={EditProductDetailsEnhanced} />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:31:      <Route exact path="/inventory/packages" component={Packages} />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:32:      <Route path="/inventory/packages/fix/:id" component={FixPackageDetail} />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:33:      <Route path="/inventory/packages/:id" component={UpdatePackageDetailsEnhanced} />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:34:      <Route exact path="/inventory/price-groups/new/" component={NewPriceGroupFormEnhanced} />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:35:      <Route exact path="/inventory/price-groups/edit/:id" component={EditPriceGroupFormEnhanced} />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:36:      <Route exact path="/inventory/price-groups" component={PriceGroups} />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:37:      <Route exact path="/inventory/pos-categories" component={POSCategoriesHOC} />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:38:      <Route exact path="/inventory" render={() => <Redirect to="/inventory/products" />} />
+- bebe-ims/frontend/src/components/pages/inventory/InventoryPage.js:40:      <Route component={PageNotFound(true)} />
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:32:      <Route exact path="/settings" component={withFixedPageWidth(VenueTab)} />
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:33:      <Route
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:35:        path="/settings/taxes"
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:38:      <Route
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:40:        path="/settings/taxes/new/lineitem"
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:47:      <Route
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:49:        path="/settings/taxes/new/subtotal"
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:56:      <Route exact path="/settings/taxes/:id/edit" component={withFixedPageWidth(EditTax)} />
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:57:      <Route exact path="/settings/compliance" component={Compliance} />
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:58:      <Route
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:60:        path="/settings/thirdparty"
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:67:      <Route
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:69:        path="/settings/thirdparty/metrc"
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:76:      <Route
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:78:        path="/settings/thirdparty/paybotic"
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:86:      <Route
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:88:        path="/settings/thirdparty/leafly"
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:95:      <Route
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:97:        path="/settings/thirdparty/bloom-menu"
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:104:      <Route
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:106:        path="/settings/compliance/new/medical"
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:113:      <Route
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:115:        path="/settings/compliance/new/recreational"
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:122:      <Route exact path="/settings/compliance/details/:id" component={withFixedPageWidth(EditCompliance)} />
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:123:      <Route exact path="/settings/hardware" component={Hardware} />
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:125:      <Route component={PageNotFound(true)} />
+- bebe-ims/frontend/src/components/pages/settings/SettingsPage.js:130:// <Route path="/settings/apps" component={withFixedPageWidth(ConnectedApps)} />
+
+## Frontend GraphQL Operations
+- bebe-ims/frontend/src/gql/employee/queries.js:31:  query getEmployees($storeID: ID!) {
+- bebe-ims/frontend/src/gql/employee/queries.js:58:  query getEmployee($employeeID: ID!, $storeID: ID!) {
+- bebe-ims/frontend/src/gql/employee/queries.js:90:  query getLoggedInEmployee($storeID: ID!) {
+- bebe-ims/frontend/src/gql/employee/mutations.js:7:  mutation updateEmployee($input: UpdateEmployeeInput!, $storeID: ID!) {
+- bebe-ims/frontend/src/gql/employee/mutations.js:20:  mutation addEmployee($input: AddEmployeeInput!, $storeID: ID!) {
+- bebe-ims/frontend/src/gql/employee/mutations.js:33:  mutation removeStoreEmployee($input: RemoveStoreEmployeeInput!) {
+- bebe-ims/frontend/src/gql/employee/mutations.js:43:  mutation GenerateNewPin($input: GenerateNewPinInput!) {
+- bebe-ims/frontend/src/gql/employee/mutations.js:51:  mutation AuthenticatedResetPassword($input: AuthenticatedResetPasswordInput!) {
+- bebe-ims/frontend/src/gql/employee/mutations.js:59:  mutation SetEmployeePin($input: SetEmployeePinInput!) {
+- bebe-ims/frontend/src/gql/employee/mutations.js:69:  mutation ResetEmployeePin($input: ResetEmployeePinInput!, $storeId: ID!) {
+- bebe-ims/frontend/src/gql/employee/mutations.js:82:  mutation InviteDemoUsers($input: InviteDemoUsersInput!) {
+- bebe-ims/frontend/src/gql/tax/queries.js:7:  query getTaxList($storeID: ID!, $includeTaxArchives: Boolean = false) { # do not include achived records unless explicitly requested
+- bebe-ims/frontend/src/gql/tax/queries.js:33:  query getTax($taxID: ID!) {
+- bebe-ims/frontend/src/gql/tax/queries.js:52:  query monthlyTaxReports($storeID: ID!, $startDate: Date!, $endDate: Date!) {
+- bebe-ims/frontend/src/gql/tax/queries.js:69:  query quarterlyTaxReports($storeID: ID!, $startDate: Date!, $endDate: Date!) {
+- bebe-ims/frontend/src/gql/loyaltyPoints/queries.js:5:  query getLoyaltyMembers($filter: LoyaltyMemberFilterInput, $storeID: ID!) {
+- bebe-ims/frontend/src/gql/loyaltyPoints/queries.js:30:  query getCustomerDetails($memberID: ID!){
+- bebe-ims/frontend/src/gql/loyaltyPoints/queries.js:50:  query GetLoyaltyPointAdjustments($memberID: ID!) {
+- bebe-ims/frontend/src/gql/loyaltyPoints/queries.js:72:  query getRewards($filter: RewardFilterInput, $storeID: ID!) {
+- bebe-ims/frontend/src/gql/loyaltyPoints/queries.js:99:  query getRewardDetails($rewardID: ID!){
+- bebe-ims/frontend/src/gql/loyaltyPoints/queries.js:117:  query GetLoyaltyMemberPoints($memberID: ID!) {
+- bebe-ims/frontend/src/gql/packages/mutations.js:6:  mutation adjustPackage($input: AdjustPackageInput!) {
+- bebe-ims/frontend/src/gql/packages/mutations.js:31:  mutation associatePackageProduct($input: AssociatePackageProductInput!) {
+- bebe-ims/frontend/src/gql/packages/mutations.js:57:  mutation finishPackage($input: FinishPackageInput!) {
+- bebe-ims/frontend/src/gql/packages/mutations.js:132:  mutation updatePackage($input: UpdatePackageInput!) {
+- bebe-ims/frontend/src/gql/packages/mutations.js:207:  mutation fetchActivePackages($input: FetchActivePackagesInput!) {
+- bebe-ims/frontend/src/gql/packages/mutations.js:215:  mutation createPackageFromProvider($input: CreatePackageFromProviderInput!) {
+- bebe-ims/frontend/src/gql/packages/mutations.js:289:  mutation SyncPackage($input: SyncPackageInput!) {
+- bebe-ims/frontend/src/gql/packages/mutations.js:363:  mutation importPackages($input: ImportPackagesInput!) {
+- bebe-ims/frontend/src/gql/discounts/queries.js:6:  query getDiscount($discountID: ID!){
+- bebe-ims/frontend/src/gql/discounts/queries.js:34:  query FetchDiscounts($storeID: ID!) {
+- bebe-ims/frontend/src/gql/salesTypes/queries.js:4:  query getSalesTypes($storeID: ID!) {
+- bebe-ims/frontend/src/gql/salesExport/mutations.js:6:  mutation createSalesExport($input: CreateSalesExportInput!) {
+- bebe-ims/frontend/src/gql/hardware/queries.js:4:  query FetchHardware($storeID: ID!) {
+- bebe-ims/frontend/src/gql/inventory/mutations.js:6:  mutation AsyncCreateInventoryReport($input: AsyncCreateInventoryReportInput!) {
+- bebe-ims/frontend/src/gql/inventory/mutations.js:14:  mutation GenerateInventoryReportURL($input:GenerateInventoryReportURLInput!) {
+- bebe-ims/frontend/src/gql/packages/queries.js:7:  query getPackages($filter: PackageFilterInput, $storeID: ID!, $pageSize: Int, $pagesSkipped: Int, $search: String, $sortBy: [PackageSortInput]) {
+- bebe-ims/frontend/src/gql/packages/queries.js:84:  query getPackages($filter: PackageFilterInput, $storeID: ID!, $pageSize: Int, $pagesSkipped: Int, $search: String, $sortBy: [PackageSortInput]) {
+- bebe-ims/frontend/src/gql/packages/queries.js:121:  query getPackage($packageID: ID!, $storeID: ID!) {
+- bebe-ims/frontend/src/gql/packages/queries.js:207:  query getBrands($storeID: ID!) {
+- bebe-ims/frontend/src/gql/packages/queries.js:219:  query getStrains($storeID: ID!) {
+- bebe-ims/frontend/src/gql/packages/queries.js:230:  query queryAllFilteredPackages($filter: PackageFilterInput!, $storeID: ID!, $pageSize: Int, $pagesSkipped: Int) {
+- bebe-ims/frontend/src/gql/packages/queries.js:247:  query GetPackage($packageId: ID!, $filter: ChangeLogFilterInput!){
+- bebe-ims/frontend/src/gql/packages/queries.js:274:  query getPackages($filter: PackageFilterInput, $storeID: ID!, $pageSize: Int, $pagesSkipped: Int, $search: String, $sortBy: [PackageSortInput]) {
+- bebe-ims/frontend/src/gql/tax/mutations.js:6:  mutation updateTax($input: UpdateTaxInput!) {
+- bebe-ims/frontend/src/gql/tax/mutations.js:27:  mutation addTax($input: AddTaxInput!) {
+- bebe-ims/frontend/src/gql/tax/mutations.js:37:  mutation deleteTax ($input: DeleteTaxInput!) {
+- bebe-ims/frontend/src/gql/tax/mutations.js:45:  mutation genPresignedTaxReportUrl($input: GenerateTaxReportURLInput!) {
+- bebe-ims/frontend/src/gql/tax/mutations.js:55:  mutation regenTaxReport($input: RegenerateTaxReportInput!) {
+- bebe-ims/frontend/src/gql/tax/mutations.js:75:  mutation archiveTax($input: ArchiveTaxInput!) {
+- bebe-ims/frontend/src/gql/hardware/mutations.js:6:  mutation deleteTerminal($input: DeleteTerminalInput!) {
+- bebe-ims/frontend/src/gql/auth/login.js:6:  mutation loginUser($input: LoginInput!) {
+- bebe-ims/frontend/src/gql/compliance/mutations.js:6:  mutation updateCompliance($input: UpdateComplianceInput!) {
+- bebe-ims/frontend/src/gql/compliance/mutations.js:24:  mutation addCompliance($input: AddComplianceInput!) {
+- bebe-ims/frontend/src/gql/compliance/mutations.js:42:  mutation archiveCompliance($input: ArchiveComplianceInput!) {
+- bebe-ims/frontend/src/gql/discounts/mutations.js:6:  mutation updateDiscount($input: UpdateDiscountInput!) {
+- bebe-ims/frontend/src/gql/discounts/mutations.js:33:  mutation AddDiscount($input: AddDiscountInput!) {
+- bebe-ims/frontend/src/gql/discounts/mutations.js:60:  mutation deleteDiscount ($input: DeleteDiscountInput!) {
+- bebe-ims/frontend/src/gql/discounts/mutations.js:68:  mutation archiveDiscount ($input: ArchiveDiscountInput!) {
+- bebe-ims/frontend/src/gql/passwordReset.js:4:  mutation sendResetPasswordEmail($input: SendResetPasswordEmailInput!) {
+- bebe-ims/frontend/src/gql/passwordReset.js:12:  mutation resetPassword($input: ResetPasswordInput!) {
+- bebe-ims/frontend/src/gql/passwordReset.js:20:  mutation verifyPasswordEmailToken($input: VerifyPasswordEmailTokenInput!) {
+- bebe-ims/frontend/src/gql/loyaltyPoints/mutations.js:6:  mutation updateLoyaltyMember($input: UpdateLoyaltyMemberInput!) {
+- bebe-ims/frontend/src/gql/loyaltyPoints/mutations.js:16:  mutation updateReward($input: UpdateRewardInput!) {
+- bebe-ims/frontend/src/gql/loyaltyPoints/mutations.js:35:  mutation adjustLoyaltyPoints($input: AdjustLoyaltyPointsInput!) {
+- bebe-ims/frontend/src/gql/loyaltyPoints/mutations.js:47:  mutation createReward($input: CreateRewardInput!) {
+- bebe-ims/frontend/src/gql/dashboard/queries.js:5:  query getDashboard($storeID: ID!) {
+- bebe-ims/frontend/src/gql/compliance/queries.js:6:  query getCompliance($complianceID: ID!) {
+- bebe-ims/frontend/src/gql/compliance/queries.js:25:  query FetchComplianceList($storeID: ID!) {
+- bebe-ims/frontend/src/gql/screens/mutations.js:4:mutation updateScreen($input: UpdateScreenInput!) {
+- bebe-ims/frontend/src/gql/demo/mutations.js:6:mutation createDemoUser($input: CreateDemoUserInput!) {
+- bebe-ims/frontend/src/gql/venues/queries.js:82:  query FetchVenueSettings($storeID: ID!) {
+- bebe-ims/frontend/src/gql/venues/queries.js:91:  query FetchVenueSettings($storeID: ID!) {
+- bebe-ims/frontend/src/gql/venues/queries.js:99:  query FetchVenueSettings($storeID: ID!) {
+- bebe-ims/frontend/src/gql/venues/queries.js:108:  query FetchStoreRoles($storeID: ID!) {
+- bebe-ims/frontend/src/gql/venues/queries.js:124:  query FetchPrinterAddress($storeID: ID!) {
+- bebe-ims/frontend/src/gql/venues/queries.js:135:  query FetchVenueSettings($storeID: ID!) {
+- bebe-ims/frontend/src/gql/venues/mutations.js:4:mutation UpdateVenueSettings($input: UpdateStoreInput!) {
+- bebe-ims/frontend/src/gql/venues/mutations.js:12:mutation updateStore($input: UpdateStoreInput!) {
+- bebe-ims/frontend/src/gql/venues/mutations.js:54:mutation getLogoUploadURL($input: GenerateStoreLogoURLInput!) {
+- bebe-ims/frontend/src/gql/venues/mutations.js:64:mutation setLogoURL($input: SetStoreLogoInput!) {
+- bebe-ims/frontend/src/gql/venues/mutations.js:73:  mutation updatePrinterAddress($input: UpdateStoreInput!) {
+- bebe-ims/frontend/src/gql/venues/mutations.js:87:  mutation updateDashboardSelection($input: UpdateStoreInput!) {
+- bebe-ims/frontend/src/gql/screens/queries.js:4:  query getScreens($storeID: ID!) {
+- bebe-ims/frontend/src/gql/receipts/queries.js:4:  query getReceipts($storeID: ID!, $startDt: DateTime, $endDt: DateTime, $uuId: String) {
+- bebe-ims/frontend/src/gql/receipts/queries.js:42:  query getReceipts($storeID: ID!, $startDt: DateTime, $endDt: DateTime, $cursor: String) {
+- bebe-ims/frontend/src/gql/receipts/queries.js:62:  query getReceipts($storeID: ID!, $startDt: DateTime, $endDt: DateTime, $cursor: String) {
+- bebe-ims/frontend/src/gql/receipts/queries.js:82:  query GetReceipt($receiptId: ID!) {
+- bebe-ims/frontend/src/gql/auth/logout.js:6:  mutation logout($input: LogoutInput!) {
+- bebe-ims/frontend/src/gql/salesReport/mutations.js:6:  mutation AsyncCreateSalesReport($input: AsyncCreateSalesReportInput!) {
+- bebe-ims/frontend/src/gql/salesReport/mutations.js:14:  mutation GenerateSalesReportURL($input:GenerateSalesReportURLInput!) {
+- bebe-ims/frontend/src/gql/demo/queries.js:4:  query fetchDemoStoreStatus {
+- bebe-ims/frontend/src/gql/priceGroups/queries.js:9:  query getPriceGroupsWithAssociatedProducts($storeID: ID!, $archived: Boolean, $filter: ProductFilterInput!) {
+- bebe-ims/frontend/src/gql/priceGroups/queries.js:45: query getPriceGroups($storeID: ID!, $archived: Boolean) {
+- bebe-ims/frontend/src/gql/priceGroups/queries.js:76:  query getPriceGroup($priceGroupID: ID!) {
+- bebe-ims/frontend/src/gql/priceGroups/queries.js:104:  query GetFilteredProducts($filter: ProductFilterInput!, $storeId: ID!){
+- bebe-ims/frontend/src/gql/priceGroups/queries.js:127: query getPriceGroups($storeID: ID!, $archived: Boolean) {
+- bebe-ims/frontend/src/gql/connectedApps/queries.js:4:  query getIntegrations($storeID: ID!){
+- bebe-ims/frontend/src/gql/auth/refreshToken.js:6:  mutation refreshToken($input: RefreshTokenInput!) {
+- bebe-ims/frontend/src/gql/priceGroups/mutations.js:6:  mutation updatePriceGroup($input: UpdatePriceGroupInput!) {
+- bebe-ims/frontend/src/gql/priceGroups/mutations.js:33:  mutation addPriceGroup($input: AddPriceGroupInput!) {
+- bebe-ims/frontend/src/gql/priceGroups/mutations.js:60:  mutation archivePriceGroup ($input: ArchivePriceGroupInput!) {
+- bebe-ims/frontend/src/gql/connectedApps/mutations.js:5:  mutation updateIntegrations($input: UpdateIntegrationsInput!) {
+- bebe-ims/frontend/src/gql/products/mutations.js:6:  mutation addProduct($input: AddProductInput!) {
+- bebe-ims/frontend/src/gql/products/mutations.js:63:  mutation updateProduct($input: UpdateProductInput!) {
+- bebe-ims/frontend/src/gql/products/mutations.js:132:  mutation addManagedInventoryEvent($input: AddManagedInventoryEventInput!) {
+- bebe-ims/frontend/src/gql/products/mutations.js:146:  mutation archiveProduct($input: ArchiveProductInput!) {
+- bebe-ims/frontend/src/gql/products/queries.js:5:query getProducts($filter: ProductFilterInput!, $storeID: ID!, $pageSize: Int, $pagesSkipped: Int, $search: String, $sortBy: [ProductSortInput]) {
+- bebe-ims/frontend/src/gql/products/queries.js:58:  query getProduct($productID: ID!) {
+- bebe-ims/frontend/src/gql/products/queries.js:141:query getProducts($filter: ProductFilterInput!, $storeID: ID!) {
+- bebe-ims/frontend/src/gql/products/queries.js:166:  query getProduct($productID: ID!) {
+- bebe-ims/frontend/src/gql/products/queries.js:215:query getProducts($filter: ProductFilterInput!, $storeID: ID!, $pageSize: Int, $pagesSkipped: Int, $search: String, $sortBy: [ProductSortInput]) {
+- bebe-ims/frontend/src/gql/products/queries.js:240:query getProducts($filter: ProductFilterInput!, $storeID: ID!, $pageSize: Int, $pagesSkipped: Int, $search: String, $sortBy: [ProductSortInput]) {
+
+## Frontend Redux Modules
+- alerts
+- auth
+- crm
+- crm/customers
+- crm/rewards
+- inventory
+- inventory/employees
+- inventory/packages
+- inventory/priceGroups
+- inventory/products
+- logs
+- logs/packageLogs
+- modals
+- modals/assignPackage
+- modals/assignProduct
+- modals/packageUpdate
+- navigation
+- notifications
+- reports
+- reports/budtender
+- reports/budtenderDetailed
+- reports/inventoryAllCategoriesCSV
+- reports/inventoryCategoryDetailCSV
+- reports/productReport
+- reports/salesByBrand
+- reports/salesByCategory
+- reports/salesByCategoryCSV
+- reports/salesByCategoryDetailed
+- reports/salesByPackage
+- reports/salesByPackageCSV
+- reports/salesByPriceGroup
+- reports/salesByProduct
+- reports/shiftList
+- reports/transactionHistoryDetailCSV
+- reports/transactionHistoryListCSV
+- reports/transactionHistoryReport
+- settings
+- settings/compliance
+- settings/discounts
+- settings/taxes
+- venues

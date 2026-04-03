@@ -1,0 +1,19 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - BEBE_IMS_DYNAMODB_ENDPOINT_URL=http://dynamodb-local:8000
+      - BEBE_IMS_DYNAMODB_TABLE_NAME=bebe_ims
+      - BEBE_IMS_AWS_REGION=ap-southeast-1
+    depends_on:
+      - dynamodb-local
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    ports:
+      - "8000:8000"

@@ -1,0 +1,35 @@
+version: '3'
+services:
+  portal:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      - REACT_APP_API_ENDPOINT=${API_ENDPOINT}
+      - NODE_ENV=development
+    expose:
+      - "80"
+
+  chrome:
+    shm_size: "1024m"
+    cap_add:
+      - SYS_ADMIN
+    expose:
+      - "4444"
+    image: "yukinying/chrome-headless-browser-selenium:${SELENIUM_CONTAINER_VERSION}"
+
+  nightwatch:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - "/tmp/screenshots/${BUILD_ID}:/app/screenshots"
+    environment:
+      - USE_DOCKER=1
+      - TEST_USERNAME=${TEST_USERNAME}
+      - TEST_PASSWORD=${TEST_PASSWORD}
+      - PORTAL_HOST_PORT=portal:80
+      - SELENIUM_HOST=chrome
+    depends_on:
+      - portal
+      - chrome

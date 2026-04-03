@@ -1,0 +1,9 @@
+{
+  "Port": 8000,
+  "InMemory": false,
+  "Version": "3.3.0",
+  "DbPath": null,
+  "SharedDb": false,
+  "shouldDelayTransientStatuses": false,
+  "CorsParams": null
+}

@@ -1,0 +1,89 @@
+from typing import Any
+from datetime import datetime
+from pydantic import ConfigDict
+from app.models.base import ObjectDocument
+
+
+class ReceiptDocument(ObjectDocument):
+    model_config = ConfigDict(extra="allow")
+    object_type: str = "receipt"
+    id: int | None = None
+    uuid: str | None = None
+    store_id: int | None = None
+    employee_id: int | None = None
+    terminal_id: int | None = None
+    terminal_name: str | None = None
+    customer_type: str | None = None
+    customer_sub_type: str | None = None
+    medical_card_id: str | None = None
+    caregiver_card_id: str | None = None
+    payment_type: str | None = None
+    tendered: float | None = None
+    sold_at: datetime | None = None
+    pre_discount_subtotal: float | None = None
+    subtotal: float | None = None
+    subtotal_exact: float | None = None
+    subtotal_exact_difference: float | None = None
+    tax: float | None = None
+    tax_exact: float | None = None
+    tax_exact_difference: float | None = None
+    total: float | None = None
+    total_exact: float | None = None
+    total_exact_difference: float | None = None
+    total_discount: float | None = None
+    total_reward: float | None = None
+    receipt_id: int | None = None
+    metrc_id: int | None = None
+    sent_at: datetime | None = None
+    package_id: int | None = None
+    product_id: int | None = None
+    product_name: str | None = None
+    sales_type_id: int | None = None
+    combined: bool | None = None
+    product_data: str | None = None
+    quantity_sold: float | None = None
+    quantity_exact: float | None = None
+    quantity_unit: str | None = None
+    package_total_sold: float | None = None
+    base_price: float | None = None
+    final_price: float | None = None
+    unit_price: float | None = None
+    line_item_price: float | None = None
+    line_item_subtotal: float | None = None
+    line_item_total: float | None = None
+    cost: float | None = None
+    receipt_item_id: int | None = None
+    quantity_amount: float | None = None
+    breakdown_quantity: float | None = None
+    breakdown_price: float | None = None
+    unit_quantity: float | None = None
+    discount_id: int | None = None
+    applies_to: str | None = None
+    amount: float | None = None
+    amount_selected: float | None = None
+    discount_value: float | None = None
+    requires_approval: bool | None = None
+    approved_by: int | None = None
+    employee_name: str | None = None
+    discount_data: str | None = None
+    discount_rule_id: int | None = None
+    reward_id: int | None = None
+    reward_value: float | None = None
+    reward_data: str | None = None
+    reward_rule_id: int | None = None
+    tax_id: int | None = None
+    tax_data: str | None = None
+    tax_rule_id: int | None = None
+    type: str | None = None
+    reason: str | None = None
+    created_at: datetime | None = None
+    return_to_stock: bool | None = None
+    receipt_adjustment_id: int | None = None
+    adjustment_id: int | None = None
+    receipt_uuid: str | None = None
+    notes: str | None = None
+    receipt_data: dict[str, Any] | list[Any] | None = None
+    handled: bool | None = None
+    stack_trace: str | None = None
+    state: str | None = None
+    retry_count: int | None = None

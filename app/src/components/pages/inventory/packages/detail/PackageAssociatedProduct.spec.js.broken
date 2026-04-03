@@ -1,0 +1,72 @@
+
+import React from 'react'
+import { shallow } from 'enzyme'
+import { createWaitForElement } from 'utils/test'
+import { get } from 'lodash'
+import {
+  fullDataPackage,
+} from 'data/MockBloomAPI/packages/getPackages'
+import getSalesTypes from 'data/MockBloomAPI/salesTypes/getSalesTypes'
+import { initialValuesMap } from 'components/pages/inventory/packages/detail/withPackageDetails'
+import PackageAssociatedProduct from './PackageAssociatedProduct'
+import { InputContainer, SectionContainer, StyledFormSelectField } from './PackageStyledComponents'
+
+const salesTypeOptions = [
+  {
+    value: '',
+    name: 'Select a sales type',
+  },
+  {
+    value: 'U2FsZXNUeXBlOjE=',
+    name: 'Buds',
+  },
+  {
+    value: 'U2FsZXNUeXBlOjM=',
+    name: 'Buds Pre-roll',
+  },
+]
+//TODO: Figure out why this test case is broken
+describe('<PackageAssociatedProduct />', () => {
+  it('Package should render PackageAssociatedProduct Component', (done) => {
+    // set up
+    const pkg = fullDataPackage.node
+    const store = get(fullDataPackage, 'store')
+    const productSalesType = get(pkg, 'product.salesType.id')
+    const salesType = productSalesType || get(salesTypeOptions, '[0].value')
+    // cannot get mountWithMocks to work, so am just doing a shallow test, not super useful but
+    // is a good starting place to test more useful components
+    const wrapper = shallow(<PackageAssociatedProduct
+      product={get(pkg, 'product', {}) || {}}
+      packageId={get(pkg, 'id')}
+      values={initialValuesMap(pkg, store, salesType)}
+      pristine={false}
+      onNavAway={() => ({})}
+      loading={get(fullDataPackage, 'loading', true)}
+      salesTypeOptions={salesTypeOptions}
+      salesTypeData={{ salesTypes: getSalesTypes.store.salesTypes }}
+      userPermissions={{ write: true, read: true }}
+    />)
+    console.error(wrapper)
+    const waitForTab = createWaitForElement('.AssociateProductTable')
+    return waitForTab(wrapper).then(() => {
+      const salesTypeInputSelector = wrapper.find(SectionContainer).shallow()
+        .find(InputContainer).shallow()
+        .find(StyledFormSelectField)
+        .shallow()
+      // TODO: Add test to check that a warning message is present if no product is assigned
+      // salesTypeInputSelector.simulate(
+      // 'change', { target: { value: 'U2FsZXNUeXBlOjE=' } }
+      // ) //buds
+      // console.error(salesTypeInputSelector)
+      // expect(wrapper.find(SectionContainer).shallow()
+      //   .find(PaginatedTable).shallow()
+      //   .find(AssignProductModal).shallow()
+      //   .find('.associatedProductWarningText')
+      //   .text()).to.equal('no product assigneddd')
+
+      expect(wrapper.exists()).toBe(true)
+      expect(salesTypeInputSelector.exists()).toBe(true)
+      done()
+    })
+  })
+})

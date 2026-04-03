@@ -1,0 +1,6 @@
+src/assets/*
+src/redux-foundry.js
+flow-typed/npm/*
+config/*
+build/*
+scripts/*

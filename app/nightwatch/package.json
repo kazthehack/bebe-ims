@@ -1,0 +1,16 @@
+{
+  "name": "bloom-nightwatch",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "N/A",
+  "private": true,
+  "scripts": {
+    "test": "./node_modules/.bin/nightwatch"
+  },
+  "dependencies": {
+    "chromedriver": "^2.35.0",
+    "glob": "^7.1.2",
+    "nightwatch": "^1.1.13",
+    "selenium-server": "^3.9.0"
+  }
+}

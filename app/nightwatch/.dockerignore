@@ -1,0 +1,4 @@
+.gitignore
+.gitattributes
+Dockerfile
+run-tests.sh

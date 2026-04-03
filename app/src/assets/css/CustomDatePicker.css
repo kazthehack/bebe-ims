@@ -1,0 +1,19 @@
+.react-datepicker-wrapper {
+  width: 100%;
+}
+
+.react-datepicker-popper {
+  z-index: 10 !important;
+}
+
+.react-datepicker__input-container {
+  width: 100%;
+}
+
+.react-datepicker__day--selected {
+  background-color: #1875f0 !important; /* override their colors */
+}
+
+.react-datepicker__day--in-range {
+  background-color: #1875f0 !important; /* override their colors */
+}

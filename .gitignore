@@ -1,0 +1,67 @@
+# Based on:
+# - https://github.com/github/gitignore/blob/main/Global/macOS.gitignore
+# - https://github.com/github/gitignore/blob/main/Python.gitignore
+# - https://github.com/github/gitignore/blob/main/Node.gitignore
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Logs
+*.log
+logs
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Editor/IDE
+.vscode/
+.idea/
+*.iml
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.python-version
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.eggs/
+*.egg-info/
+dist/
+build/
+site/
+.venv/
+venv/
+env/
+ENV/
+
+# Node
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.parcel-cache/
+.next/
+.nuxt/
+.svelte-kit/
+coverage/
+
+# Project-specific
+backend/.venv/
+backend/.pytest_cache/
+app/build/
+app/node_modules/
+legacy/

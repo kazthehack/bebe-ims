@@ -1,0 +1,13 @@
+.buildkite
+.cache
+.dockerignore
+.git
+.gitignore
+build/*
+node_modules/*
+nightwatch/*
+env
+env_file
+Dockerfile
+docker-compose.yml
+*.md

@@ -1,0 +1,48 @@
+@keyframes fadeIn {
+  from,
+  50% {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+
+  50%,
+  to {
+    opacity: 0;
+  }
+}
+
+.ReactModal__Overlay {
+  background-color:rgba(0, 0, 0, 0) !important;
+}
+
+.ReactModal__Overlay--after-open {
+  background-color:rgba(0, 0, 0, 0.5) !important;
+  transition: background-color 250ms;
+}
+
+.ReactModal__Overlay--before-close {
+  background-color:rgba(0, 0, 0, 0) !important;
+}
+
+.ReactModal__Content {
+  animation-duration: 500ms;
+  animation-fill-mode: both;
+  animation-name: fadeIn;
+}
+
+.ReactModal__Content--before-close {
+  animation-name: fadeOut;
+}
+
+.ReactModal__Body--open {
+  overflow: hidden;
+}

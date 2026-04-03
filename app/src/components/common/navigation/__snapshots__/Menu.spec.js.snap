@@ -1,0 +1,272 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<Menu /> Menu renders as expected when enableDareMode is FALSE 1`] = `
+<div
+  className="sideMenu"
+>
+  <div>
+    <a
+      aria-current={null}
+      className="sc-bwzfXH lnaFLl"
+      href="/daily"
+      onClick={[Function]}
+    >
+      <div
+        className="sc-htpNat dGOoxq"
+      >
+        <span
+          className="sc-gzVnrw NQFcB"
+        >
+          <span
+            className="icon-home5 sc-bxivhb gGHErp sc-bdVaJa bSrzPW"
+          />
+           Home
+        </span>
+      </div>
+    </a>
+  </div>
+  <div>
+    <a
+      aria-current={null}
+      className="sc-bwzfXH lnaFLl"
+      href="/inventory"
+      onClick={[Function]}
+    >
+      <div
+        className="sc-htpNat dGOoxq"
+      >
+        <span
+          className="sc-gzVnrw NQFcB"
+        >
+          <span
+            className="icon-box sc-bxivhb gGHErp sc-bdVaJa bSrzPW"
+          />
+           Inventory
+        </span>
+      </div>
+    </a>
+  </div>
+  <div>
+    <a
+      aria-current={null}
+      className="sc-bwzfXH lnaFLl"
+      href="/employees"
+      onClick={[Function]}
+    >
+      <div
+        className="sc-htpNat dGOoxq"
+      >
+        <span
+          className="sc-gzVnrw NQFcB"
+        >
+          <span
+            className="icon-users2 sc-bxivhb gGHErp sc-bdVaJa bSrzPW"
+          />
+           Employees
+        </span>
+      </div>
+    </a>
+  </div>
+  <div>
+    <a
+      aria-current={null}
+      className="sc-bwzfXH lnaFLl"
+      href="/reports"
+      onClick={[Function]}
+    >
+      <div
+        className="sc-htpNat dGOoxq"
+      >
+        <span
+          className="sc-gzVnrw NQFcB"
+        >
+          <span
+            className="icon-graph sc-bxivhb gGHErp sc-bdVaJa bSrzPW"
+          />
+           Reports
+        </span>
+      </div>
+    </a>
+  </div>
+  <div>
+    <a
+      aria-current={null}
+      className="sc-bwzfXH lnaFLl"
+      href="/crm"
+      onClick={[Function]}
+    >
+      <div
+        className="sc-htpNat dGOoxq"
+      >
+        <span
+          className="sc-gzVnrw NQFcB"
+        >
+          <span
+            className="icon-profile sc-bxivhb gGHErp sc-bdVaJa bSrzPW"
+          />
+           Crm
+        </span>
+      </div>
+    </a>
+  </div>
+  <div>
+    <a
+      aria-current={null}
+      className="sc-bwzfXH lnaFLl"
+      href="/settings"
+      onClick={[Function]}
+    >
+      <div
+        className="sc-htpNat dGOoxq"
+      >
+        <span
+          className="sc-gzVnrw NQFcB"
+        >
+          <span
+            className="icon-cog sc-bxivhb gGHErp sc-bdVaJa bSrzPW"
+          />
+           Settings
+        </span>
+      </div>
+    </a>
+  </div>
+  <hr
+    className="sc-EHOje jaObOZ"
+  />
+  <div
+    className="sc-ifAKCX fXMLgj"
+  >
+    <span
+      className="sc-bZQynM ksYtQe"
+    >
+      App Version: 
+      unknown
+    </span>
+  </div>
+</div>
+`;
+
+exports[`<Menu /> Menu renders as expected when enableDareMode is TRUE 1`] = `
+<div
+  className="sideMenu"
+>
+  <div>
+    <a
+      aria-current={null}
+      className="sc-bwzfXH lnaFLl"
+      href="/daily"
+      onClick={[Function]}
+    >
+      <div
+        className="sc-htpNat dGOoxq"
+      >
+        <span
+          className="sc-gzVnrw NQFcB"
+        >
+          <span
+            className="icon-home5 sc-bxivhb gGHErp sc-bdVaJa bSrzPW"
+          />
+           Home
+        </span>
+      </div>
+    </a>
+  </div>
+  <div>
+    <a
+      aria-current={null}
+      className="sc-bwzfXH lnaFLl"
+      href="/inventory"
+      onClick={[Function]}
+    >
+      <div
+        className="sc-htpNat dGOoxq"
+      >
+        <span
+          className="sc-gzVnrw NQFcB"
+        >
+          <span
+            className="icon-box sc-bxivhb gGHErp sc-bdVaJa bSrzPW"
+          />
+           Inventory
+        </span>
+      </div>
+    </a>
+  </div>
+  <div>
+    <a
+      aria-current={null}
+      className="sc-bwzfXH lnaFLl"
+      href="/employees"
+      onClick={[Function]}
+    >
+      <div
+        className="sc-htpNat dGOoxq"
+      >
+        <span
+          className="sc-gzVnrw NQFcB"
+        >
+          <span
+            className="icon-users2 sc-bxivhb gGHErp sc-bdVaJa bSrzPW"
+          />
+           Employees
+        </span>
+      </div>
+    </a>
+  </div>
+  <div>
+    <a
+      aria-current={null}
+      className="sc-bwzfXH lnaFLl"
+      href="/crm"
+      onClick={[Function]}
+    >
+      <div
+        className="sc-htpNat dGOoxq"
+      >
+        <span
+          className="sc-gzVnrw NQFcB"
+        >
+          <span
+            className="icon-profile sc-bxivhb gGHErp sc-bdVaJa bSrzPW"
+          />
+           Crm
+        </span>
+      </div>
+    </a>
+  </div>
+  <div>
+    <a
+      aria-current={null}
+      className="sc-bwzfXH lnaFLl"
+      href="/settings"
+      onClick={[Function]}
+    >
+      <div
+        className="sc-htpNat dGOoxq"
+      >
+        <span
+          className="sc-gzVnrw NQFcB"
+        >
+          <span
+            className="icon-cog sc-bxivhb gGHErp sc-bdVaJa bSrzPW"
+          />
+           Settings
+        </span>
+      </div>
+    </a>
+  </div>
+  <hr
+    className="sc-EHOje jaObOZ"
+  />
+  <div
+    className="sc-ifAKCX fXMLgj"
+  >
+    <span
+      className="sc-bZQynM ksYtQe"
+    >
+      App Version: 
+      unknown
+    </span>
+  </div>
+</div>
+`;
