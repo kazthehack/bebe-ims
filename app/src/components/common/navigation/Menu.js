@@ -108,10 +108,16 @@ const ConnectedMenuItem = compose(
 const Menu = ({ enableDareMode }) => (
   <div className="sideMenu">
     <ConnectedMenuItem exact to="/daily" label="Home" icon="home" />
+    <ConnectedMenuItem to="/web-pos" label="Web POS" icon="cashier" />
+    <ConnectedMenuItem to="/sales" label="Sales" icon="reports" />
     <ConnectedMenuItem to="/inventory" label="Inventory" icon="box" />
+    <ConnectedMenuItem to="/products" label="Products" icon="plant" />
+    <ConnectedMenuItem to="/supplies" label="Supplies" icon="bag" />
+    <ConnectedMenuItem to="/sites" label="Sites" icon="home" />
+    <ConnectedMenuItem to="/events" label="Events" icon="calendar" />
+    <ConnectedMenuItem to="/crm" label="CRM" icon="profile" />
     <ConnectedMenuItem to="/employees" label="Employees" icon="users" />
-    { !enableDareMode && <ConnectedMenuItem to="/reports" label="Reports" icon="reports" /> }
-    <ConnectedMenuItem to="/crm" label="Crm" icon="profile" />
+    <ConnectedMenuItem to="/reports" label="Reports" icon="reports" />
     <ConnectedMenuItem to="/settings" label="Settings" icon="cogs" />
     <VersionBreak />
     <AppVersionContainer>

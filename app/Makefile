@@ -3,12 +3,13 @@ IMAGE ?= bebe-ims-app:local
 CONTAINER ?= bebe-ims-app
 PORT ?= 2306
 
-.PHONY: help install run deploy stop logs build clean lint lint-fix fmt fmt-check
+.PHONY: help install run run-dev deploy stop logs build clean lint lint-fix fmt fmt-check
 
 help:
 	@echo "Targets:"
 	@echo "  make install    # install app dependencies"
 	@echo "  make run        # run app locally (react-scripts start)"
+	@echo "  make run-dev    # run app locally with hot reload (react-scripts start)"
 	@echo "  make deploy     # build and run app docker container"
 	@echo "  make stop       # stop app docker container"
 	@echo "  make logs       # tail app docker logs"
@@ -26,6 +27,10 @@ run:
 	test -d node_modules || $(MAKE) install
 	test -d build || NODE_PATH=src yarn build
 	PORT=$(PORT) node scripts/serve-build.js $(PORT)
+
+run-dev:
+	test -d node_modules || $(MAKE) install
+	PORT=$(PORT) NODE_PATH=src yarn start
 
 deploy:
 	docker build -t $(IMAGE) .

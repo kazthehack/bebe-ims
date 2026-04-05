@@ -11,7 +11,7 @@ import { APP_ENABLE_PUBLIC_DEMO_MODE } from 'environment'
 import ShareStoreModal from './ShareStore'
 
 const StyledHeaderContainer = styled.div`
-  position: relative;
+  position: fixed;
   display: flex;
   flex-direction: row;
   justify-content: space-between;

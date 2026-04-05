@@ -1,13 +1,14 @@
 SHELL := /bin/zsh
 .DEFAULT_GOAL := build
 
-.PHONY: help build clean run run-backend run-app deploy deploy-backend deploy-app lint fmt test
+.PHONY: help build clean run dev run-backend run-app deploy deploy-backend deploy-app lint fmt test
 
 help:
 	@echo "Root shortcuts:"
 	@echo "  make build         # build backend + app"
 	@echo "  make clean         # clean backend + app build artifacts"
 	@echo "  make run           # run backend + app locally (separate terminals recommended)"
+	@echo "  make dev           # run backend + app together (dev mode, with reload)"
 	@echo "  make run-backend   # run backend locally"
 	@echo "  make run-app       # run app locally"
 	@echo "  make deploy        # deploy backend + app with Docker"
@@ -31,6 +32,13 @@ run:
 	@echo "Use two terminals for dev services:"
 	@echo "  Terminal 1: make run-backend"
 	@echo "  Terminal 2: make run-app"
+
+dev:
+	@echo "Starting backend (reload) and app (hot reload)..."
+	@trap 'kill 0' INT TERM EXIT; \
+	$(MAKE) -C backend run & \
+	$(MAKE) -C app run-dev & \
+	wait
 
 run-backend:
 	$(MAKE) -C backend run

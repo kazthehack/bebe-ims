@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.core.config import get_settings
-from app.routers import auth, health, mock_dashboard, object_api
+from app.routers import auth, health, resources, object_api
+from app.routers.v1 import products
 
 settings = get_settings()
 
@@ -24,7 +25,8 @@ app.add_middleware(
 
 app.include_router(health.router, prefix=settings.api_prefix)
 app.include_router(auth.router, prefix=settings.api_prefix)
-app.include_router(mock_dashboard.router, prefix=settings.api_prefix)
+app.include_router(products.router, prefix=settings.api_prefix)
+app.include_router(resources.router, prefix=settings.api_prefix)
 app.include_router(object_api.router, prefix=settings.api_prefix)
 
 

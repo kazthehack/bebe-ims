@@ -10,7 +10,14 @@ import { trackPageView } from 'utils/google-analytics'
 import ReactGA from 'react-ga'
 import {
   HomePage,
+  WebPosPage,
+  SalesPage,
   InventoryPage,
+  ProductsPage,
+  ProductDetailPage,
+  SuppliesPage,
+  SitesPage,
+  EventsPage,
   EmployeesPage,
   ReportsPage,
   SettingsPage,
@@ -23,8 +30,8 @@ import {
   InventoryManifestPage,
   CrmPage,
   TryPage,
-} from 'components/pages'
-import { PageNotFound } from 'components/pages/ErrorPage'
+} from 'pages'
+import { PageNotFound } from 'pages/ErrorPage'
 import { withVenueID, withVenues } from 'components/Venue'
 import { requireAuthentication } from 'utils/hoc'
 import ScrollToTop from 'components/common/container/ScrollToTop'
@@ -70,8 +77,37 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
           render={() => <HomePage authenticatedUserData={authenticatedUserData} />}
         />
         <Route
+          path="/web-pos"
+          render={() => <WebPosPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
+          path="/sales"
+          render={() => <SalesPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
           path="/inventory"
           render={() => <InventoryPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
+          exact
+          path="/products/:id"
+          render={() => <ProductDetailPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
+          path="/products"
+          render={() => <ProductsPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
+          path="/supplies"
+          render={() => <SuppliesPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
+          path="/sites"
+          render={() => <SitesPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
+          path="/events"
+          render={() => <EventsPage authenticatedUserData={authenticatedUserData} />}
         />
         <Route
           path="/employees"

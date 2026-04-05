@@ -1,16 +1,7 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import DatePicker from 'react-datepicker'
 import styled from 'styled-components'
-import PageContent from 'components/pages/PageContent'
-import { useDashboardMockData } from './useDashboardMockData'
-import {
-  dashboardViewPropTypes,
-  emptyItemPropTypes,
-} from './HomePage.types'
-
-const StyledContainer = styled.div`
-  display: flex;
-`
 
 const DashboardGrid = styled.div`
   display: grid;
@@ -231,14 +222,6 @@ const SiteBreakdownItem = styled.div`
   font-size: 12px;
 `
 
-const StyledNote = styled.div`
-  margin-left: auto;
-  font-size: 12px;
-  color: #5e5e5e;
-  display: flex;
-  align-items: center;
-`
-
 const formatMoney = (value, currency = 'PHP') => {
   try {
     return new Intl.NumberFormat('en-PH', {
@@ -267,7 +250,6 @@ const toISODate = (dateObj) => {
 const EmptyItem = ({ children }) => (
   <PlaceholderItem>{children}</PlaceholderItem>
 )
-EmptyItem.propTypes = emptyItemPropTypes
 
 const DashboardView = ({
   calendarMonthLabel,
@@ -361,40 +343,34 @@ const DashboardView = ({
     </>
   )
 }
-DashboardView.propTypes = dashboardViewPropTypes
 
-const HomePage = () => {
-  const {
-    events,
-    eventsByDate,
-    notifications,
-    sales,
-    loading,
-    error,
-    activeApiBase,
-    calendarMonthLabel,
-  } = useDashboardMockData()
-
-  return (
-    <PageContent
-      title={(
-        <StyledContainer>
-          Dashboard
-          <StyledNote>{`Mock Placeholder (backend-wired: ${activeApiBase || 'no api base'})`}</StyledNote>
-        </StyledContainer>
-      )}
-    >
-      <DashboardView
-        calendarMonthLabel={calendarMonthLabel}
-        events={events}
-        eventsByDate={eventsByDate}
-        notifications={notifications}
-        sales={sales}
-        loading={loading}
-        error={error}
-      />
-    </PageContent>
-  )
+EmptyItem.propTypes = {
+  children: PropTypes.node,
 }
 
-export default HomePage
+DashboardView.propTypes = {
+  calendarMonthLabel: PropTypes.string.isRequired,
+  events: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    title: PropTypes.string,
+    start_date: PropTypes.string,
+    end_date: PropTypes.string,
+  })).isRequired,
+  eventsByDate: PropTypes.objectOf(
+    PropTypes.arrayOf(PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      title: PropTypes.string,
+      start_date: PropTypes.string,
+      end_date: PropTypes.string,
+    })),
+  ).isRequired,
+  notifications: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    message: PropTypes.string,
+  })).isRequired,
+  sales: PropTypes.object.isRequired,
+  loading: PropTypes.bool.isRequired,
+  error: PropTypes.string.isRequired,
+}
+
+export default DashboardView

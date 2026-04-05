@@ -11,11 +11,13 @@ import { withVenueID } from '../Venue'
 
 const MENU_WIDTH = 176
 const MENUE_Z_INDEX = 10
+const HEADER_HEIGHT = 100
 
 const StyledPage = styled.div`
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  padding-top: ${HEADER_HEIGHT}px;
 `
 
 const StyledBody = styled.div`
@@ -27,11 +29,14 @@ const StyledBody = styled.div`
 
 const StyledMenuDiv = styled.div`
   background-color: ${colors.blueDark};
-  height: 100%;
+  height: calc(100vh - ${HEADER_HEIGHT}px);
   padding: 0;
   text-align: left;
-  position: absolute;
-  overflow: hidden;
+  position: fixed;
+  top: ${HEADER_HEIGHT}px;
+  left: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   width: ${MENU_WIDTH}px;
   z-index: ${MENUE_Z_INDEX};
 `

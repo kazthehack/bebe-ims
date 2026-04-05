@@ -9,7 +9,7 @@ help:
 	@echo "Targets:"
 	@echo "  make install   # create venv + install deps"
 	@echo "  make build     # install deps + compile backend modules"
-	@echo "  make run       # run backend locally (uvicorn, no reload)"
+	@echo "  make run       # run backend locally with auto-reload"
 	@echo "  make run-dev   # run backend locally with auto-reload"
 	@echo "  make deploy    # build and run backend docker container"
 	@echo "  make stop      # stop backend docker container"
@@ -27,6 +27,10 @@ build:
 	. .venv/bin/activate && python -m compileall app
 
 run:
+	test -d .venv || $(MAKE) install
+	. .venv/bin/activate && uvicorn app.main:app --reload --host 127.0.0.1 --port $(PORT)
+
+run-no-reload:
 	test -d .venv || $(MAKE) install
 	. .venv/bin/activate && uvicorn app.main:app --host 127.0.0.1 --port $(PORT)
 
