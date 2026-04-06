@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from decimal import Decimal
 from datetime import datetime
 from threading import RLock
 from typing import Any
@@ -22,8 +23,20 @@ class DynamoSingleTableRepository:
         self._lock = RLock()
         self._fallback_objects: dict[tuple[str, str], dict[str, Any]] = {}
 
+    def _to_dynamo_compatible(self, value: Any) -> Any:
+        if isinstance(value, float):
+            return Decimal(str(value))
+        if isinstance(value, list):
+            return [self._to_dynamo_compatible(item) for item in value]
+        if isinstance(value, dict):
+            return {key: self._to_dynamo_compatible(item) for key, item in value.items()}
+        return value
+
     def _to_dynamo_item(self, item: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        return {key: self._serializer.serialize(value) for key, value in item.items()}
+        return {
+            key: self._serializer.serialize(self._to_dynamo_compatible(value))
+            for key, value in item.items()
+        }
 
     def _from_dynamo_item(self, item: dict[str, dict[str, Any]]) -> dict[str, Any]:
         return {key: self._deserializer.deserialize(value) for key, value in item.items()}
@@ -106,6 +119,28 @@ class DynamoSingleTableRepository:
         out.sort(key=lambda x: x["updated_at"], reverse=True)
         return out
 
+    def delete_object(self, tenant_id: str, object_type: str, object_id: str) -> bool:
+        pk = f"TENANT#{tenant_id}"
+        sk = f"{object_type.upper()}#{object_id}"
+        key = (pk, sk)
+        deleted = False
+
+        with self._lock:
+            try:
+                self._client.delete_item(
+                    TableName=self._settings.dynamodb_table_name,
+                    Key=self._to_dynamo_item({"pk": pk, "sk": sk}),
+                )
+                deleted = True
+            except (BotoCoreError, ClientError):
+                pass
+
+            if key in self._fallback_objects:
+                self._fallback_objects.pop(key, None)
+                deleted = True
+
+        return deleted
+
 class ObjectRepository:
     """Object-oriented repository facade over the Dynamo single-table adapter."""
 
@@ -120,3 +155,6 @@ class ObjectRepository:
 
     def list_objects(self, tenant_id: str, object_type: str) -> list[dict[str, Any]]:
         return self._adapter.list_objects(tenant_id, object_type)
+
+    def delete_object(self, tenant_id: str, object_type: str, object_id: str) -> bool:
+        return self._adapter.delete_object(tenant_id, object_type, object_id)

@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-
-const configuredApiBaseRaw = process.env.REACT_APP_REST_API_ENDPOINT || ''
-const configuredApiBase = configuredApiBaseRaw.trim().replace(/\/+$/, '')
+import { apiBase, getJson } from 'hooks/http/httpClient'
 
 const toISODate = (dateObj) => {
   const y = dateObj.getFullYear()
@@ -24,22 +22,7 @@ const expandEventDays = (eventItem) => {
   return dates
 }
 
-const fetchFromConfiguredBase = async (path) => {
-  if (!configuredApiBase) {
-    throw new Error('REACT_APP_REST_API_ENDPOINT is not configured')
-  }
-
-  const response = await fetch(`${configuredApiBase}${path}`, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-  })
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`HTTP ${response.status}: ${text}`)
-  }
-  const data = await response.json()
-  return { data, base: configuredApiBase }
-}
+const fetchFromConfiguredBase = async (path) => ({ data: await getJson(path), base: apiBase })
 
 const buildEventsByDate = (events) => events.reduce((acc, eventItem) => {
   const dates = expandEventDays(eventItem)
@@ -69,7 +52,7 @@ export const useDashboardData = () => {
   const [sales, setSales] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [activeApiBase, setActiveApiBase] = useState(configuredApiBase || '')
+  const [activeApiBase, setActiveApiBase] = useState(apiBase || '')
 
   useEffect(() => {
     let cancelled = false
@@ -78,7 +61,7 @@ export const useDashboardData = () => {
       setLoading(true)
       setError('')
 
-      if (!configuredApiBase) {
+      if (!apiBase) {
         setEvents([])
         setNotifications([])
         setSales({})
@@ -105,7 +88,7 @@ export const useDashboardData = () => {
             ? eventsRes.value.data.events
             : [],
         )
-        setActiveApiBase(eventsRes.value.base || configuredApiBase)
+        setActiveApiBase(eventsRes.value.base || apiBase)
       } else {
         setEvents([])
       }
@@ -136,7 +119,7 @@ export const useDashboardData = () => {
       if (site3.status === 'rejected') failedEndpoints.push('/sales/sites/site3/summary')
 
       if (failedEndpoints.length) {
-        setError(`Unable to load: ${failedEndpoints.join(', ')} (base: ${configuredApiBase})`)
+        setError(`Unable to load: ${failedEndpoints.join(', ')} (base: ${apiBase})`)
       }
 
       setLoading(false)

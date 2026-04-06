@@ -1,53 +1,329 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query
 
-from app.controllers.product import product
-from app.models.product import ProductModel, ProductRecipeModel
+from app.controllers.product import Product
+from app.controllers.product_line import ProductLine
+from app.controllers.product_recipe_part import ProductRecipePart
+from app.controllers.product_variant import ProductVariant
+from app.controllers.supply import Supply
+from app.domain.enums import SupplyType
+from app.domain.record_mapper import StoredRecord, map_record
+from app.models.product import ProductDocument
+from app.models.product_line import ProductLineDocument
+from app.models.product_recipe_part import ProductRecipePartDocument
+from app.models.product_variant import ProductVariantDocument
+from app.models.supply import SupplyDocument
 from app.schemas.product import (
-    ProductCreateRequest,
+    ProductCreate,
     ProductDetailResponse,
-    ProductImportRequest,
-    ProductImportResponse,
     ProductListResponse,
-    ProductRecipeCreateRequest,
-    ProductRecipeListResponse,
+    ProductRecipePartCreate,
+    ProductRecipePartListResponse,
+    ProductRecipePartRead,
+    ProductRead,
+    ProductUpdate,
+    ProductVariantCreate,
     ProductVariantListResponse,
+    ProductVariantRead,
+    ProductVariantUpdate,
 )
 
-router = APIRouter(prefix="/products", tags=["products"])
+router = APIRouter(prefix='/products', tags=['products'])
 
 
-@router.get("", response_model=ProductListResponse)
-def list_products() -> ProductListResponse:
-    return ProductListResponse(products=product.list())
+product_controller = Product()
+variant_controller = ProductVariant()
+recipe_part_controller = ProductRecipePart()
+product_line_controller = ProductLine()
+supply_controller = Supply()
 
 
-@router.post("", response_model=ProductModel)
-def create_product(payload: ProductCreateRequest) -> ProductModel:
-    return product.create(payload)
+def _normalize_supply_type(value: str | None) -> SupplyType:
+    raw = str(value or '').strip().lower()
+    if raw in ('consumable', SupplyType.CONSUMABLE.value):
+        return SupplyType.CONSUMABLE
+    return SupplyType.FILAMENT
 
 
-@router.post("/import", response_model=ProductImportResponse)
-def import_products(payload: ProductImportRequest) -> ProductImportResponse:
-    return product.import_data(payload)
+def _to_product(record: StoredRecord[ProductDocument]) -> ProductRead:
+    return ProductRead(
+        id=record.object_id,
+        product_code=record.payload.product_code or record.payload.sku or record.object_id,
+        name=record.payload.name,
+        product_line=record.payload.product_line_name or record.payload.product_line_id or 'unassigned',
+        product_line_id=record.payload.product_line_id or 'unassigned',
+        category=record.payload.category,
+        list_price=float(record.payload.list_price or 0),
+        description=record.payload.description,
+        design_source=record.payload.design_source,
+        third_party_source_url=record.payload.third_party_source_url,
+        local_working_files=record.payload.local_working_files or [],
+        image_url=record.payload.image_url,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
 
 
-@router.get("/variants", response_model=ProductVariantListResponse)
-def list_product_variants() -> ProductVariantListResponse:
-    return ProductVariantListResponse(variants=product.list_variants())
+def _to_variant(record: StoredRecord[ProductVariantDocument]) -> ProductVariantRead:
+    return ProductVariantRead(
+        id=record.object_id,
+        product_id=record.payload.product_id,
+        sku=record.payload.sku,
+        name=record.payload.name,
+        yield_units=int(record.payload.yield_units or 1),
+        print_hours=float(record.payload.print_hours or 0),
+        qr_code=record.payload.qr_code,
+        image_url=record.payload.image_url,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
 
 
-@router.get("/recipes", response_model=ProductRecipeListResponse)
-def list_product_recipes() -> ProductRecipeListResponse:
-    return ProductRecipeListResponse(recipes=product.list_recipes())
+def _to_recipe_part(
+    record: StoredRecord[ProductRecipePartDocument],
+    supply: StoredRecord[SupplyDocument] | None = None,
+    yield_units: int = 1,
+) -> ProductRecipePartRead:
+    supply_type = _normalize_supply_type(
+        record.payload.supply_type or (supply.payload.supply_type if supply else SupplyType.FILAMENT.value),
+    )
+    grams = float(record.payload.grams or 0)
+    quantity = float(record.payload.quantity or 0)
+    required_grams_for_batch = float(grams * max(1, int(yield_units or 1)))
+    required_quantity_for_batch = float(quantity * max(1, int(yield_units or 1)))
+
+    qty_available = 0.0
+    grams_available = 0.0
+    if supply:
+        qty_available = float(supply.payload.qty_on_hand or 0) - float(supply.payload.qty_reserved or 0)
+        grams_available = float(supply.payload.grams_on_hand or 0) - float(supply.payload.grams_reserved or 0)
+        if supply_type == SupplyType.FILAMENT and grams_available == 0 and qty_available > 0:
+            # Backward compatibility with earlier records where grams were stored in qty fields.
+            grams_available = qty_available
+
+    remaining_qty = float(qty_available - required_quantity_for_batch)
+    remaining_grams = float(grams_available - required_grams_for_batch)
+    can_produce = remaining_grams >= 0 if supply_type == SupplyType.FILAMENT else remaining_qty >= 0
+    return ProductRecipePartRead(
+        id=record.object_id,
+        variant_id=record.payload.variant_id,
+        supply_id=record.payload.supply_id,
+        supply_name=record.payload.supply_name,
+        supply_type=supply_type,
+        grams=grams,
+        quantity=quantity,
+        required_grams_for_batch=required_grams_for_batch,
+        required_quantity_for_batch=required_quantity_for_batch,
+        print_hours=float(record.payload.print_hours or 0),
+        available_quantity=qty_available,
+        available_grams=grams_available,
+        remaining_quantity_after_batch=remaining_qty,
+        remaining_grams_after_batch=remaining_grams,
+        can_produce=can_produce,
+        cost_per_kilo=float(record.payload.cost_per_kilo or 0),
+        cost_per_piece=float(record.payload.cost_per_piece or 0),
+        cost_of_part=float(record.payload.cost_of_part or 0),
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
 
 
-@router.post("/recipes", response_model=ProductRecipeModel)
-def create_product_recipe(payload: ProductRecipeCreateRequest) -> ProductRecipeModel:
-    return product.create_recipe(payload)
+@router.get('', response_model=ProductListResponse)
+def list_products(tenant_id: str = Query('tenant-admin')) -> ProductListResponse:
+    records = [map_record(record, ProductDocument) for record in product_controller.list(tenant_id)]
+    return ProductListResponse(products=[_to_product(record) for record in records])
 
 
-@router.get("/{id}", response_model=ProductDetailResponse)
-def get_product(id: str) -> ProductDetailResponse:
-    return product.get(id)
+@router.post('', response_model=ProductRead)
+def create_product(payload: ProductCreate, tenant_id: str = Query('tenant-admin')) -> ProductRead:
+    product_line_record: dict | None = None
+    try:
+        product_line_record = product_line_controller.get(payload.product_line_id, tenant_id)
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
+
+    if not product_line_record:
+        for line in product_line_controller.list(tenant_id):
+            mapped = map_record(line, ProductLineDocument)
+            if mapped.payload.code == payload.product_line_id:
+                product_line_record = line
+                break
+
+    if not product_line_record:
+        raise HTTPException(status_code=404, detail='Product line not found')
+
+    product_line = map_record(product_line_record, ProductLineDocument)
+    create_payload = payload.model_dump(exclude_none=True)
+    create_payload['product_line_id'] = product_line.object_id
+    create_payload['product_line_name'] = product_line.payload.name
+    create_payload['product_line_code'] = product_line.payload.code
+    record = map_record(
+        product_controller.create(tenant_id, create_payload),
+        ProductDocument,
+    )
+    return _to_product(record)
+
+
+@router.delete('/{id}')
+def delete_product(id: str, tenant_id: str = Query('tenant-admin')) -> dict[str, bool]:
+    variant_records = [map_record(record, ProductVariantDocument) for record in variant_controller.list(tenant_id)]
+    has_variants = any(variant.payload.product_id == id for variant in variant_records)
+    if has_variants:
+        raise HTTPException(
+            status_code=409,
+            detail='Cannot delete product with associated variants',
+        )
+    return {'deleted': product_controller.delete(id, tenant_id)}
+
+
+@router.put('/{id}', response_model=ProductRead)
+def update_product(id: str, payload: ProductUpdate, tenant_id: str = Query('tenant-admin')) -> ProductRead:
+    existing = map_record(product_controller.get(id, tenant_id), ProductDocument)
+    product_line = map_record(product_line_controller.get(payload.product_line_id, tenant_id), ProductLineDocument)
+    update_payload = payload.model_dump(exclude_none=True)
+    update_payload['product_code'] = existing.payload.product_code or existing.payload.sku or existing.object_id
+    update_payload['product_line_id'] = product_line.object_id
+    update_payload['product_line_name'] = product_line.payload.name
+    update_payload['product_line_code'] = product_line.payload.code
+    record = map_record(
+        product_controller.update(id, tenant_id, update_payload),
+        ProductDocument,
+    )
+    return _to_product(record)
+
+
+@router.get('/variants', response_model=ProductVariantListResponse)
+def list_product_variants(
+    tenant_id: str = Query('tenant-admin'),
+    product_id: str | None = None,
+) -> ProductVariantListResponse:
+    records = [map_record(record, ProductVariantDocument) for record in variant_controller.list(tenant_id)]
+    variants = [_to_variant(record) for record in records]
+    if product_id:
+        variants = [variant for variant in variants if variant.product_id == product_id]
+    return ProductVariantListResponse(variants=variants)
+
+
+@router.get('/variants/{id}', response_model=ProductVariantRead)
+def get_product_variant(id: str, tenant_id: str = Query('tenant-admin')) -> ProductVariantRead:
+    return _to_variant(map_record(variant_controller.get(id, tenant_id), ProductVariantDocument))
+
+
+@router.put('/variants/{id}', response_model=ProductVariantRead)
+def update_product_variant(id: str, payload: ProductVariantUpdate, tenant_id: str = Query('tenant-admin')) -> ProductVariantRead:
+    existing = map_record(variant_controller.get(id, tenant_id), ProductVariantDocument)
+    merged = existing.payload.model_dump(exclude_none=True)
+    updates = payload.model_dump(exclude_none=True)
+    merged.update(updates)
+    merged['yield_units'] = max(1, int(merged.get('yield_units') or 1))
+    merged['print_hours'] = float(merged.get('print_hours') or 0)
+    merged['sku'] = existing.payload.sku
+    merged['qr_code'] = existing.payload.qr_code
+    record = map_record(variant_controller.update(id, tenant_id, merged), ProductVariantDocument)
+    return _to_variant(record)
+
+
+@router.get('/variants/{id}/recipe-parts', response_model=ProductRecipePartListResponse)
+def list_variant_recipe_parts(id: str, tenant_id: str = Query('tenant-admin')) -> ProductRecipePartListResponse:
+    variant = map_record(variant_controller.get(id, tenant_id), ProductVariantDocument)
+    yield_units = max(1, int(variant.payload.yield_units or 1))
+    variant_print_hours = float(variant.payload.print_hours or 0)
+    records = [map_record(record, ProductRecipePartDocument) for record in recipe_part_controller.list(tenant_id)]
+    supply_records = [map_record(record, SupplyDocument) for record in supply_controller.list(tenant_id)]
+    supply_by_id = {supply.object_id: supply for supply in supply_records}
+    parts = [
+        _to_recipe_part(
+            record,
+            supply_by_id.get(record.payload.supply_id),
+            yield_units,
+        )
+        for record in records
+        if record.payload.variant_id == id
+    ]
+    total_cost = float(sum(float(part.cost_of_part or 0) for part in parts))
+    total_part_hours = float(sum(float(part.print_hours or 0) for part in parts))
+    total_batch_hours = float(variant_print_hours + total_part_hours)
+    price_per_unit = total_cost
+    hours_per_unit = float(total_batch_hours / yield_units) if yield_units > 0 else 0.0
+    can_produce_batch = all(bool(part.can_produce) for part in parts) if parts else True
+    return ProductRecipePartListResponse(
+        parts=parts,
+        total_cost=total_cost,
+        total_part_hours=total_part_hours,
+        variant_print_hours=variant_print_hours,
+        total_batch_hours=total_batch_hours,
+        yield_units=yield_units,
+        price_per_unit=price_per_unit,
+        hours_per_unit=hours_per_unit,
+        can_produce_batch=can_produce_batch,
+    )
+
+
+@router.post('/variants/{id}/recipe-parts', response_model=ProductRecipePartRead)
+def create_variant_recipe_part(
+    id: str,
+    payload: ProductRecipePartCreate,
+    tenant_id: str = Query('tenant-admin'),
+) -> ProductRecipePartRead:
+    variant = map_record(variant_controller.get(id, tenant_id), ProductVariantDocument)
+    supply = map_record(supply_controller.get(payload.supply_id, tenant_id), SupplyDocument)
+    supply_type = _normalize_supply_type(supply.payload.supply_type)
+    grams = float(payload.grams or 0)
+    quantity = float(payload.quantity or 0)
+    print_hours = float(payload.print_hours or 0)
+
+    if supply_type == SupplyType.FILAMENT and grams <= 0:
+        raise HTTPException(status_code=400, detail='Grams must be greater than zero for filament parts')
+    if supply_type == SupplyType.CONSUMABLE and quantity <= 0:
+        raise HTTPException(status_code=400, detail='Quantity must be greater than zero for consumable parts')
+
+    cost_per_kilo = float(supply.payload.cost_per_kilo or 0)
+    cost_per_piece = float(supply.payload.cost_per_piece or 0)
+    cost_of_part = float((grams / 1000.0) * cost_per_kilo) if supply_type == SupplyType.FILAMENT else float(quantity * cost_per_piece)
+    record = map_record(
+        recipe_part_controller.create(tenant_id, {
+            'variant_id': id,
+            'supply_id': payload.supply_id,
+            'supply_name': supply.payload.name,
+            'supply_type': supply_type.value,
+            'grams': grams,
+            'quantity': quantity,
+            'print_hours': print_hours,
+            'cost_per_kilo': cost_per_kilo,
+            'cost_per_piece': cost_per_piece,
+            'cost_of_part': cost_of_part,
+        }),
+        ProductRecipePartDocument,
+    )
+    yield_units = int(variant.payload.yield_units or 1)
+    return _to_recipe_part(record, supply, yield_units)
+
+
+@router.post('/variants', response_model=ProductVariantRead)
+def create_product_variant(payload: ProductVariantCreate, tenant_id: str = Query('tenant-admin')) -> ProductVariantRead:
+    product_controller.get(payload.product_id, tenant_id)
+    record = map_record(
+        variant_controller.create(tenant_id, payload.model_dump(exclude_none=True)),
+        ProductVariantDocument,
+    )
+    return _to_variant(record)
+
+
+@router.get('/variants/resolve/{qr_code}', response_model=ProductVariantRead)
+def resolve_variant_by_qr(qr_code: str, tenant_id: str = Query('tenant-admin')) -> ProductVariantRead:
+    records = [map_record(record, ProductVariantDocument) for record in variant_controller.list(tenant_id)]
+    for record in records:
+        variant = _to_variant(record)
+        if variant.qr_code == qr_code:
+            return variant
+    raise HTTPException(status_code=404, detail='Variant not found for qr_code')
+
+
+@router.get('/{id}', response_model=ProductDetailResponse)
+def get_product(id: str, tenant_id: str = Query('tenant-admin')) -> ProductDetailResponse:
+    product = _to_product(map_record(product_controller.get(id, tenant_id), ProductDocument))
+    variant_records = [map_record(record, ProductVariantDocument) for record in variant_controller.list(tenant_id)]
+    variants = [_to_variant(record) for record in variant_records if record.payload.product_id == id]
+    return ProductDetailResponse(product=product, variants=variants)

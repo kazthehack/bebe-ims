@@ -5,6 +5,8 @@ from datetime import datetime
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from app.db.repository import ObjectRepository
+
 router = APIRouter(tags=["resources"])
 
 
@@ -435,6 +437,30 @@ _REPORT_RUNS = [
     ReportRunItem(id="run-001", template_id="rpt-001", ran_at="2026-04-03T23:59:00Z", status="success"),
 ]
 
+_resource_repository = ObjectRepository()
+
+
+def _load_seeded_events(tenant_id: str = "tenant-admin") -> list[EventItem]:
+    records = _resource_repository.list_objects(tenant_id, "event")
+    events: list[EventItem] = []
+    for record in records:
+        payload = record.get("payload", {})
+        if not isinstance(payload, dict):
+            continue
+        try:
+            events.append(
+                EventItem.model_validate({
+                    "id": record.get("object_id"),
+                    "title": payload.get("title"),
+                    "start_date": payload.get("start_date"),
+                    "end_date": payload.get("end_date"),
+                    "status": payload.get("status"),
+                })
+            )
+        except Exception:
+            continue
+    return events
+
 
 @router.get("/sites", response_model=SiteListResponse)
 def list_sites() -> SiteListResponse:
@@ -566,6 +592,9 @@ def get_sales_site_summary(site_id: str) -> SalesSiteSummaryItem:
 
 @router.get("/events", response_model=EventsResponse)
 def list_events() -> EventsResponse:
+    seeded_events = _load_seeded_events()
+    if seeded_events:
+        return EventsResponse(events=seeded_events)
     return EventsResponse(events=_EVENTS)
 
 

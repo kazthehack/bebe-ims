@@ -13,8 +13,11 @@ import {
   WebPosPage,
   SalesPage,
   InventoryPage,
+  InventoryDetailPage,
   ProductsPage,
   ProductDetailPage,
+  ProductLineDetailPage,
+  VariantDetailPage,
   SuppliesPage,
   SitesPage,
   EventsPage,
@@ -85,6 +88,11 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
           render={() => <SalesPage authenticatedUserData={authenticatedUserData} />}
         />
         <Route
+          exact
+          path="/inventory/:id"
+          render={() => <InventoryDetailPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
           path="/inventory"
           render={() => <InventoryPage authenticatedUserData={authenticatedUserData} />}
         />
@@ -92,6 +100,16 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
           exact
           path="/products/:id"
           render={() => <ProductDetailPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
+          exact
+          path="/products/variants/:id"
+          render={() => <VariantDetailPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
+          exact
+          path="/product-lines/:id"
+          render={() => <ProductLineDetailPage authenticatedUserData={authenticatedUserData} />}
         />
         <Route
           path="/products"

@@ -44,18 +44,7 @@ const Lead = styled.p`
   font-size: 14px;
 `
 
-const Badge = styled.span`
-  display: inline-block;
-  margin-left: 8px;
-  font-size: 11px;
-  color: #1875f0;
-  border: 1px solid #cddcf3;
-  border-radius: 999px;
-  padding: 2px 8px;
-  vertical-align: middle;
-`
-
-const ModuleScaffoldPage = ({
+const ModuleOverviewPage = ({
   title,
   description,
   objects,
@@ -67,7 +56,6 @@ const ModuleScaffoldPage = ({
       title={(
         <div>
           {title}
-          <Badge>Mock Backbone</Badge>
         </div>
       )}
     >
@@ -96,7 +84,7 @@ const ModuleScaffoldPage = ({
   )
 }
 
-ModuleScaffoldPage.propTypes = {
+ModuleOverviewPage.propTypes = {
   title: PropTypes.string.isRequired,
   description: PropTypes.string.isRequired,
   objects: PropTypes.arrayOf(PropTypes.string).isRequired,
@@ -104,4 +92,4 @@ ModuleScaffoldPage.propTypes = {
   workflows: PropTypes.arrayOf(PropTypes.string).isRequired,
 }
 
-export default ModuleScaffoldPage
+export default ModuleOverviewPage

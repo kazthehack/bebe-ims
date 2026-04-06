@@ -3,12 +3,13 @@ IMAGE ?= bebe-ims-backend:local
 CONTAINER ?= bebe-ims-backend
 PORT ?= 8001
 
-.PHONY: help install build run run-dev deploy stop logs clean lint fmt test
+.PHONY: help install build migrate run run-dev deploy stop logs clean lint fmt test
 
 help:
 	@echo "Targets:"
 	@echo "  make install   # create venv + install deps"
 	@echo "  make build     # install deps + compile backend modules"
+	@echo "  make migrate   # create table (if needed) + seed default accounts/events"
 	@echo "  make run       # run backend locally with auto-reload"
 	@echo "  make run-dev   # run backend locally with auto-reload"
 	@echo "  make deploy    # build and run backend docker container"
@@ -26,16 +27,20 @@ build:
 	test -d .venv || $(MAKE) install
 	. .venv/bin/activate && python -m compileall app
 
-run:
+migrate:
 	test -d .venv || $(MAKE) install
+	. .venv/bin/activate && PYTHONPATH=. python scripts/migrate.py
+
+run:
+	$(MAKE) migrate
 	. .venv/bin/activate && uvicorn app.main:app --reload --host 127.0.0.1 --port $(PORT)
 
 run-no-reload:
-	test -d .venv || $(MAKE) install
+	$(MAKE) migrate
 	. .venv/bin/activate && uvicorn app.main:app --host 127.0.0.1 --port $(PORT)
 
 run-dev:
-	test -d .venv || $(MAKE) install
+	$(MAKE) migrate
 	. .venv/bin/activate && uvicorn app.main:app --reload --host 127.0.0.1 --port $(PORT)
 
 deploy:

@@ -6,7 +6,7 @@ from app.models.base import ObjectDocument
 class StoreDocument(ObjectDocument):
     model_config = ConfigDict(extra="allow")
     object_type: str = "store"
-    id: int | None = None
+    id: str | int | None = None
     name: str | None = None
     organization_id: int | None = None
     employee_id: int | None = None

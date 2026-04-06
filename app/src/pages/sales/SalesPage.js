@@ -1,7 +1,7 @@
 import React from 'react'
-import ModuleScaffoldPage from 'pages/modules/ModuleScaffoldPage'
+import ModuleOverviewPage from 'pages/modules/ModuleOverviewPage'
 import { MODULE_CONFIGS } from 'pages/modules/moduleConfigs'
 
-const SalesPage = () => <ModuleScaffoldPage {...MODULE_CONFIGS.sales} />
+const SalesPage = () => <ModuleOverviewPage {...MODULE_CONFIGS.sales} />
 
 export default SalesPage

@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     local_auth_users: str = "admin,site1,site2,site3"
     local_auth_password: str = "password"
     cors_origins: str = "http://localhost:2306,http://127.0.0.1:2306,http://localhost:3000,http://127.0.0.1:3000"
+    s3_bucket_name: str = ""
+    s3_assets_prefix: str = "assets/products"
+    s3_endpoint_url: str | None = None
+    s3_public_base_url: str | None = None
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

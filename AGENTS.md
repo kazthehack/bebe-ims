@@ -104,6 +104,38 @@ After any implementation change, complete all items below before handoff:
 - Keep page components mostly presentational.
 - Surface actionable error messages for failed endpoint calls.
 
+### Show Page Boilerplate Standard (Required)
+All object detail/show pages must follow one reusable structure and behavior model.
+
+1. Page Structure
+- Section 1: Object details (2-column key/value layout).
+- Section 2: Related objects table (with object-specific action buttons).
+- Section 3: Insights section (graph + table component scaffold).
+
+2. Required Controls
+- Top-right actions must include `EDIT`, `SAVE`, `CANCEL`, and `DELETE` when object allows update/delete.
+- `DELETE` must use confirmation modal with typed code confirmation.
+- Related object creation should use reusable modal components.
+
+3. Implementation Pattern
+- Keep page-level API calls inside hooks (`useXxxDetail`, `useXxxApi`) and not inline in view components.
+- Reuse shared components for details/table/analytics/modal rather than rebuilding layout per page.
+- Do not re-invent the show layout per object; adapt labels/fields/content only.
+
+4. Backend Contract Parity
+- Each show page must map to real REST resources:
+- `GET /api/v1/{resource}/{id}`
+- `PUT /api/v1/{resource}/{id}` (if editable)
+- `DELETE /api/v1/{resource}/{id}` (if deletable)
+- Related object endpoints must also be real routes, not hardcoded mock-only JSX.
+
+5. Done Criteria for New Show Pages
+- Page inherits the standard 3-section layout.
+- Edit flow is functional end-to-end.
+- Delete flow is functional with safety confirmation.
+- Related-object add flow is functional end-to-end.
+- Root `make` passes after changes.
+
 ### API
 - Keep endpoint contracts stable and typed.
 - For local mock/placeholder pages, wire through backend mock endpoints instead of hardcoded JSX data.

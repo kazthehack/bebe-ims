@@ -1,56 +1,129 @@
-from __future__ import annotations
+from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.models.product import (
-    ProductDetailModel,
-    ProductModel,
-    ProductRecipeLineModel,
-    ProductRecipeModel,
-    ProductVariantModel,
-)
+from app.domain.enums import SupplyType
 
-
-class ProductCreateRequest(BaseModel):
-    category: str
+class ProductCreate(BaseModel):
     name: str
-    variants: list[str]
+    product_line_id: str
+    category: str | None = None
+    list_price: float = 0.0
+    description: str | None = None
+    design_source: str | None = None
+    third_party_source_url: str | None = None
+    local_working_files: list[str] = Field(default_factory=list)
+    image_url: str | None = None
 
 
-class ProductImportItemRequest(BaseModel):
-    category: str
+class ProductRead(BaseModel):
+    id: str
+    product_code: str
     name: str
-    variants: list[str]
+    product_line: str
+    product_line_id: str
+    category: str | None = None
+    list_price: float
+    description: str | None = None
+    design_source: str | None = None
+    third_party_source_url: str | None = None
+    local_working_files: list[str] = Field(default_factory=list)
+    image_url: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
-class ProductImportRequest(BaseModel):
-    items: list[ProductImportItemRequest]
-
-
-class ProductImportResponse(BaseModel):
-    imported: int
-    total_products: int
-
-
-class ProductRecipeCreateRequest(BaseModel):
-    product_id: str
-    product_name: str
-    variant: str
-    percentage_mix: str
-    lines: list[ProductRecipeLineModel]
-    unit_cost_php: float
+class ProductUpdate(BaseModel):
+    name: str
+    product_line_id: str
+    category: str | None = None
+    list_price: float = 0.0
+    description: str | None = None
+    design_source: str | None = None
+    third_party_source_url: str | None = None
+    local_working_files: list[str] = Field(default_factory=list)
+    image_url: str | None = None
 
 
 class ProductListResponse(BaseModel):
-    products: list[ProductModel]
+    products: list[ProductRead]
+
+
+class ProductVariantCreate(BaseModel):
+    product_id: str
+    sku: str | None = None
+    name: str | None = None
+    yield_units: int = 1
+    print_hours: float = 0.0
+    image_url: str | None = None
+
+
+class ProductVariantRead(BaseModel):
+    id: str
+    product_id: str
+    sku: str
+    name: str | None = None
+    yield_units: int
+    print_hours: float
+    qr_code: str | None = None
+    image_url: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class ProductVariantListResponse(BaseModel):
-    variants: list[ProductVariantModel]
+    variants: list[ProductVariantRead]
 
 
-class ProductRecipeListResponse(BaseModel):
-    recipes: list[ProductRecipeModel]
+class ProductVariantUpdate(BaseModel):
+    name: str | None = None
+    yield_units: int | None = None
+    print_hours: float | None = None
+    image_url: str | None = None
 
 
-ProductDetailResponse = ProductDetailModel
+class ProductRecipePartCreate(BaseModel):
+    supply_id: str
+    grams: float | None = None
+    quantity: float | None = None
+    print_hours: float = 0.0
+
+
+class ProductRecipePartRead(BaseModel):
+    id: str
+    variant_id: str
+    supply_id: str
+    supply_name: str
+    supply_type: SupplyType
+    grams: float
+    quantity: float
+    required_grams_for_batch: float
+    required_quantity_for_batch: float
+    print_hours: float
+    available_quantity: float
+    available_grams: float
+    remaining_quantity_after_batch: float
+    remaining_grams_after_batch: float
+    can_produce: bool
+    cost_per_kilo: float
+    cost_per_piece: float
+    cost_of_part: float
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProductRecipePartListResponse(BaseModel):
+    parts: list[ProductRecipePartRead]
+    total_cost: float
+    total_part_hours: float
+    variant_print_hours: float
+    total_batch_hours: float
+    yield_units: int
+    price_per_unit: float
+    hours_per_unit: float
+    can_produce_batch: bool
+
+
+class ProductDetailResponse(BaseModel):
+    product: ProductRead
+    variants: list[ProductVariantRead]

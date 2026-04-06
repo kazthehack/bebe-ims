@@ -4,7 +4,7 @@ from fastapi.responses import RedirectResponse
 
 from app.core.config import get_settings
 from app.routers import auth, health, resources, object_api
-from app.routers.v1 import products
+from app.routers.v1 import product_lines, products, receipts, sessions, stock
 
 settings = get_settings()
 
@@ -25,7 +25,11 @@ app.add_middleware(
 
 app.include_router(health.router, prefix=settings.api_prefix)
 app.include_router(auth.router, prefix=settings.api_prefix)
+app.include_router(product_lines.router, prefix=settings.api_prefix)
 app.include_router(products.router, prefix=settings.api_prefix)
+app.include_router(stock.router, prefix=settings.api_prefix)
+app.include_router(receipts.router, prefix=settings.api_prefix)
+app.include_router(sessions.router, prefix=settings.api_prefix)
 app.include_router(resources.router, prefix=settings.api_prefix)
 app.include_router(object_api.router, prefix=settings.api_prefix)
 

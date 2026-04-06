@@ -1,13 +1,7 @@
 {
-  "short_name": "FF Portal Template",
-  "name": "FF Portal Template",
-  "icons": [
-    {
-      "src": "favicon.ico",
-      "sizes": "48x48",
-      "type": "image/png"
-    }
-  ],
+  "short_name": "BEBE Inventory",
+  "name": "BEBE Inventory",
+  "icons": [],
   "start_url": "./index.html",
   "display": "standalone",
   "theme_color": "#000000",

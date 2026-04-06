@@ -16,7 +16,7 @@ class BaseObjectController:
 
     def _validate_payload(self, payload: dict) -> dict:
         validated = self.model_cls.model_validate(payload)
-        return validated.model_dump(exclude_none=True)
+        return validated.model_dump(mode='json', exclude_none=True)
 
     def create(self, tenant_id: str, payload: dict) -> dict:
         now = datetime.now(timezone.utc).isoformat()
@@ -52,3 +52,9 @@ class BaseObjectController:
 
     def list(self, tenant_id: str) -> list[dict]:
         return self.repository.list_objects(tenant_id, self.object_type)
+
+    def delete(self, object_id: str, tenant_id: str) -> bool:
+        existing = self.repository.get_object(tenant_id, self.object_type, object_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail='Object not found')
+        return self.repository.delete_object(tenant_id, self.object_type, object_id)

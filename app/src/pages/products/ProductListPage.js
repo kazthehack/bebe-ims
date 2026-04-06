@@ -1,236 +1,156 @@
-import React, { useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { useHistory } from 'react-router-dom'
 import PageContent from 'components/pages/PageContent'
-import { ProductIcon } from 'components/common/display/ProductIcon'
+import ConfirmActionModal from 'components/reusable/modals/ConfirmActionModal'
+import NoticeModal from 'components/reusable/modals/NoticeModal'
 import { useProductsList } from 'hooks/products/useProductsApi'
+import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
+import AddProductModal from './modals/AddProductModal'
+import AddProductLineModal from './modals/AddProductLineModal'
+import { PRICING_TIER_OPTIONS, defaultPriceForTier, displayLabelForTier } from './constants/pricingTiers'
+import {
+  CUSTOM_DESIGN_SOURCE_VALUE,
+  DESIGN_SOURCE_OPTIONS,
+} from './constants/designSources'
+import { productListPageDefaultProps, productListPagePropTypes } from './ProductListPage.types'
 
-const PageSurface = styled.div`
+const linePrefix = (productLine) => {
+  const cleaned = String(productLine || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (!cleaned) return 'GEN'
+  return cleaned.slice(0, 3)
+}
+
+const Surface = styled.div`
   background: #f3f5f7;
   border: 1px solid #e1e6ec;
   border-radius: 4px;
+  padding: 0;
+`
+
+const TabBar = styled.div`
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  border-bottom: 1px solid #d6dde6;
+  background: #eef2f7;
+  padding: 0 14px;
+`
+
+const TabButton = styled.button`
+  border: 0;
+  border-bottom: 3px solid ${({ $active }) => ($active ? '#25384c' : 'transparent')};
+  background: transparent;
+  color: ${({ $active }) => ($active ? '#25384c' : '#5c6f84')};
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  letter-spacing: 0.02em;
+  height: 46px;
+  padding: 0 14px;
+  cursor: pointer;
+`
+
+const TabPanel = styled.div`
   padding: 14px;
 `
 
 const Toolbar = styled.div`
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-`
-
-const FilterGroup = styled.div`
-  display: flex;
-  flex-wrap: wrap;
   gap: 10px;
+  margin-bottom: 12px;
 `
 
-const FilterPill = styled.button`
-  border: 1px solid #bec8d3;
-  background: #f0f3f6;
-  color: #51667c;
-  border-radius: 4px;
-  height: 40px;
-  padding: 0 14px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: default;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`
-
-const RightTools = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-`
-
-const SearchWrap = styled.div`
-  position: relative;
-`
-
-const SearchIcon = styled(ProductIcon)`
-  position: absolute;
-  left: 12px;
-  top: 12px;
-  color: #4c6075;
-  font-size: 15px;
-`
-
-const SearchInput = styled.input`
-  width: 220px;
+const Input = styled.input`
   border: 1px solid #bec8d3;
   border-radius: 4px;
-  height: 40px;
-  padding: 0 14px 0 34px;
-  font-size: 14px;
-  color: #2f3f52;
+  height: 38px;
+  padding: 0 10px;
+  min-width: 280px;
   background: #f0f3f6;
 `
 
 const Button = styled.button`
-  height: 40px;
-  min-width: 88px;
+  height: 38px;
+  border: 1px solid ${({ $primary }) => ($primary ? '#25384c' : '#bec8d3')};
+  background: ${({ $primary }) => ($primary ? '#25384c' : '#f0f3f6')};
+  color: ${({ $primary }) => ($primary ? '#fff' : '#41576d')};
   border-radius: 4px;
-  border: 1px solid ${({ $primary }) => ($primary ? '#2f3f52' : '#bec8d3')};
-  background: ${({ $primary }) => ($primary ? '#2f3f52' : '#f0f3f6')};
-  color: ${({ $primary }) => ($primary ? '#ffffff' : '#4f6479')};
-  font-size: 13px;
-  font-weight: 600;
-  padding: 0 12px;
+  min-width: 88px;
   cursor: pointer;
 `
 
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(23, 33, 45, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-`
-
-const Modal = styled.div`
-  width: 460px;
-  background: #f8fafc;
-  border: 1px solid #d9e2ed;
-  border-radius: 4px;
-  box-shadow: 0 10px 30px rgba(18, 31, 45, 0.22);
-  padding: 16px;
-`
-
-const ModalTitle = styled.h3`
-  margin: 0 0 12px;
-  color: #243648;
-  font-size: 18px;
-`
-
-const FormGrid = styled.div`
+const Table = styled.div`
   display: grid;
-  gap: 10px;
+  gap: 6px;
 `
 
-const Label = styled.label`
+const ProductHeader = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1.5fr 1fr 1fr 0.7fr;
   font-size: 12px;
-  color: #4c6074;
-  font-weight: 600;
-`
-
-const Field = styled.input`
-  width: 100%;
-  border: 1px solid #c3cedb;
-  border-radius: 4px;
-  background: #ffffff;
-  color: #243648;
-  height: 38px;
-  padding: 0 10px;
-  font-size: 14px;
-  margin-top: 4px;
-`
-
-const ModalActions = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 14px;
-`
-
-const TableShell = styled.div`
-  margin-top: 6px;
-`
-
-const HeaderRow = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1.6fr 1.2fr 0.9fr 1.1fr 0.7fr;
   color: #4f6278;
-  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 4px 10px 8px;
+  padding: 0 10px;
 `
 
-const DataRow = styled.button`
-  width: 100%;
-  margin: 0 0 6px;
-  padding: 0;
+const ProductRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1.5fr 1fr 1fr 0.7fr;
   border: 1px solid #d9e0e8;
   border-radius: 4px;
   background: #e6eaef;
-  display: grid;
-  grid-template-columns: 1fr 1.6fr 1.2fr 0.9fr 1.1fr 0.7fr;
-  align-items: center;
   text-align: left;
-  cursor: pointer;
+  align-items: center;
+  min-height: 52px;
+`
 
-  &:hover {
-    background: #dde4ec;
-  }
+const ProductLineHeader = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 2fr 0.8fr 1fr 1fr;
+  font-size: 12px;
+  color: #4f6278;
+  font-weight: 700;
+  padding: 0 10px;
+`
+
+const ProductLineRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 2fr 0.8fr 1fr 1fr;
+  border: 1px solid #d9e0e8;
+  border-radius: 4px;
+  background: #e6eaef;
+  text-align: left;
+  align-items: center;
+  min-height: 52px;
 `
 
 const Cell = styled.div`
-  min-height: 54px;
   padding: 0 10px;
-  display: flex;
-  align-items: center;
-  color: #273646;
+  color: #243648;
   font-size: 14px;
-`
-
-const NameCell = styled(Cell)`
-  font-size: 15px;
-  font-weight: 500;
-`
-
-const Variants = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-const VariantTag = styled.span`
-  border: 1px solid #bcc9d8;
-  color: #2f4b68;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 11px;
-  background: #f0f4f8;
-`
-
-const ActionCell = styled(Cell)`
-  justify-content: space-between;
-  color: #4f6479;
-  font-weight: 600;
-`
-
-const Tags = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-const Tag = styled.span`
-  border: 1px solid #b9c7d6;
-  color: #455f79;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 11px;
-  background: #edf2f7;
 `
 
 const Meta = styled.div`
   margin-top: 8px;
+  color: #5f6e7d;
   font-size: 12px;
-  color: #5e5e5e;
 `
 
-const Empty = styled.div`
-  padding: 14px;
-  font-size: 13px;
-  color: #5e5e5e;
+const Actions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`
+
+const ActionButton = styled.button`
+  border: 0;
+  background: transparent;
+  color: #25384c;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
 `
 
 const money = (value) => new Intl.NumberFormat('en-PH', {
@@ -240,182 +160,404 @@ const money = (value) => new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 2,
 }).format(Number(value || 0))
 
-const buildTags = (item) => {
-  const tags = [item.category || 'General']
-  if ((item.variants || []).length > 1) tags.push('Multi-Variant')
-  else tags.push('Single Variant')
-  return tags
-}
+const splitMultiline = (value) => (
+  String(value || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+)
 
 const ProductListPage = ({ title }) => {
   const history = useHistory()
-  const [addOpen, setAddOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState('products')
+  const [showProductModal, setShowProductModal] = useState(false)
+  const [showProductLineModal, setShowProductLineModal] = useState(false)
+  const [showDeleteProductLineModal, setShowDeleteProductLineModal] = useState(false)
+  const [showDeleteBlockedModal, setShowDeleteBlockedModal] = useState(false)
+  const [showDeleteProductModal, setShowDeleteProductModal] = useState(false)
+  const [showDeleteProductBlockedModal, setShowDeleteProductBlockedModal] = useState(false)
+  const [productPendingDelete, setProductPendingDelete] = useState(null)
+  const [productLinePendingDelete, setProductLinePendingDelete] = useState(null)
   const [formError, setFormError] = useState('')
-  const [category, setCategory] = useState('')
   const [name, setName] = useState('')
-  const [variantsInput, setVariantsInput] = useState('')
+  const [productLineId, setProductLineId] = useState('')
+  const [category, setCategory] = useState('')
+  const [listPrice, setListPrice] = useState('')
+  const [designSource, setDesignSource] = useState('')
+  const [customDesignSource, setCustomDesignSource] = useState('')
+  const [thirdPartySourceUrl, setThirdPartySourceUrl] = useState('')
+  const [localWorkingFiles, setLocalWorkingFiles] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const [productLineSearch, setProductLineSearch] = useState('')
+
   const {
     products,
     loading,
     error,
     search,
     setSearch,
-    importStatus,
-    importMockProducts,
     createProduct,
+    deleteProduct,
+    productLines,
+    createProductLine,
+    deleteProductLine,
   } = useProductsList()
 
-  const handleCreate = async () => {
-    const cleanCategory = category.trim()
-    const cleanName = name.trim()
-    const variants = variantsInput
-      .split(',')
-      .map(item => item.trim())
-      .filter(Boolean)
+  const productLineOptions = useMemo(
+    () => productLines.map(line => ({ value: line.id, label: `${line.name} (${line.code})` })),
+    [productLines],
+  )
 
-    if (!cleanCategory || !cleanName) {
-      setFormError('Category and Name are required.')
+  const selectedProductLine = useMemo(
+    () => productLines.find(line => line.id === productLineId) || null,
+    [productLines, productLineId],
+  )
+
+  const designSourceOptions = useMemo(() => {
+    const base = [...DESIGN_SOURCE_OPTIONS]
+    const existingValues = Array.from(new Set(
+      products
+        .map((item) => String(item.design_source || '').trim())
+        .filter(Boolean),
+    ))
+    existingValues.forEach((value) => {
+      if (!base.some((option) => option.value === value)) {
+        base.push({ value, label: value })
+      }
+    })
+    return base
+  }, [products])
+
+  const filteredProductLines = useMemo(() => {
+    const query = String(productLineSearch || '').trim().toLowerCase()
+    if (!query) return productLines
+    return productLines.filter(line => (
+      String(line.code || '').toLowerCase().includes(query)
+      || String(line.name || '').toLowerCase().includes(query)
+      || String(line.description || '').toLowerCase().includes(query)
+    ))
+  }, [productLines, productLineSearch])
+
+  const skuPreview = useMemo(() => {
+    const lineCodeOrName = (
+      (selectedProductLine && (selectedProductLine.code || selectedProductLine.name)) || ''
+    )
+    const prefix = linePrefix(lineCodeOrName)
+    let maxNumber = 0
+    products.forEach((item) => {
+      const code = String(item.product_code || item.sku || '')
+      if (!code.startsWith(`${prefix}-`)) return
+      const next = code.split('-', 2)[1]
+      if (!next) return
+      const parsed = Number(next)
+      if (Number.isFinite(parsed)) maxNumber = Math.max(maxNumber, parsed)
+    })
+    return `${prefix}-${String(maxNumber + 1).padStart(5, '0')}`
+  }, [selectedProductLine, products])
+
+  const handleCreateProduct = async () => {
+    setFormError('')
+    if (!productLineId.trim() || !name.trim()) {
+      setFormError('Product Line and Product Name are required.')
       return
     }
-
-    setSaving(true)
-    setFormError('')
+    if (designSource === CUSTOM_DESIGN_SOURCE_VALUE && !customDesignSource.trim()) {
+      setFormError('Custom Design Source is required when Custom is selected.')
+      return
+    }
     try {
-      await createProduct({ category: cleanCategory, name: cleanName, variants })
-      setCategory('')
+      const resolvedDesignSource = designSource === CUSTOM_DESIGN_SOURCE_VALUE
+        ? customDesignSource.trim()
+        : designSource.trim()
+      await createProduct({
+        name: name.trim(),
+        product_line_id: productLineId.trim(),
+        category: category.trim() || null,
+        list_price: Number(listPrice || 0),
+        design_source: resolvedDesignSource || null,
+        third_party_source_url: thirdPartySourceUrl.trim() || null,
+        local_working_files: splitMultiline(localWorkingFiles),
+        image_url: imageUrl.trim() || null,
+      })
       setName('')
-      setVariantsInput('')
-      setAddOpen(false)
+      setProductLineId('')
+      setCategory('')
+      setListPrice('')
+      setDesignSource('')
+      setCustomDesignSource('')
+      setThirdPartySourceUrl('')
+      setLocalWorkingFiles('')
+      setImageUrl('')
+      setShowProductModal(false)
     } catch (err) {
       setFormError(err.message || 'Failed to create product.')
-    } finally {
-      setSaving(false)
     }
   }
 
+  const handleChangeTier = (tier) => {
+    setCategory(tier)
+    const defaultPrice = defaultPriceForTier(tier)
+    if (defaultPrice !== null) {
+      setListPrice(String(defaultPrice))
+    }
+  }
+
+  const handleOpenDeleteProductLine = (line) => {
+    setProductLinePendingDelete(line)
+    setShowDeleteProductLineModal(true)
+  }
+
+  const handleOpenDeleteProduct = (product) => {
+    setProductPendingDelete(product)
+    setShowDeleteProductModal(true)
+  }
+
+  const handleDeleteProductLine = async (line) => {
+    try {
+      await deleteProductLine(line.id)
+      setShowDeleteProductLineModal(false)
+      setProductLinePendingDelete(null)
+    } catch (err) {
+      const message = String(err && err.message ? err.message : '')
+      if (message.includes('409')) {
+        setShowDeleteProductLineModal(false)
+        setProductLinePendingDelete(null)
+        setShowDeleteBlockedModal(true)
+        return
+      }
+      throw err
+    }
+  }
+
+  const handleDeleteProduct = async (product) => {
+    try {
+      await deleteProduct(product.id)
+      setShowDeleteProductModal(false)
+      setProductPendingDelete(null)
+    } catch (err) {
+      const message = String(err && err.message ? err.message : '')
+      if (message.includes('409')) {
+        setShowDeleteProductModal(false)
+        setProductPendingDelete(null)
+        setShowDeleteProductBlockedModal(true)
+        return
+      }
+      throw err
+    }
+  }
+
+  const breadcrumbItems = activeTab === 'products'
+    ? [{ label: 'Inventory', to: '/inventory' }, { label: title }]
+    : [{ label: 'Inventory', to: '/inventory' }, { label: title, to: '/products' }, { label: 'Product Lines' }]
+
   return (
-    <PageContent title={title}>
-      <PageSurface>
-        <Toolbar>
-          <FilterGroup>
-            <FilterPill>Category <ProductIcon type="dropDown" /></FilterPill>
-            <FilterPill>Variant <ProductIcon type="dropDown" /></FilterPill>
-            <FilterPill>Date Range <ProductIcon type="dropDown" /></FilterPill>
-            <FilterPill>Site <ProductIcon type="dropDown" /></FilterPill>
-          </FilterGroup>
+    <PageContent title={<BreadcrumbTitle items={breadcrumbItems} />}>
+      <Surface>
+        <TabBar role="tablist" aria-label="Product workspace tabs">
+          <TabButton
+            id="products-tab"
+            role="tab"
+            aria-selected={activeTab === 'products'}
+            aria-controls="products-panel"
+            $active={activeTab === 'products'}
+            type="button"
+            onClick={() => setActiveTab('products')}
+          >
+            Products
+          </TabButton>
+          <TabButton
+            id="product-lines-tab"
+            role="tab"
+            aria-selected={activeTab === 'product-lines'}
+            aria-controls="product-lines-panel"
+            $active={activeTab === 'product-lines'}
+            type="button"
+            onClick={() => setActiveTab('product-lines')}
+          >
+            Product Lines
+          </TabButton>
+        </TabBar>
 
-          <RightTools>
-            <SearchWrap>
-              <SearchIcon type="search" />
-              <SearchInput
-                value={search}
-                onChange={event => setSearch(event.target.value)}
-                placeholder="Search"
-              />
-            </SearchWrap>
-            <Button type="button" onClick={importMockProducts}>Import</Button>
-            <Button $primary type="button" onClick={() => setAddOpen(true)}>Add</Button>
-          </RightTools>
-        </Toolbar>
+        {activeTab === 'products' && (
+          <TabPanel id="products-panel" role="tabpanel" aria-labelledby="products-tab">
+            <Toolbar>
+              <Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search products" />
+              <div>
+                <Button $primary type="button" onClick={() => setShowProductModal(true)}>Add Product</Button>
+              </div>
+            </Toolbar>
 
-        <TableShell>
-          <HeaderRow>
-            <div>Category</div>
-            <div>Name</div>
-            <div>Variants</div>
-            <div>Cost</div>
-            <div>Tags</div>
-            <div>Actions</div>
-          </HeaderRow>
+            <Table>
+              <ProductHeader>
+                <div>Product ID</div>
+                <div>Product Line</div>
+                <div>Name</div>
+                <div>Pricing Tier</div>
+                <div>List Price</div>
+                <div>Actions</div>
+              </ProductHeader>
 
-          {loading && <Empty>Loading products...</Empty>}
-          {!loading && products.length === 0 && <Empty>No products available.</Empty>}
-          {!loading && products.map(item => (
-            <DataRow key={item.id} type="button" onClick={() => history.push(`/products/${item.id}`)}>
-              <Cell>{item.category}</Cell>
-              <NameCell>{item.name}</NameCell>
-              <Cell>
-                <Variants>
-                  {(item.variants || []).map(variant => (
-                    <VariantTag key={`${item.id}-${variant}`}>{variant}</VariantTag>
-                  ))}
-                </Variants>
-              </Cell>
-              <Cell>{money(item.cost_php)}</Cell>
-              <Cell>
-                <Tags>
-                  {buildTags(item).map(tag => (
-                    <Tag key={`${item.id}-${tag}`}>{tag}</Tag>
-                  ))}
-                </Tags>
-              </Cell>
-              <ActionCell>
-                View
-                <ProductIcon type="rightArrow" />
-              </ActionCell>
-            </DataRow>
-          ))}
-        </TableShell>
-      </PageSurface>
+              {loading && <Meta>Loading products...</Meta>}
+              {!loading && products.map(item => (
+                <ProductRow key={item.id}>
+                  <Cell>{item.product_code || item.sku || item.id}</Cell>
+                  <Cell>{item.product_line || 'N/A'}</Cell>
+                  <Cell>{item.name}</Cell>
+                  <Cell>{displayLabelForTier(item.category)}</Cell>
+                  <Cell>{money(item.list_price)}</Cell>
+                  <Cell>
+                    <Actions>
+                      <ActionButton type="button" onClick={() => history.push(`/products/${item.id}`)}>VIEW</ActionButton>
+                      <span>|</span>
+                      <ActionButton type="button" onClick={() => handleOpenDeleteProduct(item)}>DELETE</ActionButton>
+                    </Actions>
+                  </Cell>
+                </ProductRow>
+              ))}
+            </Table>
+          </TabPanel>
+        )}
 
-      <Meta>Variants are unified per product line item and displayed as tags.</Meta>
-      {importStatus && <Meta>{importStatus}</Meta>}
-      {error && <Meta>{error}</Meta>}
+        {activeTab === 'product-lines' && (
+          <TabPanel id="product-lines-panel" role="tabpanel" aria-labelledby="product-lines-tab">
+            <Toolbar>
+              <Input value={productLineSearch} onChange={event => setProductLineSearch(event.target.value)} placeholder="Search product lines" />
+              <div>
+                <Button $primary type="button" onClick={() => setShowProductLineModal(true)}>Add Product Line</Button>
+              </div>
+            </Toolbar>
 
-      {addOpen && (
-        <Overlay onClick={() => !saving && setAddOpen(false)}>
-          <Modal onClick={event => event.stopPropagation()}>
-            <ModalTitle>Add Product</ModalTitle>
-            <FormGrid>
-              <Label>
-                Category *
-                <Field
-                  value={category}
-                  onChange={event => setCategory(event.target.value)}
-                  placeholder="Accessories"
-                  disabled={saving}
-                />
-              </Label>
-              <Label>
-                Name *
-                <Field
-                  value={name}
-                  onChange={event => setName(event.target.value)}
-                  placeholder="Keychain Delta"
-                  disabled={saving}
-                />
-              </Label>
-              <Label>
-                Variants (comma-separated)
-                <Field
-                  value={variantsInput}
-                  onChange={event => setVariantsInput(event.target.value)}
-                  placeholder="Red, Blue"
-                  disabled={saving}
-                />
-              </Label>
-            </FormGrid>
-            {formError && <Meta>{formError}</Meta>}
-            <ModalActions>
-              <Button type="button" onClick={() => setAddOpen(false)} disabled={saving}>Cancel</Button>
-              <Button $primary type="button" onClick={handleCreate} disabled={saving}>
-                {saving ? 'Saving...' : 'Create'}
-              </Button>
-            </ModalActions>
-          </Modal>
-        </Overlay>
-      )}
+            <Table>
+              <ProductLineHeader>
+                <div>Code</div>
+                <div>Name</div>
+                <div>Description</div>
+                <div>Products</div>
+                <div>Updated</div>
+                <div>Actions</div>
+              </ProductLineHeader>
+
+              {loading && <Meta>Loading product lines...</Meta>}
+              {!loading && filteredProductLines.map(line => (
+                <ProductLineRow key={line.id}>
+                  <Cell>{line.code}</Cell>
+                  <Cell>{line.name}</Cell>
+                  <Cell>{line.description || 'N/A'}</Cell>
+                  <Cell>{line.products_count || 0}</Cell>
+                  <Cell>{String(line.updated_at || '').replace('T', ' ').slice(0, 16) || 'N/A'}</Cell>
+                  <Cell>
+                    <Actions>
+                      <ActionButton type="button" onClick={() => history.push(`/product-lines/${line.id}`)}>VIEW</ActionButton>
+                      <span>|</span>
+                      <ActionButton type="button" onClick={() => handleOpenDeleteProductLine(line)}>DELETE</ActionButton>
+                    </Actions>
+                  </Cell>
+                </ProductLineRow>
+              ))}
+            </Table>
+          </TabPanel>
+        )}
+
+        {error && <TabPanel><Meta>{error}</Meta></TabPanel>}
+      </Surface>
+
+      <AddProductModal
+        open={showProductModal}
+        skuPreview={skuPreview}
+        name={name}
+        productLine={productLineId}
+        category={category}
+        listPrice={listPrice}
+        designSource={designSource}
+        customDesignSource={customDesignSource}
+        thirdPartySourceUrl={thirdPartySourceUrl}
+        localWorkingFiles={localWorkingFiles}
+        imageUrl={imageUrl}
+        categoryOptions={PRICING_TIER_OPTIONS}
+        designSourceOptions={designSourceOptions}
+        productLineOptions={productLineOptions}
+        formError={formError}
+        onChangeName={setName}
+        onChangeProductLine={setProductLineId}
+        onChangeCategory={handleChangeTier}
+        onChangeListPrice={setListPrice}
+        onChangeDesignSource={setDesignSource}
+        onChangeCustomDesignSource={setCustomDesignSource}
+        onChangeThirdPartySourceUrl={setThirdPartySourceUrl}
+        onChangeLocalWorkingFiles={setLocalWorkingFiles}
+        onChangeImageUrl={setImageUrl}
+        onClose={() => setShowProductModal(false)}
+        onSubmit={handleCreateProduct}
+      />
+
+      <AddProductLineModal
+        open={showProductLineModal}
+        onClose={() => setShowProductLineModal(false)}
+        onSubmit={createProductLine}
+      />
+
+      <ConfirmActionModal
+        open={showDeleteProductModal}
+        title="Delete Product"
+        description={`You are deleting product: ${productPendingDelete ? productPendingDelete.name : ''}`}
+        helperText="This action cannot be undone."
+        helperVariant="danger"
+        requiredText={productPendingDelete ? (productPendingDelete.product_code || productPendingDelete.id) : ''}
+        requiredTextLabel="Type code to confirm"
+        inputPlaceholder="Enter product code"
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onClose={() => {
+          setShowDeleteProductModal(false)
+          setProductPendingDelete(null)
+        }}
+        onConfirm={() => {
+          if (!productPendingDelete) return Promise.resolve()
+          return handleDeleteProduct(productPendingDelete)
+        }}
+      />
+
+      <NoticeModal
+        open={showDeleteProductBlockedModal}
+        title="Cannot Delete Product"
+        message="This product has associated variants. Remove variants first before deleting the product."
+        acknowledgeLabel="Understood"
+        onClose={() => setShowDeleteProductBlockedModal(false)}
+      />
+
+      <ConfirmActionModal
+        open={showDeleteProductLineModal}
+        title="Delete Product Line"
+        description={`You are deleting product line: ${productLinePendingDelete ? productLinePendingDelete.name : ''}`}
+        helperText="This action cannot be undone."
+        helperVariant="danger"
+        requiredText={productLinePendingDelete ? productLinePendingDelete.code : ''}
+        requiredTextLabel="Type code to confirm"
+        inputPlaceholder="Enter product line code"
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        onClose={() => {
+          setShowDeleteProductLineModal(false)
+          setProductLinePendingDelete(null)
+        }}
+        onConfirm={() => {
+          if (!productLinePendingDelete) return Promise.resolve()
+          return handleDeleteProductLine(productLinePendingDelete)
+        }}
+      />
+
+      <NoticeModal
+        open={showDeleteBlockedModal}
+        title="Cannot Delete Product Line"
+        message="This product line has products associated to it. Remove or reassign related products first."
+        acknowledgeLabel="Understood"
+        onClose={() => setShowDeleteBlockedModal(false)}
+      />
     </PageContent>
   )
 }
 
-ProductListPage.propTypes = {
-  title: PropTypes.string,
-}
-
-ProductListPage.defaultProps = {
-  title: 'Inventory',
-}
+ProductListPage.propTypes = productListPagePropTypes
+ProductListPage.defaultProps = productListPageDefaultProps
 
 export default ProductListPage

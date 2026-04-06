@@ -1,60 +1,27 @@
-from __future__ import annotations
+from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import ConfigDict, Field
+
+from app.models.base import ObjectDocument
 
 
-class ProductMaterialModel(BaseModel):
-    id: str
+class ProductDocument(ObjectDocument):
+    model_config = ConfigDict(extra='forbid')
+
+    object_type: str = 'product'
+    id: str | None = None
+    product_code: str | None = None
+    sku: str | None = None
     name: str
-    quantity: float
-    uom: str
-    cost_php: float
-
-
-class ProductPartModel(BaseModel):
-    id: str
-    name: str
-    part_type: str
-    materials: list[ProductMaterialModel]
-    cost_php: float
-
-
-class ProductModel(BaseModel):
-    id: str
-    category: str
-    name: str
-    variants: list[str]
-    cost_php: float
-
-
-class ProductDetailModel(BaseModel):
-    id: str
-    category: str
-    name: str
-    variants: list[str]
-    parts: list[ProductPartModel]
-    total_cost_php: float
-
-
-class ProductVariantModel(BaseModel):
-    id: str
-    product_id: str
-    name: str
-    percentage_mix: str
-
-
-class ProductRecipeLineModel(BaseModel):
-    material: str
-    quantity: float
-    uom: str
-    unit_cost_php: float
-
-
-class ProductRecipeModel(BaseModel):
-    id: str
-    product_id: str
-    product_name: str
-    variant: str
-    percentage_mix: str
-    lines: list[ProductRecipeLineModel]
-    unit_cost_php: float
+    product_line_id: str | None = None
+    product_line_name: str | None = None
+    product_line_code: str | None = None
+    category: str | None = None
+    list_price: float = 0.0
+    description: str | None = None
+    design_source: str | None = None
+    third_party_source_url: str | None = None
+    local_working_files: list[str] = Field(default_factory=list)
+    image_url: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
