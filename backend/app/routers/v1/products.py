@@ -6,6 +6,7 @@ from app.controllers.product import Product
 from app.controllers.product_line import ProductLine
 from app.controllers.product_recipe_part import ProductRecipePart
 from app.controllers.product_variant import ProductVariant
+from app.controllers.part import Part
 from app.controllers.supply import Supply
 from app.domain.enums import SupplyType
 from app.domain.record_mapper import StoredRecord, map_record
@@ -13,8 +14,12 @@ from app.models.product import ProductDocument
 from app.models.product_line import ProductLineDocument
 from app.models.product_recipe_part import ProductRecipePartDocument
 from app.models.product_variant import ProductVariantDocument
+from app.models.part import PartDocument
 from app.models.supply import SupplyDocument
 from app.schemas.product import (
+    PartCreate,
+    PartListResponse,
+    PartRead,
     ProductCreate,
     ProductDetailResponse,
     ProductListResponse,
@@ -37,11 +42,32 @@ variant_controller = ProductVariant()
 recipe_part_controller = ProductRecipePart()
 product_line_controller = ProductLine()
 supply_controller = Supply()
+part_controller = Part()
 
 
 def _normalize_supply_type(value: str | None) -> SupplyType:
     raw = str(value or '').strip().lower()
     if raw in ('consumable', SupplyType.CONSUMABLE.value):
+        return SupplyType.CONSUMABLE
+    if raw in ('filament', SupplyType.FILAMENT.value):
+        return SupplyType.FILAMENT
+    return SupplyType.FILAMENT
+
+
+def _infer_supply_type_for_record(
+    explicit: str | None,
+    *,
+    cost_per_kilo: float = 0.0,
+    cost_per_piece: float = 0.0,
+    grams: float = 0.0,
+    quantity: float = 0.0,
+) -> SupplyType:
+    normalized = _normalize_supply_type(explicit)
+    if explicit is not None and str(explicit).strip():
+        return normalized
+    if float(quantity or 0) > 0 and float(grams or 0) <= 0:
+        return SupplyType.CONSUMABLE
+    if float(cost_per_piece or 0) > 0 and float(cost_per_kilo or 0) <= 0:
         return SupplyType.CONSUMABLE
     return SupplyType.FILAMENT
 
@@ -60,6 +86,17 @@ def _to_product(record: StoredRecord[ProductDocument]) -> ProductRead:
         third_party_source_url=record.payload.third_party_source_url,
         local_working_files=record.payload.local_working_files or [],
         image_url=record.payload.image_url,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _to_part(record: StoredRecord[PartDocument]) -> PartRead:
+    return PartRead(
+        id=record.object_id,
+        name=record.payload.name,
+        description=record.payload.description,
+        active=bool(record.payload.active),
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -85,11 +122,17 @@ def _to_recipe_part(
     supply: StoredRecord[SupplyDocument] | None = None,
     yield_units: int = 1,
 ) -> ProductRecipePartRead:
-    supply_type = _normalize_supply_type(
-        record.payload.supply_type or (supply.payload.supply_type if supply else SupplyType.FILAMENT.value),
-    )
+    cost_per_kilo = float(record.payload.cost_per_kilo or 0)
+    cost_per_piece = float(record.payload.cost_per_piece or 0)
     grams = float(record.payload.grams or 0)
     quantity = float(record.payload.quantity or 0)
+    supply_type = _infer_supply_type_for_record(
+        record.payload.supply_type or (supply.payload.supply_type if supply else None),
+        cost_per_kilo=cost_per_kilo,
+        cost_per_piece=cost_per_piece,
+        grams=grams,
+        quantity=quantity,
+    )
     required_grams_for_batch = float(grams * max(1, int(yield_units or 1)))
     required_quantity_for_batch = float(quantity * max(1, int(yield_units or 1)))
 
@@ -108,8 +151,12 @@ def _to_recipe_part(
     return ProductRecipePartRead(
         id=record.object_id,
         variant_id=record.payload.variant_id,
+        part_id=record.payload.part_id,
+        part_name=record.payload.part_name,
         supply_id=record.payload.supply_id,
         supply_name=record.payload.supply_name,
+        filament_id=record.payload.filament_id,
+        filament_name=record.payload.filament_name,
         supply_type=supply_type,
         grams=grams,
         quantity=quantity,
@@ -121,12 +168,27 @@ def _to_recipe_part(
         remaining_quantity_after_batch=remaining_qty,
         remaining_grams_after_batch=remaining_grams,
         can_produce=can_produce,
-        cost_per_kilo=float(record.payload.cost_per_kilo or 0),
-        cost_per_piece=float(record.payload.cost_per_piece or 0),
+        cost_per_kilo=cost_per_kilo,
+        cost_per_piece=cost_per_piece,
         cost_of_part=float(record.payload.cost_of_part or 0),
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
+
+
+@router.get('/parts', response_model=PartListResponse)
+def list_parts(tenant_id: str = Query('tenant-admin')) -> PartListResponse:
+    records = [map_record(record, PartDocument) for record in part_controller.list(tenant_id)]
+    return PartListResponse(parts=[_to_part(record) for record in records])
+
+
+@router.post('/parts', response_model=PartRead)
+def create_part(payload: PartCreate, tenant_id: str = Query('tenant-admin')) -> PartRead:
+    record = map_record(
+        part_controller.create(tenant_id, payload.model_dump(exclude_none=True)),
+        PartDocument,
+    )
+    return _to_part(record)
 
 
 @router.get('', response_model=ProductListResponse)
@@ -269,11 +331,22 @@ def create_variant_recipe_part(
 ) -> ProductRecipePartRead:
     variant = map_record(variant_controller.get(id, tenant_id), ProductVariantDocument)
     supply = map_record(supply_controller.get(payload.supply_id, tenant_id), SupplyDocument)
-    supply_type = _normalize_supply_type(supply.payload.supply_type)
+    supply_type = _infer_supply_type_for_record(
+        supply.payload.supply_type,
+        cost_per_kilo=float(supply.payload.cost_per_kilo or 0),
+        cost_per_piece=float(supply.payload.cost_per_piece or 0),
+    )
     grams = float(payload.grams or 0)
     quantity = float(payload.quantity or 0)
     print_hours = float(payload.print_hours or 0)
 
+    part_id: str | None = payload.part_id
+    part_name: str | None = None
+    if supply_type == SupplyType.FILAMENT:
+        if not part_id:
+            raise HTTPException(status_code=400, detail='part_id is required for filament parts')
+        part = map_record(part_controller.get(part_id, tenant_id), PartDocument)
+        part_name = part.payload.name
     if supply_type == SupplyType.FILAMENT and grams <= 0:
         raise HTTPException(status_code=400, detail='Grams must be greater than zero for filament parts')
     if supply_type == SupplyType.CONSUMABLE and quantity <= 0:
@@ -285,8 +358,12 @@ def create_variant_recipe_part(
     record = map_record(
         recipe_part_controller.create(tenant_id, {
             'variant_id': id,
+            'part_id': part_id,
+            'part_name': part_name,
             'supply_id': payload.supply_id,
             'supply_name': supply.payload.name,
+            'filament_id': payload.supply_id if supply_type == SupplyType.FILAMENT else None,
+            'filament_name': supply.payload.name if supply_type == SupplyType.FILAMENT else None,
             'supply_type': supply_type.value,
             'grams': grams,
             'quantity': quantity,

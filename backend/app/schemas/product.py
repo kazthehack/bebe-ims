@@ -82,7 +82,27 @@ class ProductVariantUpdate(BaseModel):
     image_url: str | None = None
 
 
+class PartCreate(BaseModel):
+    name: str
+    description: str | None = None
+    active: bool = True
+
+
+class PartRead(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class PartListResponse(BaseModel):
+    parts: list[PartRead]
+
+
 class ProductRecipePartCreate(BaseModel):
+    part_id: str | None = None
     supply_id: str
     grams: float | None = None
     quantity: float | None = None
@@ -92,8 +112,12 @@ class ProductRecipePartCreate(BaseModel):
 class ProductRecipePartRead(BaseModel):
     id: str
     variant_id: str
+    part_id: str | None = None
+    part_name: str | None = None
     supply_id: str
     supply_name: str
+    filament_id: str | None = None
+    filament_name: str | None = None
     supply_type: SupplyType
     grams: float
     quantity: float

@@ -45,15 +45,20 @@ const Hint = styled.div`
 
 const AddRecipePartModal = ({
   open,
+  partId,
+  newPartName,
   supplyId,
   supplyType,
   grams,
   quantity,
   printHours,
+  partOptions,
   supplyOptions,
   selectedSupplyCostPerKilo,
   selectedSupplyCostPerPiece,
   formError,
+  onChangePartId,
+  onChangeNewPartName,
   onChangeSupplyId,
   onChangeQuantity,
   onChangeGrams,
@@ -75,6 +80,23 @@ const AddRecipePartModal = ({
       actionsAlign="right"
       closeControl="glyph"
     >
+      {supplyType !== 'consumable' && (
+        <>
+          <Label>
+            Part *
+            <Select value={partId} onChange={event => onChangePartId(event.target.value)}>
+              <option value="">Select part</option>
+              {partOptions.map(item => (
+                <option key={item.id} value={item.id}>{item.label}</option>
+              ))}
+            </Select>
+          </Label>
+          <Label>
+            New Part Name (optional)
+            <Input value={newPartName} onChange={event => onChangeNewPartName(event.target.value)} placeholder="Create if not in list" />
+          </Label>
+        </>
+      )}
       <Label>
         Supply *
         <Select value={supplyId} onChange={event => onChangeSupplyId(event.target.value)}>
@@ -109,11 +131,17 @@ const AddRecipePartModal = ({
 
 AddRecipePartModal.propTypes = {
   open: PropTypes.bool.isRequired,
+  partId: PropTypes.string.isRequired,
+  newPartName: PropTypes.string.isRequired,
   supplyId: PropTypes.string.isRequired,
   supplyType: PropTypes.string.isRequired,
   grams: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   quantity: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   printHours: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  partOptions: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    label: PropTypes.string.isRequired,
+  })).isRequired,
   supplyOptions: PropTypes.arrayOf(PropTypes.shape({
     id: PropTypes.string.isRequired,
     label: PropTypes.string.isRequired,
@@ -122,6 +150,8 @@ AddRecipePartModal.propTypes = {
   selectedSupplyCostPerKilo: PropTypes.string.isRequired,
   selectedSupplyCostPerPiece: PropTypes.string.isRequired,
   formError: PropTypes.string.isRequired,
+  onChangePartId: PropTypes.func.isRequired,
+  onChangeNewPartName: PropTypes.func.isRequired,
   onChangeSupplyId: PropTypes.func.isRequired,
   onChangeQuantity: PropTypes.func.isRequired,
   onChangeGrams: PropTypes.func.isRequired,

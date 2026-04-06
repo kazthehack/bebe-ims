@@ -104,16 +104,21 @@ const VariantDetailPage = () => {
   const {
     variantDetail,
     recipeParts,
+    parts,
     recipeTotalCost,
     recipeSummary,
     supplies,
     loading,
     error,
+    createPart,
     createRecipePart,
     updateVariant,
   } = useVariantDetail(id)
 
   const [showAddRecipePartModal, setShowAddRecipePartModal] = useState(false)
+  const [addRecipePartMode, setAddRecipePartMode] = useState('filament')
+  const [recipePartId, setRecipePartId] = useState('')
+  const [recipeNewPartName, setRecipeNewPartName] = useState('')
   const [recipePartSupplyId, setRecipePartSupplyId] = useState('')
   const [recipePartGrams, setRecipePartGrams] = useState('')
   const [recipePartQuantity, setRecipePartQuantity] = useState('')
@@ -142,21 +147,34 @@ const VariantDetailPage = () => {
     />
   )
 
-  const supplyOptions = useMemo(
-    () => (supplies || []).map((item) => ({
+  const supplyOptions = useMemo(() => {
+    const normalizedMode = String(addRecipePartMode || 'filament').toLowerCase()
+    return (supplies || [])
+      .filter((item) => {
+        const type = String(item.supply_type || 'filament').toLowerCase()
+        if (normalizedMode === 'consumable') return type === 'consumable'
+        return type !== 'consumable'
+      })
+      .map((item) => ({
       id: item.id,
       label: `${item.name || item.id} (${item.supply_type || 'filament'})`,
       supply_type: item.supply_type || 'filament',
-    })),
-    [supplies],
-  )
+      }))
+  }, [supplies, addRecipePartMode])
 
   const selectedSupply = useMemo(
     () => (supplies || []).find((item) => item.id === recipePartSupplyId) || null,
     [supplies, recipePartSupplyId],
   )
 
-  const selectedSupplyType = String((selectedSupply && selectedSupply.supply_type) || 'filament').toLowerCase()
+  const partOptions = useMemo(
+    () => (parts || []).map((item) => ({ id: item.id, label: `${item.name} (${item.id})` })),
+    [parts],
+  )
+
+  const selectedSupplyType = String(
+    (selectedSupply && selectedSupply.supply_type) || addRecipePartMode || 'filament',
+  ).toLowerCase()
 
   const selectedSupplyCostPerKilo = useMemo(
     () => money(selectedSupply ? selectedSupply.cost_per_kilo : 0),
@@ -172,7 +190,9 @@ const VariantDetailPage = () => {
       .filter((part) => String(part.supply_type || '').toLowerCase() !== 'consumable')
       .map((part) => ({
       key: part.id,
-      filament: part.supply_name || part.supply_id || 'N/A',
+      part_code: part.part_id || 'N/A',
+      part_name: part.part_name || 'N/A',
+      filament: part.filament_name || part.supply_name || part.supply_id || 'N/A',
       grams: Number(part.grams || 0),
       required_grams_for_batch: Number(part.required_grams_for_batch || 0),
       cost_per_kilo: money(part.cost_per_kilo),
@@ -241,6 +261,10 @@ const VariantDetailPage = () => {
       setRecipePartFormError('Supply is required.')
       return
     }
+    if (selectedSupplyType !== 'consumable' && !recipePartId.trim() && !recipeNewPartName.trim()) {
+      setRecipePartFormError('Part is required. Select an existing part or provide a new part name.')
+      return
+    }
     if (selectedSupplyType === 'consumable' && (!recipePartQuantity || Number(recipePartQuantity) <= 0)) {
       setRecipePartFormError('Quantity must be greater than zero.')
       return
@@ -250,12 +274,23 @@ const VariantDetailPage = () => {
       return
     }
     try {
+      let resolvedPartId = recipePartId.trim()
+      if (selectedSupplyType !== 'consumable' && !resolvedPartId && recipeNewPartName.trim()) {
+        const createdPart = await createPart({
+          name: recipeNewPartName.trim(),
+          description: null,
+        })
+        resolvedPartId = createdPart.id
+      }
       await createRecipePart({
+        part_id: selectedSupplyType === 'consumable' ? null : resolvedPartId,
         supply_id: recipePartSupplyId,
         grams: selectedSupplyType === 'consumable' ? null : Number(recipePartGrams),
         quantity: selectedSupplyType === 'consumable' ? Number(recipePartQuantity) : null,
         print_hours: Number(recipePartPrintHours || 0),
       })
+      setRecipePartId('')
+      setRecipeNewPartName('')
       setRecipePartSupplyId('')
       setRecipePartGrams('')
       setRecipePartQuantity('')
@@ -376,12 +411,24 @@ const VariantDetailPage = () => {
           <RelatedObjectsTableSection
             title="Parts"
             actions={(
-              <PrimaryButton type="button" onClick={() => setShowAddRecipePartModal(true)}>
+              <PrimaryButton
+                type="button"
+                onClick={() => {
+                  setAddRecipePartMode('filament')
+                  setRecipePartId('')
+                  setRecipeNewPartName('')
+                  setRecipePartSupplyId('')
+                  setRecipePartFormError('')
+                  setShowAddRecipePartModal(true)
+                }}
+              >
                 Add Part
               </PrimaryButton>
             )}
             columns={[
-              { key: 'filament', label: 'Filament', width: '1.6fr' },
+              { key: 'part_code', label: 'Part ID', width: '1.1fr' },
+              { key: 'part_name', label: 'Part Name', width: '1.4fr' },
+              { key: 'filament', label: 'Filament', width: '1.4fr' },
               { key: 'grams', label: 'Grams / Unit', width: '0.8fr' },
               { key: 'required_grams_for_batch', label: 'Required Grams / Batch', width: '1fr' },
               { key: 'cost_per_kilo', label: 'Cost / Kilo', width: '1fr' },
@@ -396,7 +443,17 @@ const VariantDetailPage = () => {
           <RelatedObjectsTableSection
             title="Consumables"
             actions={(
-              <PrimaryButton type="button" onClick={() => setShowAddRecipePartModal(true)}>
+              <PrimaryButton
+                type="button"
+                onClick={() => {
+                  setAddRecipePartMode('consumable')
+                  setRecipePartId('')
+                  setRecipeNewPartName('')
+                  setRecipePartSupplyId('')
+                  setRecipePartFormError('')
+                  setShowAddRecipePartModal(true)
+                }}
+              >
                 Add Consumable
               </PrimaryButton>
             )}
@@ -432,15 +489,20 @@ const VariantDetailPage = () => {
 
           <AddRecipePartModal
             open={showAddRecipePartModal}
+            partId={recipePartId}
+            newPartName={recipeNewPartName}
             supplyId={recipePartSupplyId}
             supplyType={selectedSupplyType}
             grams={recipePartGrams}
             quantity={recipePartQuantity}
             printHours={recipePartPrintHours}
+            partOptions={partOptions}
             supplyOptions={supplyOptions}
             selectedSupplyCostPerKilo={selectedSupplyCostPerKilo}
             selectedSupplyCostPerPiece={selectedSupplyCostPerPiece}
             formError={recipePartFormError}
+            onChangePartId={setRecipePartId}
+            onChangeNewPartName={setRecipeNewPartName}
             onChangeSupplyId={setRecipePartSupplyId}
             onChangeQuantity={setRecipePartQuantity}
             onChangeGrams={setRecipePartGrams}

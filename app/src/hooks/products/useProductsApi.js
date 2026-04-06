@@ -245,6 +245,7 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
 export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
   const [variantDetail, setVariantDetail] = useState(null)
   const [recipeParts, setRecipeParts] = useState([])
+  const [parts, setParts] = useState([])
   const [recipeTotalCost, setRecipeTotalCost] = useState(0)
   const [recipeSummary, setRecipeSummary] = useState({
     total_part_hours: 0,
@@ -265,10 +266,11 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
     setError('')
     try {
       const query = tenantQuery(tenantId)
-      const [variantData, recipeData, suppliesData] = await Promise.all([
+      const [variantData, recipeData, suppliesData, partsData] = await Promise.all([
         getJson(`/products/variants/${variantId}?${query}`),
         getJson(`/products/variants/${variantId}/recipe-parts?${query}`),
         getJson(`/stock/supplies?${query}`),
+        getJson(`/products/parts?${query}`),
       ])
       if (!cancelled) {
         setVariantDetail(variantData)
@@ -284,6 +286,7 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
           can_produce_batch: Boolean(recipeData.can_produce_batch),
         })
         setSupplies(suppliesData.supplies || [])
+        setParts(partsData.parts || [])
       }
     } catch (err) {
       if (!cancelled) setError(err.message || 'Failed to load variant detail.')
@@ -300,13 +303,28 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
     }
   }, [variantId, load])
 
+  const createPart = useCallback(async ({
+    name,
+    description,
+  }) => {
+    const created = await postJson(`/products/parts?${tenantQuery(tenantId)}`, {
+      name,
+      description,
+      active: true,
+    })
+    await load(false)
+    return created
+  }, [tenantId, load])
+
   const createRecipePart = useCallback(async ({
+    part_id,
     supply_id,
     grams,
     quantity,
     print_hours,
   }) => {
     const created = await postJson(`/products/variants/${encodeURIComponent(variantId)}/recipe-parts?${tenantQuery(tenantId)}`, {
+      part_id,
       supply_id,
       grams,
       quantity,
@@ -329,11 +347,13 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
   return {
     variantDetail,
     recipeParts,
+    parts,
     recipeTotalCost,
     recipeSummary,
     supplies,
     loading,
     error,
+    createPart,
     createRecipePart,
     updateVariant,
     reload: () => load(false),

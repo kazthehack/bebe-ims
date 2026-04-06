@@ -11,6 +11,7 @@ from app.models.inventory_report import InventoryReportDocument
 from app.models.notification import NotificationDocument
 from app.models.online_menu import OnlineMenuDocument
 from app.models.order import OrderDocument
+from app.models.part import PartDocument
 from app.models.permissions import PermissionsDocument
 from app.models.receipt import ReceiptDocument
 from app.models.reward import RewardDocument
@@ -42,6 +43,7 @@ OBJECT_MODELS = {
     "notification": NotificationDocument,
     "online_menu": OnlineMenuDocument,
     "order": OrderDocument,
+    "part": PartDocument,
     "permissions": PermissionsDocument,
     "receipt": ReceiptDocument,
     "reward": RewardDocument,

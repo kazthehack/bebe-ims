@@ -11,8 +11,12 @@ class ProductRecipePartDocument(ObjectDocument):
     object_type: str = 'product_recipe_part'
     id: str | None = None
     variant_id: str
+    part_id: str | None = None
+    part_name: str | None = None
     supply_id: str
     supply_name: str
+    filament_id: str | None = None
+    filament_name: str | None = None
     supply_type: str = 'filament'
     grams: float = 0.0
     quantity: float = 0.0
