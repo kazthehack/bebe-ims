@@ -60,6 +60,29 @@ Use this as the source-of-truth workflow for future migration and implementation
 - Summarize what changed and which files were touched.
 - Include known blockers or required env config explicitly.
 
+## Execution Guardrails (Hard Rules)
+These rules are mandatory for every agent turn.
+
+1. Preserve Existing Working Behavior
+- Do not remove buttons, actions, routes, or flows unless the user explicitly requests removal.
+- If refactoring layout, preserve all existing behavior first, then apply visual changes.
+- Treat every existing visible action as in-scope regression surface.
+
+2. No Scope Drift
+- Implement only what was requested in the current instruction.
+- If a request is visual/layout-only, do not alter backend logic or action availability.
+- If a request is backend-only, do not alter page layout or control placement.
+
+3. Template Compliance First
+- Inventory/Product/Supplies/Sites must follow the established reusable page template.
+- Do not introduce one-off page structures when equivalent reusable components exist.
+- If a page diverges from template, fix to template before adding new enhancements.
+
+4. Never Return Partial Work as Done
+- If any requested sub-part is missing, continue implementation until complete.
+- If uncertainty exists, default to preserving current behavior and ask only if truly blocked.
+- Do not handoff with “mostly done” status.
+
 ## Post-Change Checklist (Required)
 After any implementation change, complete all items below before handoff:
 1. Build verification
@@ -90,6 +113,16 @@ After any implementation change, complete all items below before handoff:
 7. Regression awareness
 - Identify nearby flows that might be affected by the change.
 - Call out what was not tested.
+
+8. Control Preservation Check
+- Confirm that all previously available actions on the touched page still exist.
+- Confirm button labels and positions still match the established template/playbook.
+- Confirm existing modals still open, submit, and close correctly.
+
+9. Request-to-Result Diff Check
+- Verify output exactly reflects the user’s latest instruction text.
+- Ensure no unrelated deletions or renames were introduced.
+- If additional cleanup was performed, explicitly list it and justify it.
 
 ## Conventions
 
@@ -136,6 +169,27 @@ All object detail/show pages must follow one reusable structure and behavior mod
 - Related-object add flow is functional end-to-end.
 - Root `make` passes after changes.
 
+### Inventory Page Template (Required)
+Use this exact structure for inventory detail pages unless user requests otherwise.
+
+1. Description section
+- Read-only object details using existing key/value detail template.
+
+2. Inventory section
+- Stock summary analytics block (same visual pattern used in Supplies).
+- Action buttons for inventory operations (`Add`, `Dispense`, `Transfer` when transfer exists).
+- Location stock table (`Location | Qty`) with storage and site rows.
+
+3. Changes section
+- Table-based audit list of stock movements.
+- Human-readable change text (e.g., added to storage, dispensed to site).
+- Empty state must render as an in-table row, not detached text.
+
+4. Behavior constraints
+- Keep transfer support if transfer endpoint exists.
+- Do not relocate analytics to ad-hoc top-of-page blocks outside section template.
+- Keep modal behavior consistent with shared modal controls.
+
 ### API
 - Keep endpoint contracts stable and typed.
 - For local mock/placeholder pages, wire through backend mock endpoints instead of hardcoded JSX data.
@@ -154,3 +208,5 @@ All object detail/show pages must follow one reusable structure and behavior mod
 - No silent scope reduction of legacy capability.
 - No fake placeholder layers presented as complete logic.
 - Do not return work as complete if build/run is broken.
+- No removal of existing controls without explicit user instruction.
+- No template-breaking one-off UI changes on established pages.

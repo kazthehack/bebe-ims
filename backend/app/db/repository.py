@@ -102,6 +102,7 @@ class DynamoSingleTableRepository:
                 response = self._client.query(
                     TableName=self._settings.dynamodb_table_name,
                     KeyConditionExpression="pk = :pk AND begins_with(sk, :prefix)",
+                    ConsistentRead=True,
                     ExpressionAttributeValues=self._to_dynamo_item({
                         ":pk": pk,
                         ":prefix": prefix,

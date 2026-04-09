@@ -17,5 +17,6 @@ class ProductVariantDocument(ObjectDocument):
     print_hours: float = 0.0
     qr_code: str | None = None
     image_url: str | None = None
+    seed_source: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

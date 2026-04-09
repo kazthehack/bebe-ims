@@ -1,9 +1,7 @@
 import { AuthApi, ObjectApi } from './client'
 
-const DEFAULT_TENANT_ID = process.env.REACT_APP_TENANT_ID || 'default'
-const DEFAULT_STORE_ID = process.env.REACT_APP_DEFAULT_STORE_ID || 'store-default'
-const LOCAL_USERS = ['admin', 'site1', 'site2', 'site3']
-const LOCAL_PASSWORD = 'password'
+const DEFAULT_TENANT_ID = process.env.REACT_APP_TENANT_ID || 'tenant-admin'
+const DEFAULT_STORE_ID = process.env.REACT_APP_DEFAULT_STORE_ID || 'store-admin'
 
 const nowIso = () => new Date().toISOString()
 
@@ -48,10 +46,6 @@ export const getTenantId = () => {
 
 export const authLogin = async (email, password) => {
   const username = `${email || ''}`.trim().toLowerCase()
-  if (!LOCAL_USERS.includes(username) || password !== LOCAL_PASSWORD) {
-    throw new Error('Invalid username or password')
-  }
-
   const auth = await AuthApi.login(getTenantId(), username, password)
 
   const authToken = {

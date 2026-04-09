@@ -7,8 +7,9 @@ from app.domain.enums import SupplyType
 class ProductCreate(BaseModel):
     name: str
     product_line_id: str
+    ip: str | None = None
     category: str | None = None
-    list_price: float = 0.0
+    list_price: float = 100.0
     description: str | None = None
     design_source: str | None = None
     third_party_source_url: str | None = None
@@ -22,6 +23,7 @@ class ProductRead(BaseModel):
     name: str
     product_line: str
     product_line_id: str
+    ip: str | None = None
     category: str | None = None
     list_price: float
     description: str | None = None
@@ -36,8 +38,9 @@ class ProductRead(BaseModel):
 class ProductUpdate(BaseModel):
     name: str
     product_line_id: str
+    ip: str | None = None
     category: str | None = None
-    list_price: float = 0.0
+    list_price: float = 100.0
     description: str | None = None
     design_source: str | None = None
     third_party_source_url: str | None = None
@@ -85,6 +88,7 @@ class ProductVariantUpdate(BaseModel):
 class PartCreate(BaseModel):
     name: str
     description: str | None = None
+    print_hours: float = 0.0
     active: bool = True
 
 
@@ -92,6 +96,7 @@ class PartRead(BaseModel):
     id: str
     name: str
     description: str | None = None
+    print_hours: float
     active: bool
     created_at: datetime
     updated_at: datetime
@@ -104,6 +109,7 @@ class PartListResponse(BaseModel):
 class ProductRecipePartCreate(BaseModel):
     part_id: str | None = None
     supply_id: str
+    batch_yield: float = 1.0
     grams: float | None = None
     quantity: float | None = None
     print_hours: float = 0.0
@@ -119,6 +125,7 @@ class ProductRecipePartRead(BaseModel):
     filament_id: str | None = None
     filament_name: str | None = None
     supply_type: SupplyType
+    batch_yield: float
     grams: float
     quantity: float
     required_grams_for_batch: float

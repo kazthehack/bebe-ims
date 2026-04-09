@@ -293,9 +293,9 @@ class ReportRunListResponse(BaseModel):
 
 
 _SITES = [
-    SiteItem(id="site-001", code="site1", name="Site 1", event_label="Orchard", active=True),
-    SiteItem(id="site-002", code="site2", name="Site 2", event_label="SMP", active=True),
-    SiteItem(id="site-003", code="site3", name="Site 3", event_label="Newpoint", active=True),
+    SiteItem(id="site-001", code="site1", name="Primary (A)", event_label="Orchard", active=True),
+    SiteItem(id="site-002", code="site2", name="Secondary (B)", event_label="SMP", active=True),
+    SiteItem(id="site-003", code="site3", name="Tertiary (C)", event_label="Newpoint", active=True),
 ]
 
 _SITE_STOCK = [
@@ -366,9 +366,9 @@ _SALES_TIMELINE = [
 ]
 
 _SALES_SITE_SUMMARY = {
-    "site1": SalesSiteSummaryItem(site="Site 1", gross=12480.0, rent=3200.0, operations=2860.0, currency="PHP"),
-    "site2": SalesSiteSummaryItem(site="Site 2", gross=9730.0, rent=2800.0, operations=2430.0, currency="PHP"),
-    "site3": SalesSiteSummaryItem(site="Site 3", gross=14210.0, rent=3600.0, operations=3310.0, currency="PHP"),
+    "site1": SalesSiteSummaryItem(site="Primary (A)", gross=12480.0, rent=3200.0, operations=2860.0, currency="PHP"),
+    "site2": SalesSiteSummaryItem(site="Secondary (B)", gross=9730.0, rent=2800.0, operations=2430.0, currency="PHP"),
+    "site3": SalesSiteSummaryItem(site="Tertiary (C)", gross=14210.0, rent=3600.0, operations=3310.0, currency="PHP"),
 }
 
 _EVENTS = [
@@ -403,8 +403,8 @@ _NOTIFICATIONS = [
 ]
 
 _EVENT_SITE_MAPPINGS = [
-    EventSiteMapItem(event_id="evt-001", event_name="Orchard Easter", site_id="site-001", site_name="Site 1"),
-    EventSiteMapItem(event_id="evt-002", event_name="SMP", site_id="site-002", site_name="Site 2"),
+    EventSiteMapItem(event_id="evt-001", event_name="Orchard Easter", site_id="site-001", site_name="Primary (A)"),
+    EventSiteMapItem(event_id="evt-002", event_name="SMP", site_id="site-002", site_name="Secondary (B)"),
 ]
 
 _CRM_AGREEMENTS = [
@@ -417,7 +417,7 @@ _CRM_REMEDIATIONS = [
 
 _EMPLOYEES = [
     EmployeeItem(id="emp-001", name="Admin User", role="admin", site_id="site-001"),
-    EmployeeItem(id="emp-002", name="Site 1 Staff", role="cashier", site_id="site-001"),
+    EmployeeItem(id="emp-002", name="Primary (A) Staff", role="cashier", site_id="site-001"),
 ]
 
 _PAYROLL = [
@@ -464,7 +464,15 @@ def _load_seeded_events(tenant_id: str = "tenant-admin") -> list[EventItem]:
 
 @router.get("/sites", response_model=SiteListResponse)
 def list_sites() -> SiteListResponse:
-    return SiteListResponse(sites=_SITES)
+    sites = sorted(
+        _SITES,
+        key=lambda site: (
+            (site.name or "").strip().casefold(),
+            (site.code or "").strip().casefold(),
+            site.id.casefold(),
+        ),
+    )
+    return SiteListResponse(sites=sites)
 
 
 @router.post("/sites", response_model=SiteItem)

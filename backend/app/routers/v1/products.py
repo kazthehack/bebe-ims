@@ -79,6 +79,7 @@ def _to_product(record: StoredRecord[ProductDocument]) -> ProductRead:
         name=record.payload.name,
         product_line=record.payload.product_line_name or record.payload.product_line_id or 'unassigned',
         product_line_id=record.payload.product_line_id or 'unassigned',
+        ip=record.payload.ip,
         category=record.payload.category,
         list_price=float(record.payload.list_price or 0),
         description=record.payload.description,
@@ -96,6 +97,7 @@ def _to_part(record: StoredRecord[PartDocument]) -> PartRead:
         id=record.object_id,
         name=record.payload.name,
         description=record.payload.description,
+        print_hours=float(record.payload.print_hours or 0),
         active=bool(record.payload.active),
         created_at=record.created_at,
         updated_at=record.updated_at,
@@ -120,12 +122,14 @@ def _to_variant(record: StoredRecord[ProductVariantDocument]) -> ProductVariantR
 def _to_recipe_part(
     record: StoredRecord[ProductRecipePartDocument],
     supply: StoredRecord[SupplyDocument] | None = None,
+    part: StoredRecord[PartDocument] | None = None,
     yield_units: int = 1,
 ) -> ProductRecipePartRead:
     cost_per_kilo = float(record.payload.cost_per_kilo or 0)
     cost_per_piece = float(record.payload.cost_per_piece or 0)
     grams = float(record.payload.grams or 0)
     quantity = float(record.payload.quantity or 0)
+    batch_yield = max(1.0, float(record.payload.batch_yield or 1.0))
     supply_type = _infer_supply_type_for_record(
         record.payload.supply_type or (supply.payload.supply_type if supply else None),
         cost_per_kilo=cost_per_kilo,
@@ -148,6 +152,7 @@ def _to_recipe_part(
     remaining_qty = float(qty_available - required_quantity_for_batch)
     remaining_grams = float(grams_available - required_grams_for_batch)
     can_produce = remaining_grams >= 0 if supply_type == SupplyType.FILAMENT else remaining_qty >= 0
+    part_print_hours = float(part.payload.print_hours or 0) if part else float(record.payload.print_hours or 0)
     return ProductRecipePartRead(
         id=record.object_id,
         variant_id=record.payload.variant_id,
@@ -158,11 +163,12 @@ def _to_recipe_part(
         filament_id=record.payload.filament_id,
         filament_name=record.payload.filament_name,
         supply_type=supply_type,
+        batch_yield=batch_yield,
         grams=grams,
         quantity=quantity,
         required_grams_for_batch=required_grams_for_batch,
         required_quantity_for_batch=required_quantity_for_batch,
-        print_hours=float(record.payload.print_hours or 0),
+        print_hours=part_print_hours,
         available_quantity=qty_available,
         available_grams=grams_available,
         remaining_quantity_after_batch=remaining_qty,
@@ -294,18 +300,28 @@ def list_variant_recipe_parts(id: str, tenant_id: str = Query('tenant-admin')) -
     variant_print_hours = float(variant.payload.print_hours or 0)
     records = [map_record(record, ProductRecipePartDocument) for record in recipe_part_controller.list(tenant_id)]
     supply_records = [map_record(record, SupplyDocument) for record in supply_controller.list(tenant_id)]
+    part_records = [map_record(record, PartDocument) for record in part_controller.list(tenant_id)]
     supply_by_id = {supply.object_id: supply for supply in supply_records}
+    part_by_id = {part.object_id: part for part in part_records}
     parts = [
         _to_recipe_part(
             record,
             supply_by_id.get(record.payload.supply_id),
+            part_by_id.get(record.payload.part_id) if record.payload.part_id else None,
             yield_units,
         )
         for record in records
         if record.payload.variant_id == id
     ]
     total_cost = float(sum(float(part.cost_of_part or 0) for part in parts))
-    total_part_hours = float(sum(float(part.print_hours or 0) for part in parts))
+    unique_part_hours: dict[str, float] = {}
+    ad_hoc_hours = 0.0
+    for part in parts:
+        if part.part_id:
+            unique_part_hours[part.part_id] = max(unique_part_hours.get(part.part_id, 0.0), float(part.print_hours or 0))
+        else:
+            ad_hoc_hours += float(part.print_hours or 0)
+    total_part_hours = float(sum(unique_part_hours.values()) + ad_hoc_hours)
     total_batch_hours = float(variant_print_hours + total_part_hours)
     price_per_unit = total_cost
     hours_per_unit = float(total_batch_hours / yield_units) if yield_units > 0 else 0.0
@@ -338,6 +354,7 @@ def create_variant_recipe_part(
     )
     grams = float(payload.grams or 0)
     quantity = float(payload.quantity or 0)
+    batch_yield = max(1.0, float(payload.batch_yield or 1.0))
     print_hours = float(payload.print_hours or 0)
 
     part_id: str | None = payload.part_id
@@ -347,6 +364,9 @@ def create_variant_recipe_part(
             raise HTTPException(status_code=400, detail='part_id is required for filament parts')
         part = map_record(part_controller.get(part_id, tenant_id), PartDocument)
         part_name = part.payload.name
+        print_hours = float(part.payload.print_hours or print_hours or 0)
+    else:
+        print_hours = 0.0
     if supply_type == SupplyType.FILAMENT and grams <= 0:
         raise HTTPException(status_code=400, detail='Grams must be greater than zero for filament parts')
     if supply_type == SupplyType.CONSUMABLE and quantity <= 0:
@@ -354,7 +374,13 @@ def create_variant_recipe_part(
 
     cost_per_kilo = float(supply.payload.cost_per_kilo or 0)
     cost_per_piece = float(supply.payload.cost_per_piece or 0)
-    cost_of_part = float((grams / 1000.0) * cost_per_kilo) if supply_type == SupplyType.FILAMENT else float(quantity * cost_per_piece)
+    grams_per_unit = float(grams / batch_yield) if supply_type == SupplyType.FILAMENT else grams
+    quantity_per_unit = float(quantity / batch_yield) if supply_type == SupplyType.CONSUMABLE else quantity
+    cost_of_part = (
+        float((grams_per_unit / 1000.0) * cost_per_kilo)
+        if supply_type == SupplyType.FILAMENT
+        else float(quantity_per_unit * cost_per_piece)
+    )
     record = map_record(
         recipe_part_controller.create(tenant_id, {
             'variant_id': id,
@@ -365,8 +391,9 @@ def create_variant_recipe_part(
             'filament_id': payload.supply_id if supply_type == SupplyType.FILAMENT else None,
             'filament_name': supply.payload.name if supply_type == SupplyType.FILAMENT else None,
             'supply_type': supply_type.value,
-            'grams': grams,
-            'quantity': quantity,
+            'batch_yield': batch_yield,
+            'grams': grams_per_unit,
+            'quantity': quantity_per_unit,
             'print_hours': print_hours,
             'cost_per_kilo': cost_per_kilo,
             'cost_per_piece': cost_per_piece,
@@ -375,7 +402,7 @@ def create_variant_recipe_part(
         ProductRecipePartDocument,
     )
     yield_units = int(variant.payload.yield_units or 1)
-    return _to_recipe_part(record, supply, yield_units)
+    return _to_recipe_part(record, supply, part if supply_type == SupplyType.FILAMENT else None, yield_units)
 
 
 @router.post('/variants', response_model=ProductVariantRead)

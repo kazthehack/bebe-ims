@@ -18,6 +18,7 @@ class ProductRecipePartDocument(ObjectDocument):
     filament_id: str | None = None
     filament_name: str | None = None
     supply_type: str = 'filament'
+    batch_yield: float = 1.0
     grams: float = 0.0
     quantity: float = 0.0
     print_hours: float = 0.0

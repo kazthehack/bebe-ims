@@ -32,6 +32,11 @@ const StyledDiv = styled.div`
   line-height: 52px;
   text-align: center;
   vertical-align: middle;
+
+  @media (max-width: 1024px) {
+    height: 44px;
+    line-height: 44px;
+  }
 `
 
 const StyledIcon = styled(ProductIcon)`
@@ -39,6 +44,11 @@ const StyledIcon = styled(ProductIcon)`
   position: relative;
   top: 2px;
   margin-right: 4px;
+
+  @media (max-width: 1024px) {
+    font-size: 15px;
+    margin-right: 3px;
+  }
 `
 
 const AppVersionContainer = styled.div`
@@ -58,6 +68,10 @@ const VersionSpan = styled.span`
   font-size: 14px;
   color: ${colors.blue};
   font-weight: bold;
+
+  @media (max-width: 1024px) {
+    font-size: 11px;
+  }
 `
 
 const StyledItem = styled.span`
@@ -67,6 +81,12 @@ const StyledItem = styled.span`
   letter-spacing: 1px;
   text-transform: uppercase;
   font-weight: bold;
+
+  @media (max-width: 1024px) {
+    left: 12px;
+    font-size: 11px;
+    letter-spacing: 0.4px;
+  }
 `
 
 const MenuItem = ({

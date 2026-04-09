@@ -144,8 +144,9 @@ const ProductLineDetailPage = () => {
   const [showDeleteBlocked, setShowDeleteBlocked] = useState(false)
   const [showAddProductModal, setShowAddProductModal] = useState(false)
   const [newProductName, setNewProductName] = useState('')
+  const [newProductIp, setNewProductIp] = useState('')
   const [newProductCategory, setNewProductCategory] = useState('')
-  const [newProductListPrice, setNewProductListPrice] = useState('')
+  const [newProductListPrice, setNewProductListPrice] = useState('100')
   const [newProductDesignSource, setNewProductDesignSource] = useState('')
   const [newProductCustomDesignSource, setNewProductCustomDesignSource] = useState('')
   const [newProductThirdPartySourceUrl, setNewProductThirdPartySourceUrl] = useState('')
@@ -191,6 +192,7 @@ const ProductLineDetailPage = () => {
       key: product.id,
       product_id: product.product_code || product.sku || product.id,
       name: product.name || 'N/A',
+      ip: product.ip || 'N/A',
       category: displayLabelForTier(product.category),
       list_price: money(product.list_price),
       actions: (
@@ -204,7 +206,6 @@ const ProductLineDetailPage = () => {
 
   const breadcrumbTitle = (
     <BreadcrumbTitle items={[
-      { label: 'Inventory', to: '/inventory' },
       { label: 'Products', to: '/products' },
       { label: 'Product Lines', to: '/products' },
       { label: 'Product Line Detail' },
@@ -305,6 +306,7 @@ const ProductLineDetailPage = () => {
       await createProduct({
         name: newProductName.trim(),
         product_line_id: productLineRecordId,
+        ip: newProductIp.trim() || null,
         category: newProductCategory.trim() || null,
         list_price: Number(newProductListPrice || 0),
         design_source: resolvedDesignSource || null,
@@ -316,8 +318,9 @@ const ProductLineDetailPage = () => {
         image_url: newProductImageUrl.trim() || null,
       })
       setNewProductName('')
+      setNewProductIp('')
       setNewProductCategory('')
-      setNewProductListPrice('')
+      setNewProductListPrice('100')
       setNewProductDesignSource('')
       setNewProductCustomDesignSource('')
       setNewProductThirdPartySourceUrl('')
@@ -332,9 +335,7 @@ const ProductLineDetailPage = () => {
   const handleChangeAssociatedProductTier = (tier) => {
     setNewProductCategory(tier)
     const defaultPrice = defaultPriceForTier(tier)
-    if (defaultPrice !== null) {
-      setNewProductListPrice(String(defaultPrice))
-    }
+    setNewProductListPrice(String(defaultPrice !== null ? defaultPrice : 100))
   }
 
   return (
@@ -394,8 +395,9 @@ const ProductLineDetailPage = () => {
         columns={[
           { key: 'product_id', label: 'Product ID', width: '1.1fr' },
           { key: 'name', label: 'Name', width: '1.5fr' },
+          { key: 'ip', label: 'IP', width: '1fr' },
           { key: 'category', label: 'Pricing Tier', width: '1fr' },
-          { key: 'list_price', label: 'List Price', width: '1fr' },
+          { key: 'list_price', label: 'List Price', width: '0.9fr' },
           { key: 'actions', label: 'Actions', width: '0.7fr' },
         ]}
         rows={relatedProductRows}
@@ -420,6 +422,7 @@ const ProductLineDetailPage = () => {
         skuPreview={skuPreview}
         name={newProductName}
         productLine={productLineRecordId || ''}
+        ip={newProductIp}
         category={newProductCategory}
         listPrice={newProductListPrice}
         designSource={newProductDesignSource}
@@ -436,6 +439,7 @@ const ProductLineDetailPage = () => {
         formError={newProductError}
         onChangeName={setNewProductName}
         onChangeProductLine={() => {}}
+        onChangeIp={setNewProductIp}
         onChangeCategory={handleChangeAssociatedProductTier}
         onChangeListPrice={setNewProductListPrice}
         onChangeDesignSource={setNewProductDesignSource}

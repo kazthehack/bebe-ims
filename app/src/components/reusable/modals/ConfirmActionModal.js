@@ -100,7 +100,7 @@ const ConfirmActionModal = ({
       width="460px"
       confirmDisabled={!isMatch || submitting}
       actionsAlign="right"
-      closeControl="glyph"
+      closeControl="dot"
     >
       {summaryText && <Meta>{summaryText}</Meta>}
       {helperText && <Meta $variant={helperVariant}>{helperText}</Meta>}

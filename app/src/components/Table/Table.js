@@ -41,6 +41,12 @@ const SortArrowContainer = styled.div`
   justify-content: center;
 `
 
+const TableViewport = styled.div`
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+`
+
 /* eslint-disable react/prop-types */
 const HeaderWithArrows = (Header, centered) => (props) => {
   const { column: { sorted } } = props
@@ -129,56 +135,58 @@ const Table = (props) => {
   }
 
   return (
-    <StyledTable
-      {...props}
-      manual={isManual} // handle sorting and pagination server-side
-      onFetchData={(tableState) => {
-        // Refetch query
-        fetchData({ pagesSkipped: tableState.page })
-      }}
-      pages={ceil(dataSize / pageSize)}
-      showPagination={showPagination}
-      minRows={0}
-      data={data}
-      column={{ ...ReactTableDefaults.column, resizable: false }}
-      columns={tableColumns}
-      defaultPageSize={pageSize}
-      // allow columns to extend getTdProps per column
-      getTdProps={(tState, rowInfo, column, instance) => merge(
-        // table-level getTdProps
-        getTdProps(tState, rowInfo, column, instance),
-        // per column getTdProps
-        invoke(column, 'getTdProps', tState, rowInfo, column, instance),
-      )}
-      getTrProps={(tState, info, column, instance) => {
-        // This calls getTrProps for the FIRST column that has it for each row
-        const columnProps = columns.find((col, i) => (get(columns, `[${i}].getTrProps`)))
-        const columnTrProps = invoke(columnProps, 'getTrProps', tState, info, column, instance)
-        const trProps = getTrProps(tState, info, column, instance)
-        const rowClick = get(trProps, 'onClick', () => {})
-        // Covering both cases because many tables use node and some take it out.
-        const isSelected = (get(info, 'original.id', false) === selected) || (get(info, 'original.node.id', false) === selected)
-        const style = get(trProps, 'style', {})
-        const selectedStyle = isSelected ? Object.assign(style, selectedRowStyle) : style
-        const rowStyle = noHover ? selectedStyle : Object.assign({ cursor: 'pointer' }, selectedStyle)
-        return ({
-          style: rowStyle,
-          className: noHover ? className : `tableHover ${className}`,
-          ...trProps,
-          onClick: (e, handleOriginal) => {
-            if (rowClick) rowClick(e, info)
-            if (handleOriginal) handleOriginal()
-            if (rowLink && (e.metaKey || e.ctrlKey)) {
-              window.open(rowLink(tState, info, column, instance), '_blank')
-            } else if (rowLink) history.push(rowLink(tState, info, column, instance))
-          },
-          // This implementation means that column-level trProps overrules all others
-          ...columnTrProps,
-        })
-      }}
-      onSortedChange={newSort => handleSorting(newSort)}
-      sorted={state.sorted}
-    />
+    <TableViewport>
+      <StyledTable
+        {...props}
+        manual={isManual} // handle sorting and pagination server-side
+        onFetchData={(tableState) => {
+          // Refetch query
+          fetchData({ pagesSkipped: tableState.page })
+        }}
+        pages={ceil(dataSize / pageSize)}
+        showPagination={showPagination}
+        minRows={0}
+        data={data}
+        column={{ ...ReactTableDefaults.column, resizable: false }}
+        columns={tableColumns}
+        defaultPageSize={pageSize}
+        // allow columns to extend getTdProps per column
+        getTdProps={(tState, rowInfo, column, instance) => merge(
+          // table-level getTdProps
+          getTdProps(tState, rowInfo, column, instance),
+          // per column getTdProps
+          invoke(column, 'getTdProps', tState, rowInfo, column, instance),
+        )}
+        getTrProps={(tState, info, column, instance) => {
+          // This calls getTrProps for the FIRST column that has it for each row
+          const columnProps = columns.find((col, i) => (get(columns, `[${i}].getTrProps`)))
+          const columnTrProps = invoke(columnProps, 'getTrProps', tState, info, column, instance)
+          const trProps = getTrProps(tState, info, column, instance)
+          const rowClick = get(trProps, 'onClick', () => {})
+          // Covering both cases because many tables use node and some take it out.
+          const isSelected = (get(info, 'original.id', false) === selected) || (get(info, 'original.node.id', false) === selected)
+          const style = get(trProps, 'style', {})
+          const selectedStyle = isSelected ? Object.assign(style, selectedRowStyle) : style
+          const rowStyle = noHover ? selectedStyle : Object.assign({ cursor: 'pointer' }, selectedStyle)
+          return ({
+            style: rowStyle,
+            className: noHover ? className : `tableHover ${className}`,
+            ...trProps,
+            onClick: (e, handleOriginal) => {
+              if (rowClick) rowClick(e, info)
+              if (handleOriginal) handleOriginal()
+              if (rowLink && (e.metaKey || e.ctrlKey)) {
+                window.open(rowLink(tState, info, column, instance), '_blank')
+              } else if (rowLink) history.push(rowLink(tState, info, column, instance))
+            },
+            // This implementation means that column-level trProps overrules all others
+            ...columnTrProps,
+          })
+        }}
+        onSortedChange={newSort => handleSorting(newSort)}
+        sorted={state.sorted}
+      />
+    </TableViewport>
   )
 }
 
@@ -265,6 +273,27 @@ const StyledTable = styled(ReactTable)`
 
   .table-error {
     border: 1px solid red !important;
+  }
+
+  @media (max-width: 1024px) {
+    min-width: 760px;
+
+    .rt-tr {
+      height: 50px;
+    }
+
+    .rt-th {
+      font-size: 11px;
+      letter-spacing: 0.25px;
+    }
+
+    .rt-td {
+      font-size: 12px;
+    }
+
+    .rt-tr > .rt-th:first-child, .rt-td:first-child {
+      padding-left: 14px;
+    }
   }
 `
 

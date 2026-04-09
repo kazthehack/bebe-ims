@@ -27,7 +27,7 @@ const NoticeModal = ({
     width="440px"
     showCancel={false}
     actionsAlign="right"
-    closeControl="glyph"
+    closeControl="dot"
   >
     <Message>{message}</Message>
   </FormModal>

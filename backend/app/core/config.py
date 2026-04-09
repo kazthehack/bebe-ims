@@ -47,13 +47,31 @@ class Settings(BaseSettings):
     dynamodb_local_config_file: str = "config/dynamodb.local.json"
     local_auth_users: str = "admin,site1,site2,site3"
     local_auth_password: str = "password"
-    cors_origins: str = "http://localhost:2306,http://127.0.0.1:2306,http://localhost:3000,http://127.0.0.1:3000"
+    cors_origins: str = (
+        "http://localhost:2306,http://127.0.0.1:2306,"
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://192.168.0.50:2306"
+    )
+    cors_origin_regex: str = (
+        r"^https?://("
+        r"localhost|127\.0\.0\.1|"
+        r"192\.168\.\d{1,3}\.\d{1,3}|"
+        r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+        r"172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}"
+        r")(:\d+)?$"
+    )
     s3_bucket_name: str = ""
     s3_assets_prefix: str = "assets/products"
     s3_endpoint_url: str | None = None
     s3_public_base_url: str | None = None
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
+    slicer_cli_path: str | None = None
+    slicer_profiles_root: str | None = None
+    slicer_machine_preset: str = "Bambu Lab A1 0.4 nozzle.json"
+    slicer_process_preset: str = "0.20mm Standard @BBL A1.json"
+    slicer_load_default_filament: bool = True
+    slicer_allow_newer_file: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",

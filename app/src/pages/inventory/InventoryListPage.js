@@ -1,68 +1,78 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { useHistory } from 'react-router-dom'
+import { useHistory, useLocation } from 'react-router-dom'
 import PageContent from 'components/pages/PageContent'
-import { useStockResource } from 'hooks/bazaar/useBazaarApi'
-import { useProductsList } from 'hooks/products/useProductsApi'
-import AddInventoryModal from './modals/AddInventoryModal'
-
-const Surface = styled.div`
-  background: #f3f5f7;
-  border: 1px solid #e1e6ec;
-  border-radius: 4px;
-  padding: 14px;
-`
-
-const Toolbar = styled.div`
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-`
-
-const Input = styled.input`
-  border: 1px solid #bec8d3;
-  border-radius: 4px;
-  height: 38px;
-  padding: 0 10px;
-  min-width: 220px;
-  background: #f0f3f6;
-`
-
-const Button = styled.button`
-  height: 38px;
-  border: 1px solid ${({ $primary }) => ($primary ? '#25384c' : '#bec8d3')};
-  background: ${({ $primary }) => ($primary ? '#25384c' : '#f0f3f6')};
-  color: ${({ $primary }) => ($primary ? '#fff' : '#41576d')};
-  border-radius: 4px;
-  min-width: 88px;
-  cursor: pointer;
-`
+import ListPageShell from 'components/reusable/layouts/ListPageShell'
+import ListFiltersRow from 'components/reusable/layouts/ListFiltersRow'
+import { useInventoryResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
+import {
+  buildInventoryRows,
+  GLOBAL_TAB,
+  INVENTORY_LIST_STATE_KEY,
+  readInventoryListState,
+  readInventoryListStateFromSearch,
+  STORAGE_TAB,
+} from './inventoryListState'
 
 const Table = styled.div`
   display: grid;
   gap: 6px;
 `
 
+const PaginationBar = styled.div`
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+`
+
+const PaginationButton = styled.button`
+  height: 30px;
+  border: 1px solid #bec8d3;
+  background: #f0f3f6;
+  color: #41576d;
+  border-radius: 4px;
+  min-width: 64px;
+  cursor: pointer;
+`
+
 const Header = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.6fr;
+  grid-template-columns: 1.2fr 1.2fr 1.2fr 0.8fr 0.8fr 0.9fr 0.9fr 0.9fr 0.7fr;
   font-size: 12px;
   color: #4f6278;
   font-weight: 700;
   padding: 0 10px;
 `
 
-const Row = styled.button`
+const Row = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.6fr;
+  grid-template-columns: 1.2fr 1.2fr 1.2fr 0.8fr 0.8fr 0.9fr 0.9fr 0.9fr 0.7fr;
   border: 1px solid #d9e0e8;
   border-radius: 4px;
   background: #e6eaef;
-  text-align: left;
   align-items: center;
   min-height: 52px;
-  cursor: pointer;
+`
+
+const CompactHeader = styled.div`
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr 1.2fr 0.9fr 0.7fr;
+  font-size: 12px;
+  color: #4f6278;
+  font-weight: 700;
+  padding: 0 10px;
+`
+
+const CompactRow = styled.div`
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr 1.2fr 0.9fr 0.7fr;
+  border: 1px solid #d9e0e8;
+  border-radius: 4px;
+  background: #e6eaef;
+  align-items: center;
+  min-height: 52px;
 `
 
 const Cell = styled.div`
@@ -77,85 +87,308 @@ const Meta = styled.div`
   font-size: 12px;
 `
 
-const InventoryListPage = () => {
-  const history = useHistory()
-  const [showAddInventoryModal, setShowAddInventoryModal] = useState(false)
-  const [search, setSearch] = useState('')
+const ActionButton = styled.button`
+  border: 0;
+  background: transparent;
+  color: #25384c;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+`
 
+const ToolbarRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+
+  @media (max-width: 1024px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+`
+
+const PrimaryButton = styled.button`
+  height: 38px;
+  border: 1px solid #25384c;
+  background: #25384c;
+  color: #fff;
+  border-radius: 4px;
+  min-width: 88px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+`
+
+const PAGE_SIZE = 20
+
+const InventoryListPage = () => {
+  const location = useLocation()
+  const restoredState = {
+    ...readInventoryListState(),
+    ...readInventoryListStateFromSearch(location.search),
+  }
+  const history = useHistory()
+  const [activeTab, setActiveTab] = useState(() => String(restoredState.activeTab || GLOBAL_TAB))
+  const [search, setSearch] = useState(() => String(restoredState.search || ''))
+  const [page, setPage] = useState(() => Math.max(1, Number(restoredState.page || 1)))
+  const [siteItems, setSiteItems] = useState([])
+  const [siteLoading, setSiteLoading] = useState(false)
+  const [siteError, setSiteError] = useState('')
+  const [productLineFilter, setProductLineFilter] = useState(() => String(restoredState.productLineFilter || 'all'))
+  const [variantFilter, setVariantFilter] = useState(() => String(restoredState.variantFilter || 'all'))
+  const [availabilityFilter, setAvailabilityFilter] = useState(() => String(restoredState.availabilityFilter || 'all'))
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
   const {
-    productStock,
+    globalItems,
     loading,
     error,
-    createProductStock,
-  } = useStockResource()
-  const { variantsByProductId } = useProductsList()
+    loadSite,
+    exportInventoryWorkbook,
+  } = useInventoryResource()
+  const {
+    sites,
+  } = useSitesResource()
 
-  const filteredRows = (productStock || []).filter((item) => {
-    const q = (search || '').trim().toLowerCase()
-    if (!q) return true
-    return [
-      item.id,
-      item.product_variant_id,
-      item.site_id,
-      item.qty_on_hand,
-      item.qty_reserved,
-      item.qty_available,
-      item.low_stock_threshold,
-    ].join(' ').toLowerCase().includes(q)
-  })
+  const tabs = useMemo(
+    () => ([
+      { key: GLOBAL_TAB, label: 'Global' },
+      { key: STORAGE_TAB, label: 'Storage' },
+      ...(sites || []).map((site) => ({ key: site.id, label: site.name || site.code || site.id })),
+    ]),
+    [sites],
+  )
+
+  useEffect(() => {
+    if ((tabs || []).some((tab) => tab.key === activeTab)) return
+    setActiveTab(GLOBAL_TAB)
+  }, [tabs, activeTab])
+
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      if (activeTab === GLOBAL_TAB || activeTab === STORAGE_TAB) return
+      setSiteLoading(true)
+      setSiteError('')
+      try {
+        const data = await loadSite(activeTab)
+        if (!cancelled) setSiteItems(data.items || [])
+      } catch (err) {
+        if (!cancelled) setSiteError(err.message || 'Failed to load site inventory.')
+      } finally {
+        if (!cancelled) setSiteLoading(false)
+      }
+    }
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, loadSite])
+
+  const hasMountedRef = React.useRef(false)
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true
+      return
+    }
+    setPage(1)
+  }, [activeTab, search, productLineFilter, variantFilter, availabilityFilter])
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(INVENTORY_LIST_STATE_KEY, JSON.stringify({
+        activeTab,
+        search,
+        page,
+        productLineFilter,
+        variantFilter,
+        availabilityFilter,
+      }))
+    } catch (_err) {
+      // ignore storage write errors
+    }
+  }, [activeTab, search, page, productLineFilter, variantFilter, availabilityFilter])
+
+  const productLineOptions = useMemo(
+    () => ['all', ...Array.from(new Set((globalItems || []).map((item) => String(item.product_line_name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
+    [globalItems],
+  )
+  const variantOptions = useMemo(
+    () => ['all', ...Array.from(new Set((globalItems || []).map((item) => String(item.variant_name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
+    [globalItems],
+  )
+
+  const rows = useMemo(() => buildInventoryRows({
+    activeTab,
+    globalItems,
+    siteItems,
+    search,
+    productLineFilter,
+    variantFilter,
+    availabilityFilter,
+  }), [activeTab, globalItems, siteItems, search, productLineFilter, variantFilter, availabilityFilter])
+
+  const isGlobalTab = activeTab === GLOBAL_TAB
+  const isStorageTab = activeTab === STORAGE_TAB
+  const isLoading = (isGlobalTab || isStorageTab) ? loading : siteLoading
+  const activeError = (isGlobalTab || isStorageTab) ? error : siteError
+  const activeSiteLabel = (tabs.find((tab) => tab.key === activeTab) || {}).label || 'Site'
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pagedRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
+  const filterDefinitions = useMemo(
+    () => ([
+      {
+        key: 'product-line',
+        value: productLineFilter,
+        onChange: setProductLineFilter,
+        options: [
+          { value: 'all', label: 'All Product Lines' },
+          ...productLineOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
+        ],
+      },
+      {
+        key: 'variant',
+        value: variantFilter,
+        onChange: setVariantFilter,
+        options: [
+          { value: 'all', label: 'All Variants' },
+          ...variantOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
+        ],
+      },
+      {
+        key: 'availability',
+        value: availabilityFilter,
+        onChange: setAvailabilityFilter,
+        options: [
+          { value: 'all', label: 'All Availability' },
+          { value: 'with-stock', label: 'With Stock' },
+          { value: 'zero-stock', label: 'Zero Stock' },
+        ],
+      },
+    ]),
+    [productLineFilter, productLineOptions, variantFilter, variantOptions, availabilityFilter],
+  )
+
+  const handleExport = async () => {
+    setExportError('')
+    setExporting(true)
+    try {
+      await exportInventoryWorkbook()
+    } catch (err) {
+      setExportError(err.message || 'Failed to export inventory workbook.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <PageContent title="Inventory">
-      <Surface>
-        <Toolbar>
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by inventory id, variant id, site"
-          />
-          <div>
-            <Button type="button" onClick={() => history.push('/products')}>Add Product</Button>
-            <Button $primary type="button" onClick={() => setShowAddInventoryModal(true)} style={{ marginLeft: 8 }}>Add Inventory</Button>
-          </div>
-        </Toolbar>
-
+      <ListPageShell
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search product line, product, variant"
+        toolbar={(
+          <ToolbarRow>
+            <ListFiltersRow
+              searchValue={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Search product line, product, variant"
+              filters={filterDefinitions}
+            />
+            <div>
+              <PrimaryButton type="button" onClick={handleExport} disabled={exporting}>
+                {exporting ? 'Exporting...' : 'Export'}
+              </PrimaryButton>
+            </div>
+          </ToolbarRow>
+        )}
+      >
         <Table>
-          <Header>
-            <div>ID</div>
-            <div>Product Variant</div>
-            <div>Site</div>
-            <div>On Hand</div>
-            <div>Reserved</div>
-            <div>Available</div>
-            <div>Low Stock</div>
-            <div>Action</div>
-          </Header>
-
-          {loading && <Meta>Loading inventory...</Meta>}
-          {!loading && filteredRows.map((item) => (
-            <Row key={item.id} type="button" onClick={() => history.push(`/inventory/${item.id}`)}>
-              <Cell>{item.id}</Cell>
-              <Cell>{item.product_variant_id}</Cell>
-              <Cell>{item.site_id}</Cell>
-              <Cell>{item.qty_on_hand}</Cell>
-              <Cell>{item.qty_reserved}</Cell>
-              <Cell>{item.qty_available}</Cell>
-              <Cell>{item.low_stock_threshold}</Cell>
-              <Cell>View</Cell>
-            </Row>
-          ))}
+          {isGlobalTab && (
+            <>
+              <Header>
+                <div>Product Line</div>
+                <div>Product</div>
+                <div>Variant</div>
+                <div>Global</div>
+                <div>Storage</div>
+                <div>Primary (A)</div>
+                <div>Secondary (B)</div>
+                <div>Tertiary (C)</div>
+                <div>Action</div>
+              </Header>
+              {pagedRows.map((item) => (
+                <Row key={item.product_variant_id}>
+                  <Cell>{item.product_line_name || '-'}</Cell>
+                  <Cell>{item.product_name}</Cell>
+                  <Cell>{item.variant_name || item.sku || '-'}</Cell>
+                  <Cell>{item.global_qty}</Cell>
+                  <Cell>{item.storage_qty}</Cell>
+                  <Cell>{item.primary_qty}</Cell>
+                  <Cell>{item.secondary_qty}</Cell>
+                  <Cell>{item.tertiary_qty}</Cell>
+                  <Cell>
+                    <ActionButton type="button" onClick={() => history.push(`/inventory/${item.inventory_id || item.product_variant_id}`)}>
+                      View
+                    </ActionButton>
+                  </Cell>
+                </Row>
+              ))}
+            </>
+          )}
+          {!isGlobalTab && (
+            <>
+              <CompactHeader>
+                <div>Product Line</div>
+                <div>Product</div>
+                <div>Variant</div>
+                <div>{isStorageTab ? 'Storage' : activeSiteLabel}</div>
+                <div>Action</div>
+              </CompactHeader>
+              {pagedRows.map((item) => (
+                <CompactRow key={item.product_variant_id}>
+                  <Cell>{item.product_line_name || '-'}</Cell>
+                  <Cell>{item.product_name}</Cell>
+                  <Cell>{item.variant_name || item.sku || '-'}</Cell>
+                  <Cell>{Number(item.view_qty || 0)}</Cell>
+                  <Cell>
+                    <ActionButton type="button" onClick={() => history.push(`/inventory/${item.inventory_id || item.product_variant_id}`)}>
+                      View
+                    </ActionButton>
+                  </Cell>
+                </CompactRow>
+              ))}
+            </>
+          )}
         </Table>
 
-        {error && <Meta>{error}</Meta>}
-      </Surface>
-
-      {showAddInventoryModal && (
-        <AddInventoryModal
-          onClose={() => setShowAddInventoryModal(false)}
-          onCreateInventory={createProductStock}
-          variantsByProductId={variantsByProductId}
-        />
-      )}
+        {isLoading && <Meta>Loading inventory...</Meta>}
+        {!isLoading && !rows.length && <Meta>No inventory found for this tab.</Meta>}
+        {activeError && <Meta>{activeError}</Meta>}
+        {exportError && <Meta>{exportError}</Meta>}
+        {!isLoading && rows.length > 0 && (
+          <PaginationBar>
+            <Meta>Page {safePage} / {totalPages}</Meta>
+            <PaginationButton type="button" onClick={() => setPage((prev) => Math.max(1, prev - 1))} disabled={safePage <= 1}>
+              Prev
+            </PaginationButton>
+            <PaginationButton type="button" onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))} disabled={safePage >= totalPages}>
+              Next
+            </PaginationButton>
+          </PaginationBar>
+        )}
+      </ListPageShell>
     </PageContent>
   )
 }

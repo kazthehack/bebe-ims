@@ -88,6 +88,7 @@ const AddProductModal = ({
   skuPreview,
   name,
   productLine,
+  ip,
   category,
   listPrice,
   designSource,
@@ -101,6 +102,7 @@ const AddProductModal = ({
   formError,
   onChangeName,
   onChangeProductLine,
+  onChangeIp,
   onChangeCategory,
   onChangeListPrice,
   onChangeDesignSource,
@@ -124,7 +126,7 @@ const AddProductModal = ({
       cancelLabel="Cancel"
       width="480px"
       actionsAlign="right"
-      closeControl="glyph"
+      closeControl="dot"
     >
 
       <Label>
@@ -142,6 +144,7 @@ const AddProductModal = ({
       </Label>
 
       <Label>Product Name *<Input value={name} onChange={event => onChangeName(event.target.value)} /></Label>
+      <Label>IP (nullable)<Input value={ip} onChange={event => onChangeIp(event.target.value)} placeholder="Minecraft / Pokemon / Super Mario" /></Label>
 
       <Label>
         Pricing Tier
@@ -196,6 +199,7 @@ AddProductModal.propTypes = {
   skuPreview: PropTypes.string.isRequired,
   name: PropTypes.string.isRequired,
   productLine: PropTypes.string.isRequired,
+  ip: PropTypes.string.isRequired,
   category: PropTypes.string.isRequired,
   listPrice: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   designSource: PropTypes.string.isRequired,
@@ -218,6 +222,7 @@ AddProductModal.propTypes = {
   formError: PropTypes.string.isRequired,
   onChangeName: PropTypes.func.isRequired,
   onChangeProductLine: PropTypes.func.isRequired,
+  onChangeIp: PropTypes.func.isRequired,
   onChangeCategory: PropTypes.func.isRequired,
   onChangeListPrice: PropTypes.func.isRequired,
   onChangeDesignSource: PropTypes.func.isRequired,

@@ -13,6 +13,17 @@ const StyledContent = styled.div`
   padding-right: ${PAGE_PAD}px;
   padding-left: ${MENU_WIDTH + PAGE_PAD}px;
   padding-bottom: 72px;
+
+  @media (max-width: 1024px) {
+    padding-left: 166px;
+    padding-right: 20px;
+    padding-bottom: 56px;
+  }
+
+  @media (max-width: 780px) {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
 `
 
 const Title = styled.div.attrs({
@@ -21,12 +32,25 @@ const Title = styled.div.attrs({
   color: #4d4d4d;
   padding: 50px 0;
   font: 500 26px 'Roboto', sans-serif;
+
+  @media (max-width: 1024px) {
+    padding: 26px 0 18px;
+    font: 600 22px 'Roboto', sans-serif;
+  }
 `
 
 const Foot = styled.div`
   position: absolute;
   bottom: 0;
   width: calc(100% - ${MENU_WIDTH + PAGE_PAD + PAGE_PAD}px)
+
+  @media (max-width: 1024px) {
+    width: calc(100% - 186px);
+  }
+
+  @media (max-width: 780px) {
+    width: calc(100% - 32px);
+  }
 `
 
 // eslint-disable-next-line react/prop-types

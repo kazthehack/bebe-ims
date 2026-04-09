@@ -61,7 +61,7 @@ const AddProductVariantModal = ({
       cancelLabel="Cancel"
       width="480px"
       actionsAlign="right"
-      closeControl="glyph"
+      closeControl="dot"
     >
       <Label>
         Product *

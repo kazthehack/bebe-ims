@@ -18,6 +18,10 @@ const StyledPage = styled.div`
   display: flex;
   flex-direction: column;
   padding-top: ${HEADER_HEIGHT}px;
+
+  @media (max-width: 1024px) {
+    padding-top: 78px;
+  }
 `
 
 const StyledBody = styled.div`
@@ -39,6 +43,12 @@ const StyledMenuDiv = styled.div`
   overflow-x: hidden;
   width: ${MENU_WIDTH}px;
   z-index: ${MENUE_Z_INDEX};
+
+  @media (max-width: 1024px) {
+    top: 78px;
+    width: 142px;
+    height: calc(100vh - 78px);
+  }
 `
 
 const Page = compose(

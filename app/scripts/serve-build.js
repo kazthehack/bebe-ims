@@ -6,6 +6,7 @@ const http = require('http')
 
 const buildDir = path.resolve(__dirname, '..', 'build')
 const port = Number(process.env.PORT || process.argv[2] || 3000)
+const host = process.env.HOST || '0.0.0.0'
 
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -78,6 +79,7 @@ const server = http.createServer((req, res) => {
   })
 })
 
-server.listen(port, '127.0.0.1', () => {
-  process.stdout.write(`App available at http://localhost:${port}\n`)
+server.listen(port, host, () => {
+  const displayHost = host === '0.0.0.0' ? 'localhost' : host
+  process.stdout.write(`App available at http://${displayHost}:${port}\n`)
 })

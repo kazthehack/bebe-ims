@@ -1,5 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { apiBase, deleteJson, getJson, postJson, putJson, tenantQuery } from 'hooks/http/httpClient'
+import { apiBase, deleteJson, getJson, postForm, postJson, putJson, tenantQuery } from 'hooks/http/httpClient'
+
+const alpha = (value) => String(value || '').trim().toLowerCase()
+
+const byProductLineThenProduct = (a, b) => {
+  const lineCompare = alpha(a.product_line || a.product_line_name).localeCompare(alpha(b.product_line || b.product_line_name))
+  if (lineCompare !== 0) return lineCompare
+  const nameCompare = alpha(a.name).localeCompare(alpha(b.name))
+  if (nameCompare !== 0) return nameCompare
+  return alpha(a.product_code || a.sku || a.id).localeCompare(alpha(b.product_code || b.sku || b.id))
+}
+
+const byProductLineNameThenCode = (a, b) => {
+  const nameCompare = alpha(a.name).localeCompare(alpha(b.name))
+  if (nameCompare !== 0) return nameCompare
+  return alpha(a.code || a.id).localeCompare(alpha(b.code || b.id))
+}
 
 export const useProductsList = (tenantId = 'tenant-admin') => {
   const [products, setProducts] = useState([])
@@ -19,9 +35,9 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
         getJson(`/products/variants?${query}`),
         getJson(`/product-lines?${query}`),
       ])
-      setProducts(productData.products || [])
-      setVariants(variantData.variants || [])
-      setProductLines(productLineData.product_lines || [])
+      setProducts([...(productData.products || [])].sort(byProductLineThenProduct))
+      setVariants([...(variantData.variants || [])])
+      setProductLines([...(productLineData.product_lines || [])].sort(byProductLineNameThenCode))
     } catch (err) {
       setError(err.message || 'Failed to load products.')
     } finally {
@@ -36,6 +52,7 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
   const createProduct = async ({
     name,
     product_line_id,
+    ip,
     category,
     list_price,
     description,
@@ -47,6 +64,7 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
     const created = await postJson(`/products?${tenantQuery(tenantId)}`, {
       name,
       product_line_id,
+      ip,
       category,
       list_price,
       description,
@@ -96,6 +114,7 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
       (item.product_code || '').toLowerCase().includes(query)
       || (item.name || '').toLowerCase().includes(query)
       || (item.product_line || '').toLowerCase().includes(query)
+      || (item.ip || '').toLowerCase().includes(query)
       || (item.category || '').toLowerCase().includes(query)
       || String(item.list_price || '').includes(query)
     ))
@@ -134,7 +153,9 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
 
   return {
     apiBase,
+    allProducts: products,
     products: filtered,
+    variants,
     variantsByProductId,
     productLines,
     loading,
@@ -154,6 +175,7 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
 
 export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
   const [productDetail, setProductDetail] = useState(null)
+  const [inventoryByVariantId, setInventoryByVariantId] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -163,8 +185,21 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
     setError('')
     try {
       const productData = await getJson(`/products/${productId}?${tenantQuery(tenantId)}`)
+      let inventoryData = { items: [] }
+      try {
+        inventoryData = await getJson(`/stock/inventory/global?${tenantQuery(tenantId)}`)
+      } catch (_err) {
+        inventoryData = { items: [] }
+      }
       if (!cancelled) {
         setProductDetail(productData)
+        const byVariant = (inventoryData.items || [])
+          .filter((item) => item.product_id === productId)
+          .reduce((acc, item) => {
+            acc[item.product_variant_id] = Number(item.master_qty_on_hand || 0)
+            return acc
+          }, {})
+        setInventoryByVariantId(byVariant)
       }
     } catch (err) {
       if (!cancelled) setError(err.message || 'Failed to load product detail.')
@@ -207,6 +242,7 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
   const updateProduct = useCallback(async ({
     name,
     product_line_id,
+    ip,
     category,
     list_price,
     description,
@@ -218,6 +254,7 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
     const updated = await putJson(`/products/${encodeURIComponent(productId)}?${tenantQuery(tenantId)}`, {
       name,
       product_line_id,
+      ip,
       category,
       list_price,
       description,
@@ -230,14 +267,25 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
     return updated
   }, [tenantId, productId, load])
 
+  const adjustVariantGlobalStock = useCallback(async ({ variantId, qtyDelta }) => {
+    const adjusted = await postJson(`/stock/inventory/global-adjust?${tenantQuery(tenantId)}`, {
+      product_variant_id: variantId,
+      qty_delta: qtyDelta,
+    })
+    await load(false)
+    return adjusted
+  }, [tenantId, load])
+
   return {
     productDetail,
+    inventoryByVariantId,
     loading,
     error,
     apiBase,
     createVariant,
     deleteProduct,
     updateProduct,
+    adjustVariantGlobalStock,
     reload: () => load(false),
   }
 }
@@ -306,10 +354,12 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
   const createPart = useCallback(async ({
     name,
     description,
+    print_hours,
   }) => {
     const created = await postJson(`/products/parts?${tenantQuery(tenantId)}`, {
       name,
       description,
+      print_hours,
       active: true,
     })
     await load(false)
@@ -319,6 +369,7 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
   const createRecipePart = useCallback(async ({
     part_id,
     supply_id,
+    batch_yield,
     grams,
     quantity,
     print_hours,
@@ -326,6 +377,7 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
     const created = await postJson(`/products/variants/${encodeURIComponent(variantId)}/recipe-parts?${tenantQuery(tenantId)}`, {
       part_id,
       supply_id,
+      batch_yield,
       grams,
       quantity,
       print_hours,
@@ -333,6 +385,13 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
     await load(false)
     return created
   }, [variantId, tenantId, load])
+
+  const parse3mfProject = useCallback(async (file, plateIndex = 0) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('plate_index', String(plateIndex || 0))
+    return postForm(`/slicer/parse-3mf?${tenantQuery(tenantId)}`, formData)
+  }, [tenantId])
 
   const updateVariant = useCallback(async ({ name, yield_units, print_hours }) => {
     const updated = await putJson(`/products/variants/${encodeURIComponent(variantId)}?${tenantQuery(tenantId)}`, {
@@ -355,6 +414,7 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
     error,
     createPart,
     createRecipePart,
+    parse3mfProject,
     updateVariant,
     reload: () => load(false),
   }

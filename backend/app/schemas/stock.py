@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.domain.enums import InventoryAdjustmentType, StockTargetType, SupplyType
 
@@ -27,6 +27,121 @@ class ProductStockListResponse(BaseModel):
     items: list[ProductStockRead]
 
 
+class InventoryGlobalItemRead(BaseModel):
+    inventory_id: str
+    product_variant_id: str
+    sku: str
+    variant_name: str | None = None
+    product_id: str
+    product_line_name: str | None = None
+    product_name: str
+    main_qty_on_hand: float
+    sites_qty_on_hand: float
+    master_qty_on_hand: float
+    storage_qty_on_hand: float = 0.0
+    primary_qty_on_hand: float = 0.0
+    secondary_qty_on_hand: float = 0.0
+    tertiary_qty_on_hand: float = 0.0
+
+
+class InventoryGlobalListResponse(BaseModel):
+    items: list[InventoryGlobalItemRead]
+
+
+class InventorySiteStockRead(BaseModel):
+    site_id: str
+    qty_on_hand: float
+    qty_reserved: float
+    qty_available: float
+
+
+class InventoryVariantDetailRead(BaseModel):
+    inventory_id: str
+    product_variant_id: str
+    sku: str
+    variant_name: str | None = None
+    product_id: str
+    product_line_name: str | None = None
+    product_name: str
+    product_description: str | None = None
+    main_stock: InventorySiteStockRead
+    site_stocks: list[InventorySiteStockRead]
+    master_qty_on_hand: float
+
+
+class InventorySiteItemRead(BaseModel):
+    inventory_id: str
+    product_variant_id: str
+    sku: str
+    variant_name: str | None = None
+    product_id: str
+    product_line_name: str | None = None
+    product_name: str
+    qty_on_hand: float
+    qty_reserved: float
+    qty_available: float
+
+
+class InventorySiteListResponse(BaseModel):
+    site_id: str
+    items: list[InventorySiteItemRead]
+
+
+class InventoryDispatchCreate(BaseModel):
+    product_variant_id: str
+    site_id: str
+    qty: float
+
+
+class InventoryDispatchRead(BaseModel):
+    source_site_id: str
+    destination_site_id: str
+    product_variant_id: str
+    qty: float
+    source_qty_on_hand: float
+    destination_qty_on_hand: float
+
+
+class InventoryTransferCreate(BaseModel):
+    product_variant_id: str
+    source_site_id: str
+    destination_site_id: str
+    qty: float
+
+
+class InventoryTransferRead(BaseModel):
+    product_variant_id: str
+    source_site_id: str
+    destination_site_id: str
+    qty: float
+    source_qty_on_hand: float
+    destination_qty_on_hand: float
+
+
+class InventoryReceiveCreate(BaseModel):
+    product_variant_id: str
+    qty: float
+
+
+class InventoryReceiveRead(BaseModel):
+    site_id: str
+    product_variant_id: str
+    qty: float
+    site_qty_on_hand: float
+
+
+class InventoryGlobalAdjustCreate(BaseModel):
+    product_variant_id: str
+    qty_delta: float
+
+
+class InventoryGlobalAdjustRead(BaseModel):
+    site_id: str
+    product_variant_id: str
+    qty_delta: float
+    site_qty_on_hand: float
+
+
 class SupplyCreate(BaseModel):
     name: str
     supply_type: SupplyType = SupplyType.FILAMENT
@@ -37,8 +152,7 @@ class SupplyCreate(BaseModel):
     stock_spools: float = 0.0
     spool_weight_grams: float = 1000.0
     estimated_remaining_weight_grams: float = 0.0
-    source: str | None = None
-    source_urls: list[str] = Field(default_factory=list)
+    source_url: str | None = None
     pieces_per_pack: float = 1.0
     cost_per_pack_min: float = 0.0
     cost_per_pack_max: float = 0.0
@@ -61,8 +175,7 @@ class SupplyUpdate(BaseModel):
     stock_spools: float | None = None
     spool_weight_grams: float | None = None
     estimated_remaining_weight_grams: float | None = None
-    source: str | None = None
-    source_urls: list[str] | None = None
+    source_url: str | None = None
     pieces_per_pack: float | None = None
     cost_per_pack_min: float | None = None
     cost_per_pack_max: float | None = None
@@ -86,8 +199,7 @@ class SupplyRead(BaseModel):
     stock_spools: float
     spool_weight_grams: float
     estimated_remaining_weight_grams: float
-    source: str | None = None
-    source_urls: list[str] = Field(default_factory=list)
+    source_url: str | None = None
     pieces_per_pack: float
     cost_per_pack_min: float
     cost_per_pack_max: float
@@ -105,6 +217,19 @@ class SupplyRead(BaseModel):
 
 class SupplyListResponse(BaseModel):
     supplies: list[SupplyRead]
+
+
+class SupplyBrandRead(BaseModel):
+    id: str
+    display_name: str
+
+
+class SupplyBrandListResponse(BaseModel):
+    brands: list[SupplyBrandRead]
+
+
+class SupplyBrandCreate(BaseModel):
+    brand: str
 
 
 class FilamentCreate(BaseModel):
@@ -137,6 +262,31 @@ class FilamentVariantAssociationRead(BaseModel):
 
 class FilamentVariantAssociationListResponse(BaseModel):
     variants: list[FilamentVariantAssociationRead]
+
+
+class FilamentActiveCreate(BaseModel):
+    grams_remaining: float | None = None
+    notes: str | None = None
+
+
+class FilamentActiveUpdate(BaseModel):
+    grams_remaining: float | None = None
+    notes: str | None = None
+    status: str | None = None
+
+
+class FilamentActiveRead(BaseModel):
+    id: str
+    filament_id: str
+    grams_remaining: float
+    notes: str | None = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class FilamentActiveListResponse(BaseModel):
+    entries: list[FilamentActiveRead]
 
 
 class InventoryAdjustmentCreate(BaseModel):

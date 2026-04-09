@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { useHistory } from 'react-router-dom'
+import { useHistory, useLocation } from 'react-router-dom'
 import PageContent from 'components/pages/PageContent'
 import ConfirmActionModal from 'components/reusable/modals/ConfirmActionModal'
 import NoticeModal from 'components/reusable/modals/NoticeModal'
+import ListFiltersRow from 'components/reusable/layouts/ListFiltersRow'
 import { useProductsList } from 'hooks/products/useProductsApi'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import AddProductModal from './modals/AddProductModal'
@@ -14,6 +15,12 @@ import {
   DESIGN_SOURCE_OPTIONS,
 } from './constants/designSources'
 import { productListPageDefaultProps, productListPagePropTypes } from './ProductListPage.types'
+import {
+  PRODUCTS_LIST_STATE_KEY,
+  readProductsListState,
+  readProductsListStateFromSearch,
+  toProductsListQuery,
+} from './productsListState'
 
 const linePrefix = (productLine) => {
   const cleaned = String(productLine || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
@@ -60,15 +67,6 @@ const Toolbar = styled.div`
   margin-bottom: 12px;
 `
 
-const Input = styled.input`
-  border: 1px solid #bec8d3;
-  border-radius: 4px;
-  height: 38px;
-  padding: 0 10px;
-  min-width: 280px;
-  background: #f0f3f6;
-`
-
 const Button = styled.button`
   height: 38px;
   border: 1px solid ${({ $primary }) => ($primary ? '#25384c' : '#bec8d3')};
@@ -86,7 +84,7 @@ const Table = styled.div`
 
 const ProductHeader = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1.2fr 1.5fr 1fr 1fr 0.7fr;
+  grid-template-columns: 1fr 1.1fr 1.4fr 1fr 1fr 1fr 0.7fr;
   font-size: 12px;
   color: #4f6278;
   font-weight: 700;
@@ -95,7 +93,7 @@ const ProductHeader = styled.div`
 
 const ProductRow = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1.2fr 1.5fr 1fr 1fr 0.7fr;
+  grid-template-columns: 1fr 1.1fr 1.4fr 1fr 1fr 1fr 0.7fr;
   border: 1px solid #d9e0e8;
   border-radius: 4px;
   background: #e6eaef;
@@ -116,6 +114,26 @@ const ProductLineHeader = styled.div`
 const ProductLineRow = styled.div`
   display: grid;
   grid-template-columns: 1fr 1.4fr 2fr 0.8fr 1fr 1fr;
+  border: 1px solid #d9e0e8;
+  border-radius: 4px;
+  background: #e6eaef;
+  text-align: left;
+  align-items: center;
+  min-height: 52px;
+`
+
+const ProductVariantHeader = styled.div`
+  display: grid;
+  grid-template-columns: 1.1fr 1.4fr 1.4fr 0.8fr 0.8fr;
+  font-size: 12px;
+  color: #4f6278;
+  font-weight: 700;
+  padding: 0 10px;
+`
+
+const ProductVariantRow = styled.div`
+  display: grid;
+  grid-template-columns: 1.1fr 1.4fr 1.4fr 0.8fr 0.8fr;
   border: 1px solid #d9e0e8;
   border-radius: 4px;
   background: #e6eaef;
@@ -153,6 +171,26 @@ const ActionButton = styled.button`
   cursor: pointer;
 `
 
+const PaginationBar = styled.div`
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+`
+
+const PaginationButton = styled.button`
+  height: 30px;
+  border: 1px solid #bec8d3;
+  background: #f0f3f6;
+  color: #41576d;
+  border-radius: 4px;
+  min-width: 64px;
+  cursor: pointer;
+`
+
+const PAGE_SIZE = 20
+
 const money = (value) => new Intl.NumberFormat('en-PH', {
   style: 'currency',
   currency: 'PHP',
@@ -167,9 +205,16 @@ const splitMultiline = (value) => (
     .filter(Boolean)
 )
 
+const alpha = (value) => String(value || '').trim().toLowerCase()
+
 const ProductListPage = ({ title }) => {
+  const location = useLocation()
+  const restoredState = {
+    ...readProductsListState(),
+    ...readProductsListStateFromSearch(location.search),
+  }
   const history = useHistory()
-  const [activeTab, setActiveTab] = useState('products')
+  const [activeTab, setActiveTab] = useState(() => String(restoredState.activeTab || 'products'))
   const [showProductModal, setShowProductModal] = useState(false)
   const [showProductLineModal, setShowProductLineModal] = useState(false)
   const [showDeleteProductLineModal, setShowDeleteProductLineModal] = useState(false)
@@ -182,16 +227,27 @@ const ProductListPage = ({ title }) => {
   const [name, setName] = useState('')
   const [productLineId, setProductLineId] = useState('')
   const [category, setCategory] = useState('')
-  const [listPrice, setListPrice] = useState('')
+  const [listPrice, setListPrice] = useState('100')
+  const [ip, setIp] = useState('')
   const [designSource, setDesignSource] = useState('')
   const [customDesignSource, setCustomDesignSource] = useState('')
   const [thirdPartySourceUrl, setThirdPartySourceUrl] = useState('')
   const [localWorkingFiles, setLocalWorkingFiles] = useState('')
   const [imageUrl, setImageUrl] = useState('')
-  const [productLineSearch, setProductLineSearch] = useState('')
+  const [productLineSearch, setProductLineSearch] = useState(() => String(restoredState.productLineSearch || ''))
+  const [variantSearch, setVariantSearch] = useState(() => String(restoredState.variantSearch || ''))
+  const [productsPage, setProductsPage] = useState(() => Math.max(1, Number(restoredState.productsPage || 1)))
+  const [productLinesPage, setProductLinesPage] = useState(() => Math.max(1, Number(restoredState.productLinesPage || 1)))
+  const [variantsPage, setVariantsPage] = useState(() => Math.max(1, Number(restoredState.variantsPage || 1)))
+  const [productsLineFilter, setProductsLineFilter] = useState(() => String(restoredState.productsLineFilter || 'all'))
+  const [productsIpFilter, setProductsIpFilter] = useState(() => String(restoredState.productsIpFilter || 'all'))
+  const [variantsLineFilter, setVariantsLineFilter] = useState(() => String(restoredState.variantsLineFilter || 'all'))
+  const [variantsProductFilter, setVariantsProductFilter] = useState(() => String(restoredState.variantsProductFilter || 'all'))
 
   const {
+    allProducts,
     products,
+    variants,
     loading,
     error,
     search,
@@ -202,6 +258,86 @@ const ProductListPage = ({ title }) => {
     createProductLine,
     deleteProductLine,
   } = useProductsList()
+
+  const initializedRef = React.useRef(false)
+  React.useEffect(() => {
+    if (initializedRef.current) return
+    setSearch(String(restoredState.productsSearch || ''))
+    initializedRef.current = true
+  }, [restoredState.productsSearch, setSearch])
+
+  const productNameById = useMemo(
+    () => (allProducts || []).reduce((acc, item) => {
+      acc[item.id] = item.name || item.product_code || item.id
+      return acc
+    }, {}),
+    [allProducts],
+  )
+
+  const productById = useMemo(
+    () => (allProducts || []).reduce((acc, item) => {
+      acc[item.id] = item
+      return acc
+    }, {}),
+    [allProducts],
+  )
+
+  const productLineFilterOptions = useMemo(
+    () => ['all', ...Array.from(new Set((allProducts || []).map((item) => String(item.product_line || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
+    [allProducts],
+  )
+
+  const productIpOptions = useMemo(
+    () => ['all', ...Array.from(new Set((allProducts || []).map((item) => String(item.ip || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
+    [allProducts],
+  )
+
+  const productNameOptions = useMemo(
+    () => ['all', ...Array.from(new Set((allProducts || []).map((item) => String(item.name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
+    [allProducts],
+  )
+
+  const filteredProducts = useMemo(
+    () => (products || [])
+      .filter((item) => {
+        if (productsLineFilter !== 'all' && String(item.product_line || '') !== productsLineFilter) return false
+        if (productsIpFilter !== 'all' && String(item.ip || '') !== productsIpFilter) return false
+        return true
+      })
+      .sort((a, b) => {
+        const lineCompare = alpha(a.product_line).localeCompare(alpha(b.product_line))
+        if (lineCompare !== 0) return lineCompare
+        const productCompare = alpha(a.name).localeCompare(alpha(b.name))
+        if (productCompare !== 0) return productCompare
+        return alpha(a.product_code || a.id).localeCompare(alpha(b.product_code || b.id))
+      }),
+    [products, productsLineFilter, productsIpFilter],
+  )
+
+  const filteredVariants = useMemo(() => {
+    const query = String(variantSearch || '').trim().toLowerCase()
+    const searched = !query ? (variants || []) : (variants || []).filter((item) => (
+      String(item.sku || '').toLowerCase().includes(query)
+      || String(item.name || '').toLowerCase().includes(query)
+      || String(productNameById[item.product_id] || '').toLowerCase().includes(query)
+      || String(item.product_id || '').toLowerCase().includes(query)
+    ))
+    return searched
+      .filter((item) => {
+        const parent = productById[item.product_id]
+        if (variantsLineFilter !== 'all' && String((parent && parent.product_line) || '') !== variantsLineFilter) return false
+        if (variantsProductFilter !== 'all' && String((parent && parent.name) || '') !== variantsProductFilter) return false
+        return true
+      })
+      .sort((a, b) => {
+        const aCreated = Date.parse(String(a.created_at || ''))
+        const bCreated = Date.parse(String(b.created_at || ''))
+        const aTime = Number.isFinite(aCreated) ? aCreated : Number.POSITIVE_INFINITY
+        const bTime = Number.isFinite(bCreated) ? bCreated : Number.POSITIVE_INFINITY
+        if (aTime !== bTime) return aTime - bTime
+        return alpha(a.sku || a.id).localeCompare(alpha(b.sku || b.id))
+      })
+  }, [variants, variantSearch, productNameById, productById, variantsLineFilter, variantsProductFilter])
 
   const productLineOptions = useMemo(
     () => productLines.map(line => ({ value: line.id, label: `${line.name} (${line.code})` })),
@@ -238,6 +374,90 @@ const ProductListPage = ({ title }) => {
     ))
   }, [productLines, productLineSearch])
 
+  React.useEffect(() => {
+    if (!initializedRef.current) return
+    setProductsPage(1)
+  }, [search])
+
+  React.useEffect(() => {
+    if (!initializedRef.current) return
+    setProductsPage(1)
+  }, [productsLineFilter, productsIpFilter])
+
+  React.useEffect(() => {
+    if (!initializedRef.current) return
+    setProductLinesPage(1)
+  }, [productLineSearch])
+
+  React.useEffect(() => {
+    if (!initializedRef.current) return
+    setVariantsPage(1)
+  }, [variantSearch])
+
+  React.useEffect(() => {
+    if (!initializedRef.current) return
+    setVariantsPage(1)
+  }, [variantsLineFilter, variantsProductFilter])
+
+  React.useEffect(() => {
+    if (!initializedRef.current) return
+    if (activeTab === 'products') setProductsPage(1)
+    if (activeTab === 'product-lines') setProductLinesPage(1)
+    if (activeTab === 'variants') setVariantsPage(1)
+  }, [activeTab])
+
+  const listStateForQuery = useMemo(() => ({
+    activeTab,
+    productsSearch: search,
+    productLineSearch,
+    variantSearch,
+    productsPage,
+    productLinesPage,
+    variantsPage,
+    productsLineFilter,
+    productsIpFilter,
+    variantsLineFilter,
+    variantsProductFilter,
+  }), [
+    activeTab,
+    search,
+    productLineSearch,
+    variantSearch,
+    productsPage,
+    productLinesPage,
+    variantsPage,
+    productsLineFilter,
+    productsIpFilter,
+    variantsLineFilter,
+    variantsProductFilter,
+  ])
+
+  const listQuery = useMemo(
+    () => toProductsListQuery(listStateForQuery),
+    [listStateForQuery],
+  )
+
+  React.useEffect(() => {
+    if (!initializedRef.current) return
+    try {
+      window.sessionStorage.setItem(PRODUCTS_LIST_STATE_KEY, JSON.stringify(listStateForQuery))
+    } catch (_err) {
+      // ignore storage failures
+    }
+  }, [listStateForQuery])
+
+  const productsTotalPages = Math.max(1, Math.ceil((filteredProducts || []).length / PAGE_SIZE))
+  const safeProductsPage = Math.min(productsPage, productsTotalPages)
+  const pagedProducts = (filteredProducts || []).slice((safeProductsPage - 1) * PAGE_SIZE, safeProductsPage * PAGE_SIZE)
+
+  const productLinesTotalPages = Math.max(1, Math.ceil((filteredProductLines || []).length / PAGE_SIZE))
+  const safeProductLinesPage = Math.min(productLinesPage, productLinesTotalPages)
+  const pagedProductLines = (filteredProductLines || []).slice((safeProductLinesPage - 1) * PAGE_SIZE, safeProductLinesPage * PAGE_SIZE)
+
+  const variantsTotalPages = Math.max(1, Math.ceil((filteredVariants || []).length / PAGE_SIZE))
+  const safeVariantsPage = Math.min(variantsPage, variantsTotalPages)
+  const pagedVariants = (filteredVariants || []).slice((safeVariantsPage - 1) * PAGE_SIZE, safeVariantsPage * PAGE_SIZE)
+
   const skuPreview = useMemo(() => {
     const lineCodeOrName = (
       (selectedProductLine && (selectedProductLine.code || selectedProductLine.name)) || ''
@@ -272,6 +492,7 @@ const ProductListPage = ({ title }) => {
       await createProduct({
         name: name.trim(),
         product_line_id: productLineId.trim(),
+        ip: ip.trim() || null,
         category: category.trim() || null,
         list_price: Number(listPrice || 0),
         design_source: resolvedDesignSource || null,
@@ -281,8 +502,9 @@ const ProductListPage = ({ title }) => {
       })
       setName('')
       setProductLineId('')
+      setIp('')
       setCategory('')
-      setListPrice('')
+      setListPrice('100')
       setDesignSource('')
       setCustomDesignSource('')
       setThirdPartySourceUrl('')
@@ -297,9 +519,7 @@ const ProductListPage = ({ title }) => {
   const handleChangeTier = (tier) => {
     setCategory(tier)
     const defaultPrice = defaultPriceForTier(tier)
-    if (defaultPrice !== null) {
-      setListPrice(String(defaultPrice))
-    }
+    setListPrice(String(defaultPrice !== null ? defaultPrice : 100))
   }
 
   const handleOpenDeleteProductLine = (line) => {
@@ -347,8 +567,8 @@ const ProductListPage = ({ title }) => {
   }
 
   const breadcrumbItems = activeTab === 'products'
-    ? [{ label: 'Inventory', to: '/inventory' }, { label: title }]
-    : [{ label: 'Inventory', to: '/inventory' }, { label: title, to: '/products' }, { label: 'Product Lines' }]
+    ? [{ label: title }]
+    : [{ label: title, to: `/products?${listQuery}` }, { label: activeTab === 'variants' ? 'Product Variants' : 'Product Lines' }]
 
   return (
     <PageContent title={<BreadcrumbTitle items={breadcrumbItems} />}>
@@ -366,6 +586,17 @@ const ProductListPage = ({ title }) => {
             Products
           </TabButton>
           <TabButton
+            id="product-variants-tab"
+            role="tab"
+            aria-selected={activeTab === 'variants'}
+            aria-controls="product-variants-panel"
+            $active={activeTab === 'variants'}
+            type="button"
+            onClick={() => setActiveTab('variants')}
+          >
+            Product Variants
+          </TabButton>
+          <TabButton
             id="product-lines-tab"
             role="tab"
             aria-selected={activeTab === 'product-lines'}
@@ -381,7 +612,31 @@ const ProductListPage = ({ title }) => {
         {activeTab === 'products' && (
           <TabPanel id="products-panel" role="tabpanel" aria-labelledby="products-tab">
             <Toolbar>
-              <Input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search products" />
+              <ListFiltersRow
+                searchValue={search}
+                onSearchChange={setSearch}
+                searchPlaceholder="Search products"
+                filters={[
+                  {
+                    key: 'products-line',
+                    value: productsLineFilter,
+                    onChange: setProductsLineFilter,
+                    options: [
+                      { value: 'all', label: 'All Product Lines' },
+                      ...productLineFilterOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
+                    ],
+                  },
+                  {
+                    key: 'products-ip',
+                    value: productsIpFilter,
+                    onChange: setProductsIpFilter,
+                    options: [
+                      { value: 'all', label: 'All IP' },
+                      ...productIpOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
+                    ],
+                  },
+                ]}
+              />
               <div>
                 <Button $primary type="button" onClick={() => setShowProductModal(true)}>Add Product</Button>
               </div>
@@ -392,22 +647,24 @@ const ProductListPage = ({ title }) => {
                 <div>Product ID</div>
                 <div>Product Line</div>
                 <div>Name</div>
+                <div>IP</div>
                 <div>Pricing Tier</div>
                 <div>List Price</div>
                 <div>Actions</div>
               </ProductHeader>
 
               {loading && <Meta>Loading products...</Meta>}
-              {!loading && products.map(item => (
+              {!loading && pagedProducts.map(item => (
                 <ProductRow key={item.id}>
                   <Cell>{item.product_code || item.sku || item.id}</Cell>
                   <Cell>{item.product_line || 'N/A'}</Cell>
                   <Cell>{item.name}</Cell>
+                  <Cell>{item.ip || 'N/A'}</Cell>
                   <Cell>{displayLabelForTier(item.category)}</Cell>
                   <Cell>{money(item.list_price)}</Cell>
                   <Cell>
                     <Actions>
-                      <ActionButton type="button" onClick={() => history.push(`/products/${item.id}`)}>VIEW</ActionButton>
+                      <ActionButton type="button" onClick={() => history.push(`/products/${item.id}?${listQuery}`)}>VIEW</ActionButton>
                       <span>|</span>
                       <ActionButton type="button" onClick={() => handleOpenDeleteProduct(item)}>DELETE</ActionButton>
                     </Actions>
@@ -415,13 +672,28 @@ const ProductListPage = ({ title }) => {
                 </ProductRow>
               ))}
             </Table>
+            {!loading && filteredProducts.length > 0 && (
+              <PaginationBar>
+                <Meta>Page {safeProductsPage} / {productsTotalPages}</Meta>
+                <PaginationButton type="button" onClick={() => setProductsPage((prev) => Math.max(1, prev - 1))} disabled={safeProductsPage <= 1}>
+                  Prev
+                </PaginationButton>
+                <PaginationButton type="button" onClick={() => setProductsPage((prev) => Math.min(productsTotalPages, prev + 1))} disabled={safeProductsPage >= productsTotalPages}>
+                  Next
+                </PaginationButton>
+              </PaginationBar>
+            )}
           </TabPanel>
         )}
 
         {activeTab === 'product-lines' && (
           <TabPanel id="product-lines-panel" role="tabpanel" aria-labelledby="product-lines-tab">
             <Toolbar>
-              <Input value={productLineSearch} onChange={event => setProductLineSearch(event.target.value)} placeholder="Search product lines" />
+              <ListFiltersRow
+                searchValue={productLineSearch}
+                onSearchChange={setProductLineSearch}
+                searchPlaceholder="Search product lines"
+              />
               <div>
                 <Button $primary type="button" onClick={() => setShowProductLineModal(true)}>Add Product Line</Button>
               </div>
@@ -438,7 +710,7 @@ const ProductListPage = ({ title }) => {
               </ProductLineHeader>
 
               {loading && <Meta>Loading product lines...</Meta>}
-              {!loading && filteredProductLines.map(line => (
+              {!loading && pagedProductLines.map(line => (
                 <ProductLineRow key={line.id}>
                   <Cell>{line.code}</Cell>
                   <Cell>{line.name}</Cell>
@@ -447,7 +719,7 @@ const ProductListPage = ({ title }) => {
                   <Cell>{String(line.updated_at || '').replace('T', ' ').slice(0, 16) || 'N/A'}</Cell>
                   <Cell>
                     <Actions>
-                      <ActionButton type="button" onClick={() => history.push(`/product-lines/${line.id}`)}>VIEW</ActionButton>
+                      <ActionButton type="button" onClick={() => history.push(`/product-lines/${line.id}?${listQuery}`)}>VIEW</ActionButton>
                       <span>|</span>
                       <ActionButton type="button" onClick={() => handleOpenDeleteProductLine(line)}>DELETE</ActionButton>
                     </Actions>
@@ -455,6 +727,86 @@ const ProductListPage = ({ title }) => {
                 </ProductLineRow>
               ))}
             </Table>
+            {!loading && filteredProductLines.length > 0 && (
+              <PaginationBar>
+                <Meta>Page {safeProductLinesPage} / {productLinesTotalPages}</Meta>
+                <PaginationButton type="button" onClick={() => setProductLinesPage((prev) => Math.max(1, prev - 1))} disabled={safeProductLinesPage <= 1}>
+                  Prev
+                </PaginationButton>
+                <PaginationButton type="button" onClick={() => setProductLinesPage((prev) => Math.min(productLinesTotalPages, prev + 1))} disabled={safeProductLinesPage >= productLinesTotalPages}>
+                  Next
+                </PaginationButton>
+              </PaginationBar>
+            )}
+          </TabPanel>
+        )}
+
+        {activeTab === 'variants' && (
+          <TabPanel id="product-variants-panel" role="tabpanel" aria-labelledby="product-variants-tab">
+            <Toolbar>
+              <ListFiltersRow
+                searchValue={variantSearch}
+                onSearchChange={setVariantSearch}
+                searchPlaceholder="Search product variants"
+                filters={[
+                  {
+                    key: 'variants-line',
+                    value: variantsLineFilter,
+                    onChange: setVariantsLineFilter,
+                    options: [
+                      { value: 'all', label: 'All Product Lines' },
+                      ...productLineFilterOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
+                    ],
+                  },
+                  {
+                    key: 'variants-product',
+                    value: variantsProductFilter,
+                    onChange: setVariantsProductFilter,
+                    options: [
+                      { value: 'all', label: 'All Products' },
+                      ...productNameOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
+                    ],
+                  },
+                ]}
+              />
+              <div />
+            </Toolbar>
+
+            <Table>
+              <ProductVariantHeader>
+                <div>Variant SKU</div>
+                <div>Product</div>
+                <div>Variant Name</div>
+                <div>Yield</div>
+                <div>Actions</div>
+              </ProductVariantHeader>
+
+              {loading && <Meta>Loading variants...</Meta>}
+              {!loading && pagedVariants.map(item => (
+                <ProductVariantRow key={item.id}>
+                  <Cell>{item.sku || item.id}</Cell>
+                  <Cell>{productNameById[item.product_id] || item.product_id}</Cell>
+                  <Cell>{item.name || 'N/A'}</Cell>
+                  <Cell>{Number(item.yield_units || 1)}</Cell>
+                  <Cell>
+                    <Actions>
+                      <ActionButton type="button" onClick={() => history.push(`/products/variants/${item.id}?${listQuery}`)}>VIEW</ActionButton>
+                    </Actions>
+                  </Cell>
+                </ProductVariantRow>
+              ))}
+            </Table>
+            {!loading && filteredVariants.length > 0 && (
+              <PaginationBar>
+                <Meta>Page {safeVariantsPage} / {variantsTotalPages}</Meta>
+                <PaginationButton type="button" onClick={() => setVariantsPage((prev) => Math.max(1, prev - 1))} disabled={safeVariantsPage <= 1}>
+                  Prev
+                </PaginationButton>
+                <PaginationButton type="button" onClick={() => setVariantsPage((prev) => Math.min(variantsTotalPages, prev + 1))} disabled={safeVariantsPage >= variantsTotalPages}>
+                  Next
+                </PaginationButton>
+              </PaginationBar>
+            )}
           </TabPanel>
         )}
 
@@ -466,6 +818,7 @@ const ProductListPage = ({ title }) => {
         skuPreview={skuPreview}
         name={name}
         productLine={productLineId}
+        ip={ip}
         category={category}
         listPrice={listPrice}
         designSource={designSource}
@@ -479,6 +832,7 @@ const ProductListPage = ({ title }) => {
         formError={formError}
         onChangeName={setName}
         onChangeProductLine={setProductLineId}
+        onChangeIp={setIp}
         onChangeCategory={handleChangeTier}
         onChangeListPrice={setListPrice}
         onChangeDesignSource={setDesignSource}

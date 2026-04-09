@@ -78,7 +78,7 @@ const AddProductLineModal = ({ open, onClose, onSubmit }) => {
       cancelLabel="Cancel"
       width="460px"
       actionsAlign="right"
-      closeControl="glyph"
+      closeControl="dot"
     >
       <Meta>Product line is a collection of products grouped by theme.</Meta>
       <Label>Name *<Input value={name} onChange={event => setName(event.target.value)} placeholder="E.g. Keychains" /></Label>

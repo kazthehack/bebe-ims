@@ -120,6 +120,11 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
           render={() => <SuppliesPage authenticatedUserData={authenticatedUserData} />}
         />
         <Route
+          exact
+          path="/sites/:id"
+          render={() => <SitesPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
           path="/sites"
           render={() => <SitesPage authenticatedUserData={authenticatedUserData} />}
         />

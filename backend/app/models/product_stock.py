@@ -13,3 +13,4 @@ class ProductStockDocument(ObjectDocument):
     qty_on_hand: float = 0.0
     qty_reserved: float = 0.0
     low_stock_threshold: float = 0.0
+    seed_source: str | None = None

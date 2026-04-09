@@ -5,6 +5,7 @@ from app.models.compliance import ComplianceDocument
 from app.models.customer import CustomerDocument
 from app.models.demo import DemoDocument
 from app.models.discount import DiscountDocument
+from app.models.filament_active import FilamentActiveDocument
 from app.models.hardware import HardwareDocument
 from app.models.integration import IntegrationDocument
 from app.models.inventory_report import InventoryReportDocument
@@ -20,8 +21,10 @@ from app.models.sales_report import SalesReportDocument
 from app.models.sales_type import SalesTypeDocument
 from app.models.shift import ShiftDocument
 from app.models.shift_report import ShiftReportDocument
+from app.models.site import SiteDocument
 from app.models.store import StoreDocument
 from app.models.strain import StrainDocument
+from app.models.supply_brand import SupplyBrandDocument
 from app.models.task import TaskDocument
 from app.models.tax import TaxDocument
 from app.models.transaction_history_report import TransactionHistoryReportDocument
@@ -37,6 +40,7 @@ OBJECT_MODELS = {
     "customer": CustomerDocument,
     "demo": DemoDocument,
     "discount": DiscountDocument,
+    "filament_active": FilamentActiveDocument,
     "hardware": HardwareDocument,
     "integration": IntegrationDocument,
     "inventory_report": InventoryReportDocument,
@@ -52,8 +56,10 @@ OBJECT_MODELS = {
     "sales_type": SalesTypeDocument,
     "shift": ShiftDocument,
     "shift_report": ShiftReportDocument,
+    "site": SiteDocument,
     "store": StoreDocument,
     "strain": StrainDocument,
+    "supply_brand": SupplyBrandDocument,
     "task": TaskDocument,
     "tax": TaxDocument,
     "transaction_history_report": TransactionHistoryReportDocument,

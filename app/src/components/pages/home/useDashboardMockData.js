@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { resolveApiBase } from '../../../api/resolveApiBase'
 
 const configuredApiBaseRaw = process.env.REACT_APP_REST_API_ENDPOINT || ''
-const configuredApiBase = configuredApiBaseRaw.trim().replace(/\/+$/, '')
+const configuredApiBase = resolveApiBase(configuredApiBaseRaw)
 
 const toISODate = (dateObj) => {
   const y = dateObj.getFullYear()
@@ -77,15 +78,6 @@ export const useDashboardMockData = () => {
     const load = async () => {
       setLoading(true)
       setError('')
-
-      if (!configuredApiBase) {
-        setEvents([])
-        setNotifications([])
-        setSales({})
-        setError('Missing REACT_APP_REST_API_ENDPOINT in app environment.')
-        setLoading(false)
-        return
-      }
 
       const result = await Promise.allSettled([
         fetchFromConfiguredBase('/events'),

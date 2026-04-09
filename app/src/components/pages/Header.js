@@ -29,6 +29,11 @@ const StyledHeaderContainer = styled.div`
   font-size: 14px;
   font-weight: 400;
   letter-spacing: 0;
+
+  @media (max-width: 1024px) {
+    height: 78px;
+    font-size: 12px;
+  }
 `
 
 const StyledLeftContainer = styled.div`
@@ -39,6 +44,10 @@ const StyledLeftContainer = styled.div`
   height: 100%;
   padding: 5px;
   z-index: 1;
+
+  @media (max-width: 1024px) {
+    padding: 4px;
+  }
 `
 
 const StyledLogo = styled.img`
@@ -46,6 +55,10 @@ const StyledLogo = styled.img`
   width: auto;
   display: block;
   margin: 0;
+
+  @media (max-width: 1024px) {
+    height: 70px;
+  }
 `
 const StyledRightContainer = styled.div`
   position: absolute;
@@ -56,6 +69,10 @@ const StyledRightContainer = styled.div`
   justify-content: center;
   align-items: center;
   padding: 5px;
+
+  @media (max-width: 1024px) {
+    padding: 4px 8px 4px 4px;
+  }
 `
 
 class Header extends React.Component {

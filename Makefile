@@ -1,13 +1,16 @@
 SHELL := /bin/zsh
 .DEFAULT_GOAL := build
 
-.PHONY: help build clean migrate run dev run-backend run-app deploy deploy-backend deploy-app lint fmt test
+.PHONY: help install build clean migrate migrate-init reset run dev run-backend run-app deploy deploy-backend deploy-app lint fmt test
 
 help:
 	@echo "Root shortcuts:"
+	@echo "  make install       # install backend + app deps (includes slicer bootstrap)"
 	@echo "  make build         # build backend + app"
 	@echo "  make clean         # clean backend + app build artifacts"
-	@echo "  make migrate       # run backend db migrate/seed"
+	@echo "  make migrate       # run backend db migrate/seed (no inventory overwrite)"
+	@echo "  make migrate-init  # run migrate + catalog-sync inventory seed from workbook (preserves stock numbers)"
+	@echo "  make reset         # zero out inventory quantities"
 	@echo "  make run           # run backend + app locally (separate terminals recommended)"
 	@echo "  make dev           # run backend + app together (dev mode, with reload)"
 	@echo "  make run-backend   # run backend locally"
@@ -19,9 +22,12 @@ help:
 	@echo "  make fmt           # format backend + app"
 	@echo "  make test          # backend tests"
 
-build:
+install:
 	$(MAKE) -C backend install
 	$(MAKE) -C app install
+
+build:
+	$(MAKE) install
 	$(MAKE) -C backend build
 	$(MAKE) -C app build
 
@@ -31,6 +37,12 @@ clean:
 
 migrate:
 	$(MAKE) -C backend migrate
+
+migrate-init:
+	$(MAKE) -C backend migrate-init
+
+reset:
+	$(MAKE) -C backend reset
 
 run:
 	@echo "Use two terminals for dev services:"

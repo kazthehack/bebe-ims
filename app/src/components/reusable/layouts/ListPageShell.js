@@ -16,6 +16,7 @@ const TabBar = styled.div`
   border-bottom: 1px solid #d6dde6;
   background: #eef2f7;
   padding: 0 14px;
+  overflow-x: auto;
 `
 
 const TabButton = styled.button`
@@ -28,6 +29,7 @@ const TabButton = styled.button`
   height: 46px;
   padding: 0 14px;
   cursor: pointer;
+  white-space: nowrap;
 `
 
 const TabPanel = styled.div`
@@ -39,6 +41,15 @@ const Toolbar = styled.div`
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 12px;
+
+  @media (max-width: 1024px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+`
+
+const ToolbarSlot = styled.div`
+  margin-bottom: 12px;
 `
 
 const SearchInput = styled.input`
@@ -48,6 +59,11 @@ const SearchInput = styled.input`
   min-width: 280px;
   padding: 0 10px;
   background: #f0f3f6;
+
+  @media (max-width: 1024px) {
+    min-width: 0;
+    width: 100%;
+  }
 `
 
 const PrimaryButton = styled.button`
@@ -60,6 +76,10 @@ const PrimaryButton = styled.button`
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
+
+  @media (max-width: 1024px) {
+    width: 100%;
+  }
 `
 
 const ListPageShell = ({
@@ -71,6 +91,7 @@ const ListPageShell = ({
   searchPlaceholder,
   primaryActionLabel,
   onPrimaryAction,
+  toolbar,
   children,
 }) => (
   <Surface>
@@ -87,18 +108,24 @@ const ListPageShell = ({
       ))}
     </TabBar>
     <TabPanel>
-      <Toolbar>
-        <SearchInput
-          value={searchValue}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder={searchPlaceholder}
-        />
-        <div>
-          <PrimaryButton type="button" onClick={onPrimaryAction}>
-            {primaryActionLabel}
-          </PrimaryButton>
-        </div>
-      </Toolbar>
+      {toolbar ? (
+        <ToolbarSlot>{toolbar}</ToolbarSlot>
+      ) : (
+        <Toolbar>
+          <SearchInput
+            value={searchValue}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder={searchPlaceholder}
+          />
+          {primaryActionLabel && onPrimaryAction && (
+            <div>
+              <PrimaryButton type="button" onClick={onPrimaryAction}>
+                {primaryActionLabel}
+              </PrimaryButton>
+            </div>
+          )}
+        </Toolbar>
+      )}
       {children}
     </TabPanel>
   </Surface>
@@ -114,8 +141,9 @@ ListPageShell.propTypes = {
   searchValue: PropTypes.string.isRequired,
   onSearchChange: PropTypes.func.isRequired,
   searchPlaceholder: PropTypes.string.isRequired,
-  primaryActionLabel: PropTypes.string.isRequired,
-  onPrimaryAction: PropTypes.func.isRequired,
+  primaryActionLabel: PropTypes.string,
+  onPrimaryAction: PropTypes.func,
+  toolbar: PropTypes.node,
   children: PropTypes.node.isRequired,
 }
 

@@ -1,4 +1,6 @@
-const API_BASE = process.env.REACT_APP_REST_API_ENDPOINT || 'http://localhost:8001/api/v1'
+import { resolveApiBase } from './resolveApiBase'
+
+const API_BASE = resolveApiBase(process.env.REACT_APP_REST_API_ENDPOINT || '')
 
 async function request(path, options = {}) {
   const accessToken = sessionStorage.getItem('accessToken') || process.env.REACT_APP_API_ACCESS_TOKEN

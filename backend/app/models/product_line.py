@@ -14,5 +14,6 @@ class ProductLineDocument(ObjectDocument):
     name: str
     description: str | None = None
     active: bool = True
+    seed_source: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

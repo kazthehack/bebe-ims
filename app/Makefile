@@ -2,6 +2,7 @@ SHELL := /bin/zsh
 IMAGE ?= bebe-ims-app:local
 CONTAINER ?= bebe-ims-app
 PORT ?= 2306
+HOST ?= 0.0.0.0
 
 .PHONY: help install run run-dev deploy stop logs build clean lint lint-fix fmt fmt-check
 
@@ -26,11 +27,11 @@ install:
 run:
 	test -d node_modules || $(MAKE) install
 	test -d build || NODE_PATH=src yarn build
-	PORT=$(PORT) node scripts/serve-build.js $(PORT)
+	HOST=$(HOST) PORT=$(PORT) node scripts/serve-build.js $(PORT)
 
 run-dev:
 	test -d node_modules || $(MAKE) install
-	PORT=$(PORT) NODE_PATH=src yarn start
+	HOST=$(HOST) PORT=$(PORT) NODE_PATH=src yarn start
 
 deploy:
 	docker build -t $(IMAGE) .

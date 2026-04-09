@@ -16,6 +16,7 @@ class ProductDocument(ObjectDocument):
     product_line_id: str | None = None
     product_line_name: str | None = None
     product_line_code: str | None = None
+    ip: str | None = None
     category: str | None = None
     list_price: float = 0.0
     description: str | None = None
@@ -23,5 +24,6 @@ class ProductDocument(ObjectDocument):
     third_party_source_url: str | None = None
     local_working_files: list[str] = Field(default_factory=list)
     image_url: str | None = None
+    seed_source: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

@@ -154,7 +154,7 @@ FormModal.defaultProps = {
   width: '480px',
   confirmDisabled: false,
   actionsAlign: 'right',
-  closeControl: 'glyph',
+  closeControl: 'dot',
   showCloseControl: true,
   showCancel: true,
 }
