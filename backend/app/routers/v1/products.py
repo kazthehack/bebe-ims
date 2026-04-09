@@ -231,6 +231,16 @@ def create_product(payload: ProductCreate, tenant_id: str = Query('tenant-admin'
         product_controller.create(tenant_id, create_payload),
         ProductDocument,
     )
+    try:
+        variant_controller.create(tenant_id, {
+            'product_id': record.object_id,
+            'name': record.payload.name,
+            'yield_units': 1,
+            'print_hours': 0.0,
+        })
+    except Exception as exc:
+        product_controller.delete(record.object_id, tenant_id)
+        raise HTTPException(status_code=500, detail=f'Failed to create default variant: {exc}') from exc
     return _to_product(record)
 
 

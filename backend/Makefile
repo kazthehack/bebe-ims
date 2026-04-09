@@ -6,7 +6,7 @@ HOST ?= 0.0.0.0
 
 export PATH := $(CURDIR)/.tools/bin:$(PATH)
 
-.PHONY: help install build migrate migrate-init reset run run-dev deploy stop logs clean lint fmt test ensure-slicer-cli
+.PHONY: help install build migrate migrate-init reset snapshot restore-snapshot run run-dev deploy stop logs clean lint fmt test ensure-slicer-cli
 
 help:
 	@echo "Targets:"
@@ -16,6 +16,8 @@ help:
 	@echo "  make migrate   # create table + seed defaults (no inventory overwrite)"
 	@echo "  make migrate-init # migrate + catalog-sync inventory from backend/data/inventory_seed.xlsm (preserves stock numbers)"
 	@echo "  make reset     # zero out product inventory quantities"
+	@echo "  make snapshot  # save DynamoDB snapshot JSON (tenant-admin by default)"
+	@echo "  make restore-snapshot SNAPSHOT_FILE=... # restore snapshot JSON into DynamoDB"
 	@echo "  make run       # run backend locally with auto-reload"
 	@echo "  make run-dev   # run backend locally with auto-reload"
 	@echo "  make deploy    # build and run backend docker container"
@@ -48,6 +50,15 @@ migrate-init:
 reset:
 	test -d .venv || $(MAKE) install
 	. .venv/bin/activate && PYTHONPATH=. python scripts/reset_inventory.py --tenant-id tenant-admin
+
+snapshot:
+	test -d .venv || $(MAKE) install
+	. .venv/bin/activate && PYTHONPATH=. python scripts/snapshot_db.py --mode snapshot --tenant-id tenant-admin
+
+restore-snapshot:
+	test -d .venv || $(MAKE) install
+	test -n "$(SNAPSHOT_FILE)"
+	. .venv/bin/activate && PYTHONPATH=. python scripts/restore_db.py --input "$(SNAPSHOT_FILE)"
 
 run:
 	$(MAKE) migrate

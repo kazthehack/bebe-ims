@@ -14,6 +14,13 @@ class Product(BaseObjectController):
         'discount_custom',
     }
     DEFAULT_PRICING_TIER = 'regular_100'
+    PRICING_TIER_DEFAULT_PRICE = {
+        'regular_100': 100.0,
+        'special_150': 150.0,
+        'special_200': 200.0,
+        'premium_250': 250.0,
+        'premium_300': 300.0,
+    }
 
     def __init__(self, repository: ObjectRepository | None = None) -> None:
         super().__init__('product', ProductDocument, repository)
@@ -42,6 +49,9 @@ class Product(BaseObjectController):
         payload = payload.copy()
         category = str(payload.get('category') or '').strip().lower()
         payload['category'] = category if category in self.ALLOWED_PRICING_TIERS else self.DEFAULT_PRICING_TIER
+        tier_default_price = self.PRICING_TIER_DEFAULT_PRICE.get(payload['category'])
+        if tier_default_price is not None and float(payload.get('list_price') or 0) <= 0:
+            payload['list_price'] = tier_default_price
         if not payload.get('product_code'):
             line_value = str(payload.get('product_line_code') or payload.get('product_line_name') or '')
             payload['product_code'] = self._next_product_code(tenant_id, line_value)
@@ -51,4 +61,7 @@ class Product(BaseObjectController):
         payload = payload.copy()
         category = str(payload.get('category') or '').strip().lower()
         payload['category'] = category if category in self.ALLOWED_PRICING_TIERS else self.DEFAULT_PRICING_TIER
+        tier_default_price = self.PRICING_TIER_DEFAULT_PRICE.get(payload['category'])
+        if tier_default_price is not None and float(payload.get('list_price') or 0) <= 0:
+            payload['list_price'] = tier_default_price
         return super().update(object_id, tenant_id, payload)

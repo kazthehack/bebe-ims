@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { useHistory, useParams } from 'react-router-dom'
 import PageContent from 'components/pages/PageContent'
+import FormModal from 'components/reusable/modals/FormModal'
 import { useInventoryResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import {
@@ -176,6 +177,29 @@ const ErrorText = styled.div`
   margin-top: 8px;
 `
 
+const ModalMeta = styled.div`
+  margin-top: 6px;
+  color: #4b6176;
+  font-size: 13px;
+`
+
+const ModalField = styled.label`
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  color: #4b6176;
+  font-size: 12px;
+`
+
+const ModalTextarea = styled.textarea`
+  border: 1px solid #bec8d3;
+  border-radius: 4px;
+  min-height: 88px;
+  padding: 8px 10px;
+  background: #f0f3f6;
+  resize: vertical;
+`
+
 const DetailTopActions = styled.div`
   display: flex;
   justify-content: flex-end;
@@ -210,6 +234,7 @@ const InventoryDetailPage = () => {
     dispatchToSite,
     receiveToMain,
     transferInventory,
+    adjustGlobalInventory,
     globalItems,
     loadSite,
   } = useInventoryResource()
@@ -221,6 +246,10 @@ const InventoryDetailPage = () => {
   const [inlineQtyBySite, setInlineQtyBySite] = useState({})
   const [inlineError, setInlineError] = useState('')
   const [navSiteItems, setNavSiteItems] = useState([])
+  const [showLossModal, setShowLossModal] = useState(false)
+  const [lossReason, setLossReason] = useState('')
+  const [lossError, setLossError] = useState('')
+  const [lossSubmitting, setLossSubmitting] = useState(false)
 
   const listContext = useMemo(() => {
     const raw = readInventoryListState()
@@ -390,6 +419,46 @@ const InventoryDetailPage = () => {
     }
   }
 
+  const openGlobalLossModal = () => {
+    setInlineError('')
+    setLossError('')
+    const qty = parseInlineQty('global')
+    if (qty <= 0) {
+      setInlineError('Qty must be greater than zero.')
+      return
+    }
+    setShowLossModal(true)
+  }
+
+  const applyInlineGlobalLoss = async () => {
+    if (!detail) return
+    const qty = parseInlineQty('global')
+    if (qty <= 0) {
+      setLossError('Qty must be greater than zero.')
+      return
+    }
+    if (!String(lossReason || '').trim()) {
+      setLossError('Reason is required.')
+      return
+    }
+    try {
+      setLossSubmitting(true)
+      setLossError('')
+      await adjustGlobalInventory({
+        product_variant_id: detail.product_variant_id,
+        qty_delta: -Math.abs(qty),
+        notes: `Loss adjustment: ${String(lossReason).trim()}`,
+      })
+      setShowLossModal(false)
+      setLossReason('')
+      await load()
+    } catch (err) {
+      setLossError(err.message || 'Failed to record loss adjustment.')
+    } finally {
+      setLossSubmitting(false)
+    }
+  }
+
   const applyInlineDispatch = async (siteId) => {
     if (!detail) return
     setInlineError('')
@@ -541,7 +610,7 @@ const InventoryDetailPage = () => {
                 <Cell>{globalQty}</Cell>
                 <Cell>
                   <InlineAdjust>
-                    <InlineButton type="button" disabled>-</InlineButton>
+                    <InlineButton type="button" onClick={openGlobalLossModal}>-</InlineButton>
                     <InlineInput
                       type="number"
                       min="1"
@@ -611,6 +680,36 @@ const InventoryDetailPage = () => {
               )}
             </Table>
           </Section>
+          <FormModal
+            open={showLossModal}
+            title="Record Loss Adjustment"
+            onClose={() => {
+              setShowLossModal(false)
+              setLossReason('')
+              setLossError('')
+              setLossSubmitting(false)
+            }}
+            onConfirm={applyInlineGlobalLoss}
+            confirmLabel={lossSubmitting ? 'Saving...' : 'Save'}
+            cancelLabel="Cancel"
+            confirmDisabled={lossSubmitting}
+            width="460px"
+            actionsAlign="right"
+            closeControl="x"
+          >
+            <ModalMeta>
+              This will reduce global stock by <strong>{parseInlineQty('global') || 0}</strong>.
+            </ModalMeta>
+            <ModalField>
+              <span>Reason (required)</span>
+              <ModalTextarea
+                value={lossReason}
+                onChange={(event) => setLossReason(event.target.value)}
+                placeholder="e.g. damaged print, failed batch, lost item"
+              />
+            </ModalField>
+            {lossError && <ErrorText>{lossError}</ErrorText>}
+          </FormModal>
         </>
       )}
     </PageContent>

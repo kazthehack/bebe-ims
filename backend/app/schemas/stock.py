@@ -133,6 +133,7 @@ class InventoryReceiveRead(BaseModel):
 class InventoryGlobalAdjustCreate(BaseModel):
     product_variant_id: str
     qty_delta: float
+    notes: str | None = None
 
 
 class InventoryGlobalAdjustRead(BaseModel):

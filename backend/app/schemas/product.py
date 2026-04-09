@@ -9,7 +9,7 @@ class ProductCreate(BaseModel):
     product_line_id: str
     ip: str | None = None
     category: str | None = None
-    list_price: float = 100.0
+    list_price: float | None = None
     description: str | None = None
     design_source: str | None = None
     third_party_source_url: str | None = None
@@ -40,7 +40,7 @@ class ProductUpdate(BaseModel):
     product_line_id: str
     ip: str | None = None
     category: str | None = None
-    list_price: float = 100.0
+    list_price: float | None = None
     description: str | None = None
     design_source: str | None = None
     third_party_source_url: str | None = None

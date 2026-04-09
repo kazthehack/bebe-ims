@@ -1,7 +1,7 @@
 SHELL := /bin/zsh
 .DEFAULT_GOAL := build
 
-.PHONY: help install build clean migrate migrate-init reset run dev run-backend run-app deploy deploy-backend deploy-app lint fmt test
+.PHONY: help install build clean migrate migrate-init reset snapshot restore-snapshot run dev run-backend run-app deploy deploy-backend deploy-app lint fmt test
 
 help:
 	@echo "Root shortcuts:"
@@ -11,6 +11,8 @@ help:
 	@echo "  make migrate       # run backend db migrate/seed (no inventory overwrite)"
 	@echo "  make migrate-init  # run migrate + catalog-sync inventory seed from workbook (preserves stock numbers)"
 	@echo "  make reset         # zero out inventory quantities"
+	@echo "  make snapshot      # save backend DynamoDB snapshot JSON"
+	@echo "  make restore-snapshot SNAPSHOT_FILE=... # restore a snapshot JSON"
 	@echo "  make run           # run backend + app locally (separate terminals recommended)"
 	@echo "  make dev           # run backend + app together (dev mode, with reload)"
 	@echo "  make run-backend   # run backend locally"
@@ -43,6 +45,12 @@ migrate-init:
 
 reset:
 	$(MAKE) -C backend reset
+
+snapshot:
+	$(MAKE) -C backend snapshot
+
+restore-snapshot:
+	$(MAKE) -C backend restore-snapshot SNAPSHOT_FILE="$(SNAPSHOT_FILE)"
 
 run:
 	@echo "Use two terminals for dev services:"

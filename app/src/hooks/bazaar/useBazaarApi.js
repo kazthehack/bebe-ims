@@ -269,6 +269,20 @@ export const useInventoryResource = (tenantId = 'tenant-admin') => {
     return result
   }
 
+  const adjustGlobalInventory = async ({
+    product_variant_id,
+    qty_delta,
+    notes,
+  }) => {
+    const result = await postJson(`/stock/inventory/global-adjust?${tenantQuery(tenantId)}`, {
+      product_variant_id,
+      qty_delta,
+      notes,
+    })
+    await loadGlobal()
+    return result
+  }
+
   const exportInventoryWorkbook = async () => {
     const { blob, headers } = await getBlob(`/stock/inventory/export?${tenantQuery(tenantId)}`)
     const contentDisposition = headers.get('content-disposition') || ''
@@ -296,6 +310,7 @@ export const useInventoryResource = (tenantId = 'tenant-admin') => {
     dispatchToSite,
     receiveToMain,
     transferInventory,
+    adjustGlobalInventory,
     exportInventoryWorkbook,
     reload: loadGlobal,
   }

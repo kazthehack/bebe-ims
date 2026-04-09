@@ -817,7 +817,7 @@ def adjust_inventory_global(
         main_site_id,
         InventoryAdjustmentType.ADD if qty_delta > 0 else InventoryAdjustmentType.DISPENSE,
         qty_delta,
-        notes='Global stock quick adjustment',
+        notes=(str(payload.notes or '').strip() or 'Global stock quick adjustment'),
     )
     return InventoryGlobalAdjustRead(
         site_id=main_site_id,
