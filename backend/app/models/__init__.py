@@ -5,6 +5,7 @@ from app.models.compliance import ComplianceDocument
 from app.models.customer import CustomerDocument
 from app.models.demo import DemoDocument
 from app.models.discount import DiscountDocument
+from app.models.event import EventDocument
 from app.models.filament_active import FilamentActiveDocument
 from app.models.hardware import HardwareDocument
 from app.models.integration import IntegrationDocument
@@ -40,6 +41,7 @@ OBJECT_MODELS = {
     "customer": CustomerDocument,
     "demo": DemoDocument,
     "discount": DiscountDocument,
+    "event": EventDocument,
     "filament_active": FilamentActiveDocument,
     "hardware": HardwareDocument,
     "integration": IntegrationDocument,

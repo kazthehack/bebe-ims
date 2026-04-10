@@ -5,6 +5,7 @@ import PageContent from 'components/pages/PageContent'
 import ConfirmActionModal from 'components/reusable/modals/ConfirmActionModal'
 import NoticeModal from 'components/reusable/modals/NoticeModal'
 import ListFiltersRow from 'components/reusable/layouts/ListFiltersRow'
+import WorkspaceTabs from 'components/reusable/layouts/WorkspaceTabs'
 import { useProductsList } from 'hooks/products/useProductsApi'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import AddProductModal from './modals/AddProductModal'
@@ -33,27 +34,6 @@ const Surface = styled.div`
   border: 1px solid #e1e6ec;
   border-radius: 4px;
   padding: 0;
-`
-
-const TabBar = styled.div`
-  display: flex;
-  align-items: flex-end;
-  gap: 0;
-  border-bottom: 1px solid #d6dde6;
-  background: #eef2f7;
-  padding: 0 14px;
-`
-
-const TabButton = styled.button`
-  border: 0;
-  border-bottom: 3px solid ${({ $active }) => ($active ? '#25384c' : 'transparent')};
-  background: transparent;
-  color: ${({ $active }) => ($active ? '#25384c' : '#5c6f84')};
-  font-weight: ${({ $active }) => ($active ? 700 : 600)};
-  letter-spacing: 0.02em;
-  height: 46px;
-  padding: 0 14px;
-  cursor: pointer;
 `
 
 const TabPanel = styled.div`
@@ -124,7 +104,7 @@ const ProductLineRow = styled.div`
 
 const ProductVariantHeader = styled.div`
   display: grid;
-  grid-template-columns: 1.1fr 1.4fr 1.4fr 0.8fr 0.8fr;
+  grid-template-columns: 1.1fr 1.8fr 1.4fr 1.4fr 0.8fr 0.8fr;
   font-size: 12px;
   color: #4f6278;
   font-weight: 700;
@@ -133,7 +113,7 @@ const ProductVariantHeader = styled.div`
 
 const ProductVariantRow = styled.div`
   display: grid;
-  grid-template-columns: 1.1fr 1.4fr 1.4fr 0.8fr 0.8fr;
+  grid-template-columns: 1.1fr 1.8fr 1.4fr 1.4fr 0.8fr 0.8fr;
   border: 1px solid #d9e0e8;
   border-radius: 4px;
   background: #e6eaef;
@@ -573,41 +553,16 @@ const ProductListPage = ({ title }) => {
   return (
     <PageContent title={<BreadcrumbTitle items={breadcrumbItems} />}>
       <Surface>
-        <TabBar role="tablist" aria-label="Product workspace tabs">
-          <TabButton
-            id="products-tab"
-            role="tab"
-            aria-selected={activeTab === 'products'}
-            aria-controls="products-panel"
-            $active={activeTab === 'products'}
-            type="button"
-            onClick={() => setActiveTab('products')}
-          >
-            Products
-          </TabButton>
-          <TabButton
-            id="product-variants-tab"
-            role="tab"
-            aria-selected={activeTab === 'variants'}
-            aria-controls="product-variants-panel"
-            $active={activeTab === 'variants'}
-            type="button"
-            onClick={() => setActiveTab('variants')}
-          >
-            Product Variants
-          </TabButton>
-          <TabButton
-            id="product-lines-tab"
-            role="tab"
-            aria-selected={activeTab === 'product-lines'}
-            aria-controls="product-lines-panel"
-            $active={activeTab === 'product-lines'}
-            type="button"
-            onClick={() => setActiveTab('product-lines')}
-          >
-            Product Lines
-          </TabButton>
-        </TabBar>
+        <WorkspaceTabs
+          ariaLabel="Product workspace tabs"
+          activeTab={activeTab}
+          onChange={setActiveTab}
+          tabs={[
+            { key: 'products', label: 'Products' },
+            { key: 'variants', label: 'Product Variants' },
+            { key: 'product-lines', label: 'Product Lines' },
+          ]}
+        />
 
         {activeTab === 'products' && (
           <TabPanel id="products-panel" role="tabpanel" aria-labelledby="products-tab">
@@ -775,6 +730,7 @@ const ProductListPage = ({ title }) => {
             <Table>
               <ProductVariantHeader>
                 <div>Variant SKU</div>
+                <div>QR Code</div>
                 <div>Product</div>
                 <div>Variant Name</div>
                 <div>Yield</div>
@@ -785,6 +741,7 @@ const ProductListPage = ({ title }) => {
               {!loading && pagedVariants.map(item => (
                 <ProductVariantRow key={item.id}>
                   <Cell>{item.sku || item.id}</Cell>
+                  <Cell>{item.qr_code || 'N/A'}</Cell>
                   <Cell>{productNameById[item.product_id] || item.product_id}</Cell>
                   <Cell>{item.name || 'N/A'}</Cell>
                   <Cell>{Number(item.yield_units || 1)}</Cell>

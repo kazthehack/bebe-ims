@@ -14,5 +14,7 @@ class SiteDocument(ObjectDocument):
     name: str
     location: str | None = None
     active: bool = True
+    assigned_event_ids: list[str] = []
+    active_event_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

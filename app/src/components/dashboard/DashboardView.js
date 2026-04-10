@@ -140,15 +140,21 @@ const DayEvent = styled.div`
   text-overflow: ellipsis;
 `
 
+const DayMore = styled.div`
+  font-size: 9px;
+  line-height: 1.2;
+  padding: 1px 4px;
+  border-radius: 6px;
+  margin-bottom: 2px;
+  background: #dfe8f6;
+  color: #1f2f45;
+  font-weight: 700;
+`
+
 const CalendarMeta = styled.div`
   margin-top: 8px;
   color: #5e5e5e;
   font-size: 12px;
-`
-
-const PlaceholderList = styled.div`
-  display: grid;
-  gap: 10px;
 `
 
 const PlaceholderItem = styled.div`
@@ -251,16 +257,76 @@ const EmptyItem = ({ children }) => (
   <PlaceholderItem>{children}</PlaceholderItem>
 )
 
+const InventoryStatWrap = styled.div`
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 14px;
+`
+
+const InventoryStatCard = styled.div`
+  min-width: 220px;
+  border: 1px solid #dbe5f2;
+  border-radius: 10px;
+  background: #f8faff;
+  text-align: center;
+  padding: 12px 16px;
+`
+
+const InventoryStatValue = styled.div`
+  color: #1875f0;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+`
+
+const InventoryStatLabel = styled.div`
+  color: #5e5e5e;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin-top: 6px;
+`
+
+const InventoryTable = styled.div`
+  display: grid;
+  gap: 6px;
+`
+
+const InventoryHeader = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: #4f6278;
+  font-weight: 700;
+`
+
+const InventoryRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  border: 1px solid #d9e0e8;
+  border-radius: 4px;
+  background: #e6eaef;
+  min-height: 46px;
+  align-items: center;
+`
+
+const InventoryCell = styled.div`
+  padding: 0 10px;
+  color: #243648;
+  font-size: 13px;
+`
+
 const DashboardView = ({
   calendarMonthLabel,
   events,
   eventsByDate,
-  notifications,
   sales,
+  inventorySummary,
   loading,
   error,
 }) => {
   const currentMonth = new Date()
+  const MAX_EVENTS_PER_DAY = 3
 
   return (
     <>
@@ -278,12 +344,15 @@ const DashboardView = ({
               renderDayContents={(dayOfMonth, date) => {
                 const dateIso = toISODate(date)
                 const dayEvents = eventsByDate[dateIso] || []
+                const visibleEvents = dayEvents.slice(0, MAX_EVENTS_PER_DAY)
+                const hiddenCount = Math.max(0, dayEvents.length - visibleEvents.length)
                 return (
                   <DayContent className="dashboard-day-content">
                     <DayNumber>{dayOfMonth}</DayNumber>
-                    {dayEvents.slice(0, 2).map(item => (
+                    {visibleEvents.map(item => (
                       <DayEvent key={`${dateIso}-${item.id}`}>{item.title}</DayEvent>
                     ))}
+                    {hiddenCount > 0 && <DayMore>{`+${hiddenCount} more`}</DayMore>}
                   </DayContent>
                 )
               }}
@@ -302,14 +371,29 @@ const DashboardView = ({
         </Panel>
 
         <Panel>
-          <PanelTitle>Important System Notifications</PanelTitle>
-          <PlaceholderList>
-            {loading && <EmptyItem>Loading notifications...</EmptyItem>}
-            {!loading && notifications.length === 0 && <EmptyItem>No notifications available.</EmptyItem>}
-            {!loading && notifications.map(item => (
-              <PlaceholderItem key={item.id}>{item.message}</PlaceholderItem>
+          <PanelTitle>Inventory Sneak Peek</PanelTitle>
+          <InventoryStatWrap>
+            <InventoryStatCard>
+              <InventoryStatValue>{Number(inventorySummary.totalGlobalUnits || 0).toFixed(0)}</InventoryStatValue>
+              <InventoryStatLabel>Global Units</InventoryStatLabel>
+            </InventoryStatCard>
+          </InventoryStatWrap>
+          <InventoryTable>
+            <InventoryHeader>
+              <div>Per Product Line</div>
+              <div>Units</div>
+            </InventoryHeader>
+            {loading && <EmptyItem>Loading inventory...</EmptyItem>}
+            {!loading && (inventorySummary.lines || []).map((row) => (
+              <InventoryRow key={row.productLine}>
+                <InventoryCell>{row.productLine}</InventoryCell>
+                <InventoryCell>{Number(row.units || 0).toFixed(0)}</InventoryCell>
+              </InventoryRow>
             ))}
-          </PlaceholderList>
+            {!loading && !(inventorySummary.lines || []).length && (
+              <EmptyItem>No inventory records available.</EmptyItem>
+            )}
+          </InventoryTable>
         </Panel>
       </DashboardGrid>
 
@@ -364,10 +448,13 @@ DashboardView.propTypes = {
       end_date: PropTypes.string,
     })),
   ).isRequired,
-  notifications: PropTypes.arrayOf(PropTypes.shape({
-    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
-    message: PropTypes.string,
-  })).isRequired,
+  inventorySummary: PropTypes.shape({
+    totalGlobalUnits: PropTypes.number,
+    lines: PropTypes.arrayOf(PropTypes.shape({
+      productLine: PropTypes.string,
+      units: PropTypes.number,
+    })),
+  }).isRequired,
   sales: PropTypes.object.isRequired,
   loading: PropTypes.bool.isRequired,
   error: PropTypes.string.isRequired,

@@ -20,8 +20,8 @@ const HomePage = () => {
   const {
     events,
     eventsByDate,
-    notifications,
     sales,
+    inventorySummary,
     loading,
     error,
     activeApiBase,
@@ -41,8 +41,8 @@ const HomePage = () => {
         calendarMonthLabel={calendarMonthLabel}
         events={events}
         eventsByDate={eventsByDate}
-        notifications={notifications}
         sales={sales}
+        inventorySummary={inventorySummary}
         loading={loading}
         error={error}
       />

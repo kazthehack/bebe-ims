@@ -13,6 +13,10 @@ class WebPosSessionDocument(ObjectDocument):
     id: str | None = None
     site_id: str
     employee_id: str
+    event_id: str | None = None
+    opening_cash: float = 0.0
+    closing_cash: float | None = None
+    close_notes: str | None = None
     status: WebPosSessionStatus = WebPosSessionStatus.OPEN
     opened_at: datetime | None = None
     closed_at: datetime | None = None

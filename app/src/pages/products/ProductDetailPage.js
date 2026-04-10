@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { useHistory, useLocation, useParams } from 'react-router-dom'
 import PageContent from 'components/pages/PageContent'
+import FormModal from 'components/reusable/modals/FormModal'
 import ConfirmActionModal from 'components/reusable/modals/ConfirmActionModal'
 import RelatedObjectsTableSection from 'components/reusable/details/RelatedObjectsTableSection'
 import GraphWithTableSection from 'components/reusable/analytics/GraphWithTableSection'
+import QuantityStepper from 'components/reusable/controls/QuantityStepper'
 import { useProductDetail, useProductsList } from 'hooks/products/useProductsApi'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import AddProductVariantModal from './modals/AddProductVariantModal'
@@ -148,38 +150,33 @@ const FullWidth = styled.div`
   grid-column: 1 / -1;
 `
 
-const StockAdjustControl = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-`
-
-const StockAdjustButton = styled.button`
-  width: 28px;
-  height: 28px;
-  border: 1px solid #bec8d3;
-  background: #f0f3f6;
-  border-radius: 4px;
-  color: #2f4256;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-`
-
-const StockAdjustInput = styled.input`
-  width: 58px;
-  height: 28px;
-  border: 1px solid #bec8d3;
-  border-radius: 4px;
-  background: #f0f3f6;
-  color: #243648;
-  text-align: center;
-`
-
 const ErrorText = styled.div`
   margin-top: 8px;
   color: #b42318;
   font-size: 12px;
+`
+
+const ModalMeta = styled.div`
+  margin-top: 6px;
+  color: #4b6176;
+  font-size: 13px;
+`
+
+const ModalField = styled.label`
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  color: #4b6176;
+  font-size: 12px;
+`
+
+const ModalTextarea = styled.textarea`
+  border: 1px solid #bec8d3;
+  border-radius: 4px;
+  min-height: 88px;
+  padding: 8px 10px;
+  background: #f0f3f6;
+  resize: vertical;
 `
 
 const money = (value) => new Intl.NumberFormat('en-PH', {
@@ -242,6 +239,11 @@ const ProductDetailPage = () => {
   const [quickQtyByVariant, setQuickQtyByVariant] = useState({})
   const [quickBusyByVariant, setQuickBusyByVariant] = useState({})
   const [quickInventoryError, setQuickInventoryError] = useState('')
+  const [showQuickLossModal, setShowQuickLossModal] = useState(false)
+  const [quickLossVariantId, setQuickLossVariantId] = useState('')
+  const [quickLossReason, setQuickLossReason] = useState('')
+  const [quickLossError, setQuickLossError] = useState('')
+  const [quickLossSubmitting, setQuickLossSubmitting] = useState(false)
   const product = productDetail ? productDetail.product : null
 
   const breadcrumbTitle = (
@@ -328,6 +330,7 @@ const ProductDetailPage = () => {
     () => variants.map((variant) => ({
       key: variant.id,
       sku: variant.sku || 'N/A',
+      qr_code: variant.qr_code || 'N/A',
       name: variant.name || 'N/A',
       actions: (
         <ActionButton type="button" onClick={() => history.push(`/products/variants/${variant.id}`)}>
@@ -338,23 +341,62 @@ const ProductDetailPage = () => {
     [variants, history],
   )
 
-  const handleQuickAdjust = async (variantId, direction) => {
-    setQuickInventoryError('')
+  const resolveQuickQty = (variantId) => {
     const rawValue = quickQtyByVariant[variantId]
     const parsedQty = Number.parseFloat(rawValue === '' || rawValue === undefined ? '1' : String(rawValue))
-    const qty = Number.isFinite(parsedQty) && parsedQty > 0 ? parsedQty : 1
+    return Number.isFinite(parsedQty) && parsedQty > 0 ? parsedQty : 1
+  }
+
+  const handleQuickAdd = async (variantId) => {
+    setQuickInventoryError('')
+    const qty = resolveQuickQty(variantId)
     try {
       setQuickBusyByVariant((prev) => ({ ...prev, [variantId]: true }))
       setQuickQtyByVariant((prev) => ({ ...prev, [variantId]: String(qty) }))
       await adjustVariantGlobalStock({
         variantId,
-        qtyDelta: direction > 0 ? qty : -qty,
+        qtyDelta: qty,
       })
       setQuickQtyByVariant((prev) => ({ ...prev, [variantId]: '1' }))
     } catch (err) {
-      setQuickInventoryError(err.message || 'Failed to adjust global stock.')
+      setQuickInventoryError(err.message || 'Failed to add global stock.')
     } finally {
       setQuickBusyByVariant((prev) => ({ ...prev, [variantId]: false }))
+    }
+  }
+
+  const openQuickLossModal = (variantId) => {
+    const qty = resolveQuickQty(variantId)
+    setQuickQtyByVariant((prev) => ({ ...prev, [variantId]: String(qty) }))
+    setQuickLossVariantId(variantId)
+    setQuickLossReason('')
+    setQuickLossError('')
+    setShowQuickLossModal(true)
+  }
+
+  const submitQuickLoss = async () => {
+    if (!quickLossVariantId) return
+    const qty = resolveQuickQty(quickLossVariantId)
+    if (!String(quickLossReason || '').trim()) {
+      setQuickLossError('Reason is required.')
+      return
+    }
+    try {
+      setQuickLossSubmitting(true)
+      setQuickLossError('')
+      await adjustVariantGlobalStock({
+        variantId: quickLossVariantId,
+        qtyDelta: -qty,
+        notes: `Loss adjustment: ${String(quickLossReason).trim()}`,
+      })
+      setQuickQtyByVariant((prev) => ({ ...prev, [quickLossVariantId]: '1' }))
+      setShowQuickLossModal(false)
+      setQuickLossVariantId('')
+      setQuickLossReason('')
+    } catch (err) {
+      setQuickLossError(err.message || 'Failed to record loss adjustment.')
+    } finally {
+      setQuickLossSubmitting(false)
     }
   }
 
@@ -369,32 +411,21 @@ const ProductDetailPage = () => {
         name: variant.name || 'N/A',
         global_stock: Number(inventoryByVariantId[variant.id] || 0),
         adjust: (
-          <StockAdjustControl>
-            <StockAdjustButton
-              type="button"
-              disabled={Boolean(quickBusyByVariant[variant.id])}
-              onClick={() => handleQuickAdjust(variant.id, -1)}
-            >
-              -
-            </StockAdjustButton>
-            <StockAdjustInput
-              type="number"
-              min="1"
-              step="1"
-              value={value}
-              onChange={(event) => {
-                const nextValue = event.target.value
-                setQuickQtyByVariant((prev) => ({ ...prev, [variant.id]: nextValue }))
-              }}
-            />
-            <StockAdjustButton
-              type="button"
-              disabled={Boolean(quickBusyByVariant[variant.id])}
-              onClick={() => handleQuickAdjust(variant.id, 1)}
-            >
-              +
-            </StockAdjustButton>
-          </StockAdjustControl>
+          <QuantityStepper
+            buttonSize={28}
+            inputWidth={58}
+            value={value}
+            onChange={(nextValue) => {
+              setQuickQtyByVariant((prev) => ({ ...prev, [variant.id]: nextValue }))
+            }}
+            onDecrement={() => openQuickLossModal(variant.id)}
+            onIncrement={() => handleQuickAdd(variant.id)}
+            disabled={Boolean(quickBusyByVariant[variant.id])}
+            filledButtons={false}
+            min={1}
+            step={1}
+            placeholder="1"
+          />
         ),
         actions: (
           <ActionButton type="button" onClick={() => history.push(`/inventory/inv-${variant.id}`)}>
@@ -603,6 +634,7 @@ const ProductDetailPage = () => {
             )}
             columns={[
               { key: 'sku', label: 'Variant SKU', width: '1.2fr' },
+              { key: 'qr_code', label: 'QR Code', width: '1.6fr' },
               { key: 'name', label: 'Name', width: '1.4fr' },
               { key: 'actions', label: 'Actions', width: '0.8fr' },
             ]}
@@ -651,6 +683,38 @@ const ProductDetailPage = () => {
             onSubmit={handleCreateVariant}
             lockProduct
           />
+
+          <FormModal
+            open={showQuickLossModal}
+            title="Record Loss Adjustment"
+            onClose={() => {
+              setShowQuickLossModal(false)
+              setQuickLossVariantId('')
+              setQuickLossReason('')
+              setQuickLossError('')
+              setQuickLossSubmitting(false)
+            }}
+            onConfirm={submitQuickLoss}
+            confirmLabel={quickLossSubmitting ? 'Saving...' : 'Save'}
+            cancelLabel="Cancel"
+            confirmDisabled={quickLossSubmitting}
+            width="460px"
+            actionsAlign="right"
+            closeControl="x"
+          >
+            <ModalMeta>
+              This will reduce global stock by <strong>{quickLossVariantId ? resolveQuickQty(quickLossVariantId) : 0}</strong>.
+            </ModalMeta>
+            <ModalField>
+              <span>Reason (required)</span>
+              <ModalTextarea
+                value={quickLossReason}
+                onChange={(event) => setQuickLossReason(event.target.value)}
+                placeholder="e.g. damaged print, failed batch, lost item"
+              />
+            </ModalField>
+            {quickLossError && <ErrorText>{quickLossError}</ErrorText>}
+          </FormModal>
 
           <ConfirmActionModal
             open={showDeleteConfirm}

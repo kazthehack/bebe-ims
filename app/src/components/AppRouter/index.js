@@ -71,7 +71,16 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
   }, [])
 
   return (
-    <Page>
+    location.pathname.startsWith('/web-pos') ? (
+      <Switch>
+        <Route
+          path="/web-pos"
+          render={() => <WebPosPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route component={PageNotFound(true, true)} />
+      </Switch>
+    ) : (
+      <Page>
       <Switch>
         <Route exact path="/" render={() => <Redirect to="/daily" />} />
         <Route
@@ -80,8 +89,9 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
           render={() => <HomePage authenticatedUserData={authenticatedUserData} />}
         />
         <Route
-          path="/web-pos"
-          render={() => <WebPosPage authenticatedUserData={authenticatedUserData} />}
+          exact
+          path="/sales/:id"
+          render={() => <SalesPage authenticatedUserData={authenticatedUserData} />}
         />
         <Route
           path="/sales"
@@ -129,6 +139,11 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
           render={() => <SitesPage authenticatedUserData={authenticatedUserData} />}
         />
         <Route
+          exact
+          path="/events/:id"
+          render={() => <EventsPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
           path="/events"
           render={() => <EventsPage authenticatedUserData={authenticatedUserData} />}
         />
@@ -141,6 +156,16 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
         <Route
           path="/reports"
           render={() => <ReportsPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
+          exact
+          path="/crm/partnerships/:id"
+          render={() => <CrmPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
+          exact
+          path="/crm/requests/:id"
+          render={() => <CrmPage authenticatedUserData={authenticatedUserData} />}
         />
         <Route
           path="/crm"
@@ -169,7 +194,8 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
         {/* If none of the above routes matches, show the 404 error page */}
         <Route component={PageNotFound(true, true)} />
       </Switch>
-    </Page>
+      </Page>
+    )
   )
 })
 

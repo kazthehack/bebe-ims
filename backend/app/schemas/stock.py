@@ -59,6 +59,7 @@ class InventoryVariantDetailRead(BaseModel):
     inventory_id: str
     product_variant_id: str
     sku: str
+    qr_code: str | None = None
     variant_name: str | None = None
     product_id: str
     product_line_name: str | None = None

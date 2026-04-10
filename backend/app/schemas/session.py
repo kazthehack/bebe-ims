@@ -8,12 +8,18 @@ from app.domain.enums import WebPosCashMovementType, WebPosSessionStatus
 class WebPosSessionCreate(BaseModel):
     site_id: str
     employee_id: str
+    event_id: str | None = None
+    opening_cash: float = 0.0
 
 
 class WebPosSessionRead(BaseModel):
     id: str
     site_id: str
     employee_id: str
+    event_id: str | None = None
+    opening_cash: float = 0.0
+    closing_cash: float | None = None
+    close_notes: str | None = None
     status: WebPosSessionStatus
     opened_at: datetime
     closed_at: datetime | None = None
@@ -21,6 +27,11 @@ class WebPosSessionRead(BaseModel):
 
 class WebPosSessionListResponse(BaseModel):
     sessions: list[WebPosSessionRead]
+
+
+class WebPosSessionCloseCreate(BaseModel):
+    closing_cash: float = 0.0
+    close_notes: str | None = None
 
 
 class WebPosCashMovementCreate(BaseModel):

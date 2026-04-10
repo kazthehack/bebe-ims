@@ -4,8 +4,9 @@ import { useHistory, useParams } from 'react-router-dom'
 import PageContent from 'components/pages/PageContent'
 import FormModal from 'components/reusable/modals/FormModal'
 import ListFiltersRow from 'components/reusable/layouts/ListFiltersRow'
+import { PageDangerButton, PagePrimaryButton, PageSecondaryButton } from 'components/reusable/buttons/PageButtons'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
-import { useSitesResource } from 'hooks/bazaar/useBazaarApi'
+import { useEventsResource, useInventoryResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
 
 const Surface = styled.div`
   background: #f3f5f7;
@@ -15,21 +16,8 @@ const Surface = styled.div`
 `
 
 const Toolbar = styled.div`
-  display: flex;
-  justify-content: flex-end;
+  display: block;
   margin-bottom: 12px;
-`
-
-const PrimaryButton = styled.button`
-  height: 38px;
-  border: 1px solid #25384c;
-  background: #25384c;
-  color: #fff;
-  border-radius: 4px;
-  min-width: 88px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
 `
 
 const Table = styled.div`
@@ -82,6 +70,12 @@ const Cell = styled.div`
   font-size: 13px;
 `
 
+const ActionCell = styled(Cell)`
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+`
+
 const Section = styled.section`
   border: 1px solid #d7e0ec;
   border-radius: 4px;
@@ -94,6 +88,14 @@ const SectionTitle = styled.h3`
   margin: 0 0 10px;
   color: #243648;
   font-size: 16px;
+`
+
+const SectionHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
 `
 
 const PageActions = styled.div`
@@ -151,27 +153,104 @@ const ErrorText = styled.div`
   margin-top: 8px;
 `
 
+const Select = styled.select`
+  border: 1px solid #bec8d3;
+  border-radius: 4px;
+  height: 38px;
+  padding: 0 10px;
+  width: 100%;
+  box-sizing: border-box;
+  background: #f0f3f6;
+`
+
+const ListTable = styled.div`
+  display: grid;
+  gap: 6px;
+`
+
+const ListHeader = styled.div`
+  display: grid;
+  grid-template-columns: ${(props) => props.columns || '1fr'};
+  font-size: 12px;
+  color: #4f6278;
+  font-weight: 700;
+  padding: 0 10px;
+`
+
+const ListRow = styled.div`
+  display: grid;
+  grid-template-columns: ${(props) => props.columns || '1fr'};
+  border: 1px solid #d9e0e8;
+  border-radius: 4px;
+  background: #e6eaef;
+  align-items: center;
+  min-height: 50px;
+`
+
+const LinkButton = styled.button`
+  border: none;
+  background: none;
+  color: #25384c;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+`
+
+const Subsection = styled.div`
+  margin-top: 14px;
+`
+
+const SubsectionTitle = styled.div`
+  color: #4f6278;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0 0 8px;
+`
+
+const SpacedMeta = styled(Meta)`
+  margin-top: 10px;
+  margin-bottom: 8px;
+`
+
 const SitesPage = () => {
   const history = useHistory()
   const { id } = useParams()
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showAssignEventModal, setShowAssignEventModal] = useState(false)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
+  const [selectedEventId, setSelectedEventId] = useState('')
   const [formError, setFormError] = useState('')
+  const [assignError, setAssignError] = useState('')
+  const [inventoryError, setInventoryError] = useState('')
+  const [siteMessage, setSiteMessage] = useState('')
+  const [siteActionError, setSiteActionError] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState('')
   const [editLocation, setEditLocation] = useState('')
   const [editError, setEditError] = useState('')
+  const [siteInventoryItems, setSiteInventoryItems] = useState([])
+  const [siteInventoryLoading, setSiteInventoryLoading] = useState(false)
+  const [siteEventsLoading, setSiteEventsLoading] = useState(false)
   const {
     sites,
+    siteEventsById,
     loading,
     error,
     createSite,
     updateSite,
+    loadSiteEvents,
+    assignEventToSite,
+    returnAllInventoryToGlobal,
+    closeSiteEvent,
   } = useSitesResource()
+  const { events } = useEventsResource()
+  const { loadSite } = useInventoryResource()
 
   const filteredSites = useMemo(() => {
     const query = String(search || '').trim().toLowerCase()
@@ -192,6 +271,7 @@ const SitesPage = () => {
     () => (sites || []).find((site) => site.id === id) || null,
     [sites, id],
   )
+  const selectedSiteId = selectedSite ? selectedSite.id : ''
   const PAGE_SIZE = 20
   const totalPages = Math.max(1, Math.ceil((filteredSites || []).length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -211,15 +291,78 @@ const SitesPage = () => {
     setEditError('')
   }, [selectedSite])
 
+  useEffect(() => {
+    let mounted = true
+    if (!selectedSiteId) return () => { mounted = false }
+    const run = async () => {
+      setSiteActionError('')
+      setSiteMessage('')
+      setInventoryError('')
+      setSiteInventoryLoading(true)
+      setSiteEventsLoading(true)
+      try {
+        const [eventsData, inventoryData] = await Promise.all([
+          loadSiteEvents(selectedSiteId),
+          loadSite(selectedSiteId),
+        ])
+        if (!mounted) return
+        const sortedInventory = (inventoryData.items || []).slice().sort((left, right) => {
+          const leftName = `${left.product_name || ''} ${left.variant_name || ''}`.trim().toLowerCase()
+          const rightName = `${right.product_name || ''} ${right.variant_name || ''}`.trim().toLowerCase()
+          return leftName.localeCompare(rightName)
+        })
+        setSiteInventoryItems(sortedInventory)
+        if (!selectedEventId && (eventsData || []).length > 0) {
+          setSelectedEventId(eventsData[0].id)
+        }
+      } catch (err) {
+        if (!mounted) return
+        setInventoryError(err.message || 'Failed to load site inventory.')
+      } finally {
+        if (mounted) {
+          setSiteInventoryLoading(false)
+          setSiteEventsLoading(false)
+        }
+      }
+    }
+    run()
+    return () => { mounted = false }
+  }, [selectedSiteId, loadSiteEvents, loadSite])
+
   const title = id
     ? (
       <BreadcrumbTitle items={[
         { label: 'Sites', to: '/sites' },
-        { label: 'Site Detail' },
+        { label: (selectedSite && selectedSite.name) || 'Site Detail' },
       ]}
       />
     )
     : 'Sites'
+
+  const assignedEvents = selectedSite ? (siteEventsById[selectedSite.id] || []) : []
+  const isClosedStatus = (value) => ['closed', 'done', 'cancelled'].includes(String(value || '').trim().toLowerCase())
+  const formatEventDateRange = (event) => `${event.start_date || '-'} to ${event.end_date || '-'}`
+  const eventWithDates = (event) => `${event.title}${event.start_date || event.end_date ? ` (${formatEventDateRange(event)})` : ''}`
+  const byEventDate = (left, right) => {
+    const leftStart = String(left.start_date || '')
+    const rightStart = String(right.start_date || '')
+    if (leftStart !== rightStart) return leftStart.localeCompare(rightStart)
+    const leftEnd = String(left.end_date || '')
+    const rightEnd = String(right.end_date || '')
+    if (leftEnd !== rightEnd) return leftEnd.localeCompare(rightEnd)
+    return String(left.title || '').localeCompare(String(right.title || ''))
+  }
+  const visibleAssignedEvents = assignedEvents
+    .filter((event) => !isClosedStatus(event.status))
+    .slice()
+    .sort(byEventDate)
+  const activeEvent = visibleAssignedEvents.find((event) => Boolean(event.active_for_site)) || null
+  const historyEvents = visibleAssignedEvents.filter((event) => !event.active_for_site)
+  const formatStatus = (value) => String(value || '-').trim().toUpperCase()
+  const assignableEvents = (events || [])
+    .filter((event) => !isClosedStatus(event.status))
+    .slice()
+    .sort(byEventDate)
 
   const handleCreate = async () => {
     setFormError('')
@@ -260,6 +403,57 @@ const SitesPage = () => {
     }
   }
 
+  const handleAssignEvent = async () => {
+    if (!selectedSite) return
+    setAssignError('')
+    if (!selectedEventId) {
+      setAssignError('Event is required.')
+      return
+    }
+    try {
+      await assignEventToSite({
+        siteId: selectedSite.id,
+        eventId: selectedEventId,
+        makeActive: true,
+      })
+      setShowAssignEventModal(false)
+      setSiteMessage('Event assigned to site and set as active.')
+    } catch (err) {
+      setAssignError(err.message || 'Failed to assign event.')
+    }
+  }
+
+  const handleReturnAll = async () => {
+    if (!selectedSite) return
+    setSiteActionError('')
+    setSiteMessage('')
+    try {
+      const result = await returnAllInventoryToGlobal(selectedSite.id)
+      const inventoryData = await loadSite(selectedSite.id)
+      const sortedInventory = (inventoryData.items || []).slice().sort((left, right) => {
+        const leftName = `${left.product_name || ''} ${left.variant_name || ''}`.trim().toLowerCase()
+        const rightName = `${right.product_name || ''} ${right.variant_name || ''}`.trim().toLowerCase()
+        return leftName.localeCompare(rightName)
+      })
+      setSiteInventoryItems(sortedInventory)
+      setSiteMessage(`Returned ${Number(result.moved_qty || 0).toFixed(2)} units across ${result.moved_variants || 0} variants to global.`)
+    } catch (err) {
+      setSiteActionError(err.message || 'Failed to return inventory to global.')
+    }
+  }
+
+  const handleCloseActiveEvent = async () => {
+    if (!selectedSite || !activeEvent) return
+    setSiteActionError('')
+    setSiteMessage('')
+    try {
+      await closeSiteEvent(selectedSite.id, activeEvent.id)
+      setSiteMessage(`Closed event ${activeEvent.code || activeEvent.title}.`)
+    } catch (err) {
+      setSiteActionError(err.message || 'Failed to close active event.')
+    }
+  }
+
   return (
     <PageContent title={title}>
       {!id && (
@@ -281,7 +475,7 @@ const SitesPage = () => {
                   ],
                 },
               ]}
-              right={<PrimaryButton type="button" onClick={() => setShowCreateModal(true)}>Add Site</PrimaryButton>}
+              right={<PagePrimaryButton type="button" onClick={() => setShowCreateModal(true)}>Add Site</PagePrimaryButton>}
             />
           </Toolbar>
           <Table>
@@ -298,7 +492,7 @@ const SitesPage = () => {
                 <Cell>{site.name}</Cell>
                 <Cell>{site.location || '-'}</Cell>
                 <Cell>{site.active ? 'Active' : 'Inactive'}</Cell>
-                <Cell>View</Cell>
+                <ActionCell>VIEW</ActionCell>
               </Row>
             ))}
           </Table>
@@ -323,10 +517,10 @@ const SitesPage = () => {
         <>
           {!loading && selectedSite && (
             <PageActions>
-              {!isEditing && <PrimaryButton type="button" onClick={() => setIsEditing(true)}>EDIT</PrimaryButton>}
-              {isEditing && <PrimaryButton type="button" onClick={handleSaveEdit}>SAVE</PrimaryButton>}
+              {!isEditing && <PagePrimaryButton type="button" onClick={() => setIsEditing(true)}>EDIT</PagePrimaryButton>}
+              {isEditing && <PagePrimaryButton type="button" onClick={handleSaveEdit}>SAVE</PagePrimaryButton>}
               {isEditing && (
-                <PaginationButton
+                <PageSecondaryButton
                   type="button"
                   onClick={() => {
                     setIsEditing(false)
@@ -336,7 +530,7 @@ const SitesPage = () => {
                   }}
                 >
                   CANCEL
-                </PaginationButton>
+                </PageSecondaryButton>
               )}
             </PageActions>
           )}
@@ -370,6 +564,117 @@ const SitesPage = () => {
             </>
           )}
           </Section>
+          {!loading && selectedSite && (
+            <Section>
+              <SectionHeader>
+                <SectionTitle style={{ margin: 0 }}>Assigned Events</SectionTitle>
+                <PagePrimaryButton type="button" onClick={() => {
+                  setSelectedEventId((assignableEvents[0] && assignableEvents[0].id) || '')
+                  setAssignError('')
+                  setShowAssignEventModal(true)
+                }}
+                >
+                  Assign Event
+                </PagePrimaryButton>
+              </SectionHeader>
+              <Subsection>
+                <SubsectionTitle>Active Event</SubsectionTitle>
+                <ListTable>
+                  <ListHeader columns="1fr 2fr 1.4fr 1fr 1fr">
+                    <div>Code</div>
+                    <div>Event</div>
+                    <div>Date Range</div>
+                    <div>Status</div>
+                    <div>Action</div>
+                  </ListHeader>
+                  {siteEventsLoading && <SpacedMeta>Loading site events...</SpacedMeta>}
+                  {!siteEventsLoading && activeEvent && (
+                    <ListRow key={activeEvent.id} columns="1fr 2fr 1.4fr 1fr 1fr">
+                      <Cell>{activeEvent.code}</Cell>
+                      <Cell>{eventWithDates(activeEvent)}</Cell>
+                      <Cell>{formatEventDateRange(activeEvent)}</Cell>
+                      <Cell>{formatStatus(activeEvent.status)}</Cell>
+                      <Cell>
+                        <LinkButton type="button" onClick={handleCloseActiveEvent}>
+                          CLOSE
+                        </LinkButton>
+                      </Cell>
+                    </ListRow>
+                  )}
+                  {!siteEventsLoading && !activeEvent && (
+                    <ListRow columns="1fr 2fr 1.4fr 1fr 1fr">
+                      <Cell>No events assigned</Cell>
+                      <Cell>-</Cell>
+                      <Cell>-</Cell>
+                      <Cell>-</Cell>
+                      <Cell>-</Cell>
+                    </ListRow>
+                  )}
+                </ListTable>
+              </Subsection>
+              <Subsection>
+                <SubsectionTitle>Event History</SubsectionTitle>
+                <ListTable>
+                  <ListHeader columns="1fr 2fr 1.4fr 1fr">
+                    <div>Code</div>
+                    <div>Event</div>
+                    <div>Date Range</div>
+                    <div>Status</div>
+                  </ListHeader>
+                  {siteEventsLoading && <SpacedMeta>Loading site history...</SpacedMeta>}
+                  {!siteEventsLoading && historyEvents.map((event) => (
+                    <ListRow key={event.id} columns="1fr 2fr 1.4fr 1fr">
+                      <Cell>{event.code}</Cell>
+                      <Cell>{eventWithDates(event)}</Cell>
+                      <Cell>{formatEventDateRange(event)}</Cell>
+                      <Cell>{formatStatus(event.status)}</Cell>
+                    </ListRow>
+                  ))}
+                  {!siteEventsLoading && historyEvents.length === 0 && (
+                    <SpacedMeta>No event history yet.</SpacedMeta>
+                  )}
+                </ListTable>
+              </Subsection>
+            </Section>
+          )}
+          {!loading && selectedSite && (
+            <Section>
+              <SectionHeader>
+                <SectionTitle style={{ margin: 0 }}>Inventory Variants</SectionTitle>
+                <PageDangerButton type="button" onClick={handleReturnAll}>Return All to Global</PageDangerButton>
+              </SectionHeader>
+              <ListTable>
+                <ListHeader columns="2fr 1.5fr 1fr 1fr">
+                  <div>Product</div>
+                  <div>Variant</div>
+                  <div>Qty Available</div>
+                  <div>Action</div>
+                </ListHeader>
+                {siteInventoryLoading && <Meta>Loading site inventory...</Meta>}
+                {!siteInventoryLoading && siteInventoryItems.map((item) => (
+                  <ListRow key={item.inventory_id || item.product_variant_id} columns="2fr 1.5fr 1fr 1fr">
+                    <Cell>{item.product_name}</Cell>
+                    <Cell>{item.variant_name || '-'}</Cell>
+                    <Cell>{Number(item.qty_available || 0).toFixed(2)}</Cell>
+                    <Cell>
+                      <LinkButton
+                        type="button"
+                        onClick={() => history.push(`/inventory/${item.inventory_id || item.product_variant_id}`)}
+                      >
+                        VIEW
+                      </LinkButton>
+                    </Cell>
+                  </ListRow>
+                ))}
+                {!siteInventoryLoading && siteInventoryItems.length === 0 && (
+                  <Meta>No inventory variants at this site yet.</Meta>
+                )}
+              </ListTable>
+              {siteMessage && <Meta>{siteMessage}</Meta>}
+              {inventoryError && <ErrorText>{inventoryError}</ErrorText>}
+              {siteActionError && <ErrorText>{siteActionError}</ErrorText>}
+            </Section>
+          )}
         </>
       )}
 
@@ -382,8 +687,7 @@ const SitesPage = () => {
         }}
         onConfirm={handleCreate}
         confirmLabel="Create"
-        cancelLabel="Exit"
-        closeControl="dot"
+        cancelLabel="Cancel"
       >
         <Field>
           <Label>Name</Label>
@@ -394,6 +698,30 @@ const SitesPage = () => {
           <Input value={location} onChange={(event) => setLocation(event.target.value)} />
         </Field>
         {formError && <ErrorText>{formError}</ErrorText>}
+      </FormModal>
+      <FormModal
+        open={showAssignEventModal}
+        title="Assign Event"
+        onClose={() => {
+          setShowAssignEventModal(false)
+          setAssignError('')
+        }}
+        onConfirm={handleAssignEvent}
+        confirmLabel="Assign"
+        cancelLabel="Cancel"
+      >
+        <Field>
+          <Label>Event</Label>
+          <Select value={selectedEventId} onChange={(event) => setSelectedEventId(event.target.value)}>
+            <option value="">Select event</option>
+            {assignableEvents.map((event) => (
+              <option key={event.id} value={event.id}>
+                {event.code ? `${event.code} - ` : ''}{eventWithDates(event)}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        {assignError && <ErrorText>{assignError}</ErrorText>}
       </FormModal>
     </PageContent>
   )

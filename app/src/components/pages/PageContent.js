@@ -3,26 +3,50 @@
 import React from 'react'
 import Copyright from 'components/common/display/Copyright'
 import PropTypes from 'prop-types'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 const MENU_WIDTH = 176
 const PAGE_PAD = 64
 
 const StyledContent = styled.div`
   width: 100%;
-  padding-right: ${PAGE_PAD}px;
-  padding-left: ${MENU_WIDTH + PAGE_PAD}px;
-  padding-bottom: 72px;
+  ${({ $fullBleed }) => ($fullBleed
+    ? css`
+      padding-right: 12px;
+      padding-left: ${MENU_WIDTH + 12}px;
+      padding-bottom: 20px;
+    `
+    : css`
+      padding-right: ${PAGE_PAD}px;
+      padding-left: ${MENU_WIDTH + PAGE_PAD}px;
+      padding-bottom: 72px;
+    `)}
 
   @media (max-width: 1024px) {
-    padding-left: 166px;
-    padding-right: 20px;
-    padding-bottom: 56px;
+    ${({ $fullBleed }) => ($fullBleed
+    ? css`
+      padding-left: 170px;
+      padding-right: 10px;
+      padding-bottom: 20px;
+    `
+    : css`
+      padding-left: 166px;
+      padding-right: 20px;
+      padding-bottom: 56px;
+    `)}
   }
 
   @media (max-width: 780px) {
-    padding-left: 16px;
-    padding-right: 16px;
+    ${({ $fullBleed }) => ($fullBleed
+    ? css`
+      padding-left: 8px;
+      padding-right: 8px;
+      padding-bottom: 12px;
+    `
+    : css`
+      padding-left: 16px;
+      padding-right: 16px;
+    `)}
   }
 `
 
@@ -62,8 +86,8 @@ export const StyledFooter = ({ footerOffset }) => (
   </div>
 )
 
-const PageContent = ({ title, children, footerOffset }) => (
-  <StyledContent>
+const PageContent = ({ title, children, footerOffset, fullBleed }) => (
+  <StyledContent $fullBleed={fullBleed}>
     {title && <Title>{title}</Title>}
     <div style={{ position: 'relative' }}>
       {children}
@@ -76,6 +100,7 @@ PageContent.propTypes = {
   children: PropTypes.node.isRequired,
   title: PropTypes.node,
   footerOffset: PropTypes.number,
+  fullBleed: PropTypes.bool,
 }
 
 export default PageContent

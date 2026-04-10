@@ -267,10 +267,11 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
     return updated
   }, [tenantId, productId, load])
 
-  const adjustVariantGlobalStock = useCallback(async ({ variantId, qtyDelta }) => {
+  const adjustVariantGlobalStock = useCallback(async ({ variantId, qtyDelta, notes }) => {
     const adjusted = await postJson(`/stock/inventory/global-adjust?${tenantQuery(tenantId)}`, {
       product_variant_id: variantId,
       qty_delta: qtyDelta,
+      notes: notes || null,
     })
     await load(false)
     return adjusted

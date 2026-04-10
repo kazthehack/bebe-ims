@@ -408,6 +408,7 @@ const SuppliesPage = () => {
       actions: (
         <div style={{ display: 'flex', gap: 8, whiteSpace: 'nowrap' }}>
           <ActionButton type="button" onClick={() => setSelectedId(item.id)}>VIEW</ActionButton>
+          <span>|</span>
           <ActionButton type="button" onClick={() => setDeleteTarget(item)}>DELETE</ActionButton>
         </div>
       ),

@@ -9,6 +9,7 @@ class SaleReceiptItemDocument(ObjectDocument):
     object_type: str = 'sale_receipt_item'
     id: str | None = None
     sale_receipt_id: str
-    product_variant_id: str
-    qty: int
-    unit_price: float
+    product_variant_id: str | None = None
+    inventory_item_id: str | None = None
+    qty: int = 1
+    unit_price: float = 0.0

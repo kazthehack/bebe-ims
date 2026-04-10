@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.db.repository import ObjectRepository
@@ -173,6 +173,86 @@ class CrmRemediationItem(BaseModel):
     status: str
 
 
+class PartnershipItem(BaseModel):
+    id: str
+    code: str
+    name: str
+    status: str
+    contact_person: str | None = None
+    contact_number: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    notes: str | None = None
+
+
+class PartnershipCreate(BaseModel):
+    name: str
+    status: str = "active"
+    contact_person: str | None = None
+    contact_number: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    notes: str | None = None
+
+
+class PartnershipRemittanceItem(BaseModel):
+    id: str
+    partnership_id: str
+    date: str
+    amount_php: float
+    notes: str | None = None
+
+
+class PartnershipRemittanceCreate(BaseModel):
+    date: str
+    amount_php: float
+    notes: str | None = None
+
+
+class PartnershipRequestItem(BaseModel):
+    id: str
+    code: str
+    partnership_id: str | None = None
+    partnership_name: str | None = None
+    title: str
+    status: str
+    cost_php: float
+    start_date: str | None = None
+    end_date: str | None = None
+    notes: str | None = None
+    created_at: str
+
+
+class PartnershipRequestCreate(BaseModel):
+    partnership_id: str | None = None
+    title: str
+    status: str = "open"
+    cost_php: float = 0
+    start_date: str | None = None
+    end_date: str | None = None
+    notes: str | None = None
+
+
+class PartnershipUpdate(BaseModel):
+    name: str
+    status: str = "active"
+    contact_person: str | None = None
+    contact_number: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+    notes: str | None = None
+
+
+class PartnershipRequestUpdate(BaseModel):
+    partnership_id: str | None = None
+    title: str
+    status: str = "open"
+    cost_php: float = 0
+    start_date: str | None = None
+    end_date: str | None = None
+    notes: str | None = None
+
+
 class EmployeeItem(BaseModel):
     id: str
     name: str
@@ -270,6 +350,18 @@ class CrmAgreementListResponse(BaseModel):
 
 class CrmRemediationListResponse(BaseModel):
     remediations: list[CrmRemediationItem]
+
+
+class PartnershipListResponse(BaseModel):
+    partnerships: list[PartnershipItem]
+
+
+class PartnershipRemittanceListResponse(BaseModel):
+    remittances: list[PartnershipRemittanceItem]
+
+
+class PartnershipRequestListResponse(BaseModel):
+    requests: list[PartnershipRequestItem]
 
 
 class EmployeeListResponse(BaseModel):
@@ -414,6 +506,35 @@ _CRM_AGREEMENTS = [
 _CRM_REMEDIATIONS = [
     CrmRemediationItem(id="rem-001", account_name="SMP", issue="Late liquidation", status="open"),
 ]
+
+_PARTNERSHIPS = [
+    PartnershipItem(
+        id="ptn-001",
+        code="PTR-001",
+        name="TOEZY",
+        status="active",
+        contact_person=None,
+        contact_number=None,
+        start_date=None,
+        end_date=None,
+        notes=None,
+    ),
+    PartnershipItem(
+        id="ptn-002",
+        code="PTR-002",
+        name="Crafts by JAME",
+        status="active",
+        contact_person=None,
+        contact_number=None,
+        start_date=None,
+        end_date=None,
+        notes=None,
+    ),
+]
+
+_PARTNERSHIP_REMITTANCES: list[PartnershipRemittanceItem] = []
+
+_PARTNERSHIP_REQUESTS: list[PartnershipRequestItem] = []
 
 _EMPLOYEES = [
     EmployeeItem(id="emp-001", name="Admin User", role="admin", site_id="site-001"),
@@ -624,6 +745,188 @@ def list_crm_agreements() -> CrmAgreementListResponse:
 @router.get("/crm/remediations", response_model=CrmRemediationListResponse)
 def list_crm_remediations() -> CrmRemediationListResponse:
     return CrmRemediationListResponse(remediations=_CRM_REMEDIATIONS)
+
+
+def _find_partnership(partnership_id: str) -> PartnershipItem:
+    for item in _PARTNERSHIPS:
+        if item.id == partnership_id:
+            return item
+    raise HTTPException(status_code=404, detail="Partnership not found.")
+
+
+def _find_partnership_index(partnership_id: str) -> int:
+    for index, item in enumerate(_PARTNERSHIPS):
+        if item.id == partnership_id:
+            return index
+    raise HTTPException(status_code=404, detail="Partnership not found.")
+
+
+def _find_request_index(request_id: str) -> int:
+    for index, item in enumerate(_PARTNERSHIP_REQUESTS):
+        if item.id == request_id:
+            return index
+    raise HTTPException(status_code=404, detail="Request not found.")
+
+
+def _to_partner_request(item: PartnershipRequestItem) -> PartnershipRequestItem:
+    partnership_name = item.partnership_name
+    if item.partnership_id:
+        try:
+            partnership_name = _find_partnership(item.partnership_id).name
+        except HTTPException:
+            partnership_name = item.partnership_name
+    return item.model_copy(update={"partnership_name": partnership_name})
+
+
+@router.get("/partners/partnerships", response_model=PartnershipListResponse)
+def list_partnerships() -> PartnershipListResponse:
+    items = sorted(_PARTNERSHIPS, key=lambda item: item.name.casefold())
+    return PartnershipListResponse(partnerships=items)
+
+
+@router.post("/partners/partnerships", response_model=PartnershipItem)
+def create_partnership(payload: PartnershipCreate) -> PartnershipItem:
+    item = PartnershipItem(
+        id=_next_id("ptn", _PARTNERSHIPS),
+        code=f"PTR-{len(_PARTNERSHIPS) + 1:03d}",
+        name=payload.name.strip(),
+        status=payload.status.strip().lower() or "active",
+        contact_person=payload.contact_person,
+        contact_number=payload.contact_number,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        notes=payload.notes,
+    )
+    _PARTNERSHIPS.append(item)
+    return item
+
+
+@router.get("/partners/partnerships/{partnership_id}", response_model=PartnershipItem)
+def get_partnership(partnership_id: str) -> PartnershipItem:
+    return _find_partnership(partnership_id)
+
+
+@router.put("/partners/partnerships/{partnership_id}", response_model=PartnershipItem)
+def update_partnership(partnership_id: str, payload: PartnershipUpdate) -> PartnershipItem:
+    index = _find_partnership_index(partnership_id)
+    existing = _PARTNERSHIPS[index]
+    updated = existing.model_copy(update={
+        "name": payload.name.strip(),
+        "status": payload.status.strip().lower() or existing.status,
+        "contact_person": payload.contact_person,
+        "contact_number": payload.contact_number,
+        "start_date": payload.start_date,
+        "end_date": payload.end_date,
+        "notes": payload.notes,
+    })
+    _PARTNERSHIPS[index] = updated
+    return updated
+
+
+@router.delete("/partners/partnerships/{partnership_id}")
+def delete_partnership(partnership_id: str) -> dict[str, bool]:
+    index = _find_partnership_index(partnership_id)
+    removed_id = _PARTNERSHIPS[index].id
+    _PARTNERSHIPS.pop(index)
+    _PARTNERSHIP_REMITTANCES[:] = [item for item in _PARTNERSHIP_REMITTANCES if item.partnership_id != removed_id]
+    for idx, request in enumerate(_PARTNERSHIP_REQUESTS):
+        if request.partnership_id == removed_id:
+            _PARTNERSHIP_REQUESTS[idx] = request.model_copy(update={"partnership_id": None, "partnership_name": None})
+    return {"ok": True}
+
+
+@router.get("/partners/partnerships/{partnership_id}/remittances", response_model=PartnershipRemittanceListResponse)
+def list_partnership_remittances(partnership_id: str) -> PartnershipRemittanceListResponse:
+    _find_partnership(partnership_id)
+    items = [item for item in _PARTNERSHIP_REMITTANCES if item.partnership_id == partnership_id]
+    items = sorted(items, key=lambda item: item.date, reverse=True)
+    return PartnershipRemittanceListResponse(remittances=items)
+
+
+@router.post("/partners/partnerships/{partnership_id}/remittances", response_model=PartnershipRemittanceItem)
+def create_partnership_remittance(partnership_id: str, payload: PartnershipRemittanceCreate) -> PartnershipRemittanceItem:
+    _find_partnership(partnership_id)
+    item = PartnershipRemittanceItem(
+        id=_next_id("prm", _PARTNERSHIP_REMITTANCES),
+        partnership_id=partnership_id,
+        date=payload.date,
+        amount_php=payload.amount_php,
+        notes=payload.notes,
+    )
+    _PARTNERSHIP_REMITTANCES.append(item)
+    return item
+
+
+@router.get("/partners/requests", response_model=PartnershipRequestListResponse)
+def list_partnership_requests() -> PartnershipRequestListResponse:
+    items = sorted(_PARTNERSHIP_REQUESTS, key=lambda item: item.created_at, reverse=True)
+    return PartnershipRequestListResponse(requests=[_to_partner_request(item) for item in items])
+
+
+@router.post("/partners/requests", response_model=PartnershipRequestItem)
+def create_partnership_request(payload: PartnershipRequestCreate) -> PartnershipRequestItem:
+    partnership_name = None
+    if payload.partnership_id:
+        partnership_name = _find_partnership(payload.partnership_id).name
+    item = PartnershipRequestItem(
+        id=_next_id("preq", _PARTNERSHIP_REQUESTS),
+        code=f"REQ-{len(_PARTNERSHIP_REQUESTS) + 1:03d}",
+        partnership_id=payload.partnership_id,
+        partnership_name=partnership_name,
+        title=payload.title.strip(),
+        status=payload.status.strip().lower() or "open",
+        cost_php=payload.cost_php,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        notes=payload.notes,
+        created_at=datetime.utcnow().isoformat() + "Z",
+    )
+    _PARTNERSHIP_REQUESTS.append(item)
+    return _to_partner_request(item)
+
+
+@router.get("/partners/requests/{request_id}", response_model=PartnershipRequestItem)
+def get_partnership_request(request_id: str) -> PartnershipRequestItem:
+    for item in _PARTNERSHIP_REQUESTS:
+        if item.id == request_id:
+            return _to_partner_request(item)
+    raise HTTPException(status_code=404, detail="Request not found.")
+
+
+@router.put("/partners/requests/{request_id}", response_model=PartnershipRequestItem)
+def update_partnership_request(request_id: str, payload: PartnershipRequestUpdate) -> PartnershipRequestItem:
+    index = _find_request_index(request_id)
+    existing = _PARTNERSHIP_REQUESTS[index]
+    partnership_name = None
+    if payload.partnership_id:
+        partnership_name = _find_partnership(payload.partnership_id).name
+    updated = existing.model_copy(update={
+        "partnership_id": payload.partnership_id,
+        "partnership_name": partnership_name,
+        "title": payload.title.strip(),
+        "status": payload.status.strip().lower() or existing.status,
+        "cost_php": payload.cost_php,
+        "start_date": payload.start_date,
+        "end_date": payload.end_date,
+        "notes": payload.notes,
+    })
+    _PARTNERSHIP_REQUESTS[index] = updated
+    return _to_partner_request(updated)
+
+
+@router.delete("/partners/requests/{request_id}")
+def delete_partnership_request(request_id: str) -> dict[str, bool]:
+    index = _find_request_index(request_id)
+    _PARTNERSHIP_REQUESTS.pop(index)
+    return {"ok": True}
+
+
+@router.get("/partners/partnerships/{partnership_id}/requests", response_model=PartnershipRequestListResponse)
+def list_partnership_request_history(partnership_id: str) -> PartnershipRequestListResponse:
+    _find_partnership(partnership_id)
+    items = [item for item in _PARTNERSHIP_REQUESTS if item.partnership_id == partnership_id]
+    items = sorted(items, key=lambda item: item.created_at, reverse=True)
+    return PartnershipRequestListResponse(requests=[_to_partner_request(item) for item in items])
 
 
 @router.get("/employees", response_model=EmployeeListResponse)

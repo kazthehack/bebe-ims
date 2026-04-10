@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { useParams } from 'react-router-dom'
+import QRCode from 'qrcode.react'
 import PageContent from 'components/pages/PageContent'
 import RelatedObjectsTableSection from 'components/reusable/details/RelatedObjectsTableSection'
+import { PagePrimaryButton, PageSecondaryButton } from 'components/reusable/buttons/PageButtons'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import { useVariantDetail } from 'hooks/products/useProductsApi'
 import AddRecipePartModal from './modals/AddRecipePartModal'
@@ -13,6 +15,10 @@ const Section = styled.section`
   background: #fff;
   padding: 14px;
   margin-bottom: 10px;
+`
+
+const DetailSection = styled(Section)`
+  position: relative;
 `
 
 const SectionTitle = styled.h3`
@@ -33,6 +39,7 @@ const Grid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px 16px;
+  padding-right: 210px;
 `
 
 const Label = styled.div`
@@ -48,30 +55,6 @@ const Value = styled.div`
   min-height: 38px;
   display: flex;
   align-items: center;
-`
-
-const PrimaryButton = styled.button`
-  height: 34px;
-  border: 1px solid #25384c;
-  background: #25384c;
-  color: #fff;
-  border-radius: 4px;
-  padding: 0 12px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-`
-
-const SecondaryButton = styled.button`
-  height: 34px;
-  border: 1px solid #bec8d3;
-  background: #f0f3f6;
-  color: #41576d;
-  border-radius: 4px;
-  padding: 0 12px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
 `
 
 const Input = styled.input`
@@ -90,6 +73,33 @@ const DescriptionValue = styled.div`
   font-size: 14px;
   line-height: 1.45;
   white-space: pre-wrap;
+`
+
+const QrWrap = styled.div`
+  border: 1px solid #d7e0ec;
+  border-radius: 4px;
+  background: #f6f9fc;
+  padding: 10px;
+  width: fit-content;
+`
+
+const FloatingQrPanel = styled.div`
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: 1px solid #d7e0ec;
+  border-radius: 4px;
+  background: #f6f9fc;
+  padding: 10px;
+`
+
+const QrCodeText = styled.div`
+  color: #243648;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
+  max-width: 170px;
+  word-break: break-all;
 `
 
 const money = (value) => new Intl.NumberFormat('en-PH', {
@@ -364,10 +374,10 @@ const VariantDetailPage = () => {
       {!loading && variantDetail && (
         <>
           <PageActions>
-            {!isEditing && <PrimaryButton type="button" onClick={() => setIsEditing(true)}>EDIT</PrimaryButton>}
-            {isEditing && <PrimaryButton type="button" onClick={handleSaveVariant}>SAVE</PrimaryButton>}
+            {!isEditing && <PagePrimaryButton type="button" onClick={() => setIsEditing(true)}>EDIT</PagePrimaryButton>}
+            {isEditing && <PagePrimaryButton type="button" onClick={handleSaveVariant}>SAVE</PagePrimaryButton>}
             {isEditing && (
-              <SecondaryButton
+              <PageSecondaryButton
                 type="button"
                 onClick={() => {
                   setIsEditing(false)
@@ -378,11 +388,23 @@ const VariantDetailPage = () => {
                 }}
               >
                 CANCEL
-              </SecondaryButton>
+              </PageSecondaryButton>
             )}
           </PageActions>
-          <Section>
+          <DetailSection>
             <SectionTitle>Variant Details</SectionTitle>
+            <FloatingQrPanel>
+              <Label>QR Code</Label>
+              <QrWrap>
+                <QRCode
+                  value={variantDetail.qr_code || variantDetail.id}
+                  size={150}
+                  level="M"
+                  includeMargin
+                />
+              </QrWrap>
+              <QrCodeText>{variantDetail.qr_code || 'N/A'}</QrCodeText>
+            </FloatingQrPanel>
             <Grid>
               <div>
                 <Label>Variant ID</Label>
@@ -445,12 +467,12 @@ const VariantDetailPage = () => {
               </div>
             </Grid>
             {variantFormError && <DescriptionValue>{variantFormError}</DescriptionValue>}
-          </Section>
+          </DetailSection>
 
           <RelatedObjectsTableSection
             title="Parts"
             actions={(
-              <PrimaryButton
+              <PagePrimaryButton
                 type="button"
                 onClick={() => {
                   setAddRecipePartMode('filament')
@@ -463,7 +485,7 @@ const VariantDetailPage = () => {
                 }}
               >
                 Add Part
-              </PrimaryButton>
+              </PagePrimaryButton>
             )}
             columns={[
               { key: 'part_code', label: 'Part ID', width: '1.1fr' },
@@ -484,7 +506,7 @@ const VariantDetailPage = () => {
           <RelatedObjectsTableSection
             title="Consumables"
             actions={(
-              <PrimaryButton
+              <PagePrimaryButton
                 type="button"
                 onClick={() => {
                   setAddRecipePartMode('consumable')
@@ -495,7 +517,7 @@ const VariantDetailPage = () => {
                 }}
               >
                 Add Consumable
-              </PrimaryButton>
+              </PagePrimaryButton>
             )}
             columns={[
               { key: 'consumable', label: 'Consumable', width: '1.6fr' },

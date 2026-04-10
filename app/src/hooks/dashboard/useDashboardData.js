@@ -48,8 +48,11 @@ export const formatEventRange = (start, end) => {
 
 export const useDashboardData = () => {
   const [events, setEvents] = useState([])
-  const [notifications, setNotifications] = useState([])
   const [sales, setSales] = useState({})
+  const [inventorySummary, setInventorySummary] = useState({
+    totalGlobalUnits: 0,
+    lines: [],
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeApiBase, setActiveApiBase] = useState(apiBase || '')
@@ -63,8 +66,8 @@ export const useDashboardData = () => {
 
       if (!apiBase) {
         setEvents([])
-        setNotifications([])
         setSales({})
+        setInventorySummary({ totalGlobalUnits: 0, lines: [] })
         setError('Missing REACT_APP_REST_API_ENDPOINT in app environment.')
         setLoading(false)
         return
@@ -72,15 +75,15 @@ export const useDashboardData = () => {
 
       const result = await Promise.allSettled([
         fetchFromConfiguredBase('/events'),
-        fetchFromConfiguredBase('/notifications'),
         fetchFromConfiguredBase('/sales/sites/site1/summary'),
         fetchFromConfiguredBase('/sales/sites/site2/summary'),
         fetchFromConfiguredBase('/sales/sites/site3/summary'),
+        fetchFromConfiguredBase('/stock/inventory/global'),
       ])
 
       if (cancelled) return
 
-      const [eventsRes, notificationsRes, site1, site2, site3] = result
+      const [eventsRes, site1, site2, site3, inventoryRes] = result
 
       if (eventsRes.status === 'fulfilled') {
         setEvents(
@@ -93,30 +96,42 @@ export const useDashboardData = () => {
         setEvents([])
       }
 
-      if (notificationsRes.status === 'fulfilled') {
-        setNotifications(
-          notificationsRes.value
-            && notificationsRes.value.data
-            && notificationsRes.value.data.notifications
-            ? notificationsRes.value.data.notifications
-            : [],
-        )
-      } else {
-        setNotifications([])
-      }
-
       setSales({
         site1: site1.status === 'fulfilled' ? ((site1.value && site1.value.data) || {}) : {},
         site2: site2.status === 'fulfilled' ? ((site2.value && site2.value.data) || {}) : {},
         site3: site3.status === 'fulfilled' ? ((site3.value && site3.value.data) || {}) : {},
       })
 
+      if (inventoryRes.status === 'fulfilled') {
+        const items = (
+          inventoryRes.value
+          && inventoryRes.value.data
+          && inventoryRes.value.data.items
+          ? inventoryRes.value.data.items
+          : []
+        )
+        const lineTotals = items.reduce((acc, item) => {
+          const lineName = String(item.product_line_name || 'Unassigned').trim() || 'Unassigned'
+          const qty = Number(item.master_qty_on_hand || 0)
+          if (!acc[lineName]) acc[lineName] = 0
+          acc[lineName] += qty
+          return acc
+        }, {})
+        const lines = Object.entries(lineTotals)
+          .map(([productLine, units]) => ({ productLine, units }))
+          .sort((left, right) => left.productLine.localeCompare(right.productLine))
+        const totalGlobalUnits = lines.reduce((sum, row) => sum + Number(row.units || 0), 0)
+        setInventorySummary({ totalGlobalUnits, lines })
+      } else {
+        setInventorySummary({ totalGlobalUnits: 0, lines: [] })
+      }
+
       const failedEndpoints = []
       if (eventsRes.status === 'rejected') failedEndpoints.push('/events')
-      if (notificationsRes.status === 'rejected') failedEndpoints.push('/notifications')
       if (site1.status === 'rejected') failedEndpoints.push('/sales/sites/site1/summary')
       if (site2.status === 'rejected') failedEndpoints.push('/sales/sites/site2/summary')
       if (site3.status === 'rejected') failedEndpoints.push('/sales/sites/site3/summary')
+      if (inventoryRes.status === 'rejected') failedEndpoints.push('/stock/inventory/global')
 
       if (failedEndpoints.length) {
         setError(`Unable to load: ${failedEndpoints.join(', ')} (base: ${apiBase})`)
@@ -140,8 +155,8 @@ export const useDashboardData = () => {
   return {
     events,
     eventsByDate,
-    notifications,
     sales,
+    inventorySummary,
     loading,
     error,
     activeApiBase,

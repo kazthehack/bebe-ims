@@ -609,6 +609,7 @@ def get_inventory_variant_detail(variant_id: str, tenant_id: str = Query('tenant
         inventory_id=_inventory_id_for_variant(variant.object_id),
         product_variant_id=variant.object_id,
         sku=variant.payload.sku,
+        qr_code=variant.payload.qr_code,
         variant_name=variant.payload.name,
         product_id=variant.payload.product_id,
         product_line_name=product.payload.product_line_name,

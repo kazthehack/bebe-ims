@@ -6,6 +6,7 @@ import ConfirmActionModal from 'components/reusable/modals/ConfirmActionModal'
 import NoticeModal from 'components/reusable/modals/NoticeModal'
 import RelatedObjectsTableSection from 'components/reusable/details/RelatedObjectsTableSection'
 import GraphWithTableSection from 'components/reusable/analytics/GraphWithTableSection'
+import { PagePrimaryButton, PageSecondaryButton } from 'components/reusable/buttons/PageButtons'
 import AddProductModal from 'pages/products/modals/AddProductModal'
 import { buildProductLineInsightsSectionConfig } from 'pages/products/sections/productLineInsightsSectionConfig'
 import { PRICING_TIER_OPTIONS, defaultPriceForTier, displayLabelForTier } from 'pages/products/constants/pricingTiers'
@@ -32,30 +33,6 @@ const ActionButton = styled.button`
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-`
-
-const PrimaryButton = styled.button`
-  height: 34px;
-  border: 1px solid #25384c;
-  background: #25384c;
-  color: #fff;
-  border-radius: 4px;
-  padding: 0 12px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-`
-
-const SecondaryButton = styled.button`
-  height: 34px;
-  border: 1px solid #bec8d3;
-  background: #f0f3f6;
-  color: #41576d;
-  border-radius: 4px;
-  padding: 0 12px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
 `
 
 const Section = styled.section`
@@ -341,16 +318,16 @@ const ProductLineDetailPage = () => {
   return (
     <PageContent title={breadcrumbTitle}>
       <PageActions>
-        {!isEditing && <PrimaryButton type="button" onClick={() => setIsEditing(true)}>EDIT</PrimaryButton>}
-        {isEditing && <PrimaryButton type="button" onClick={saveEdits}>SAVE</PrimaryButton>}
-        {isEditing && <SecondaryButton type="button" onClick={() => {
+        {!isEditing && <PagePrimaryButton type="button" onClick={() => setIsEditing(true)}>EDIT</PagePrimaryButton>}
+        {isEditing && <PagePrimaryButton type="button" onClick={saveEdits}>SAVE</PagePrimaryButton>}
+        {isEditing && <PageSecondaryButton type="button" onClick={() => {
           setIsEditing(false)
           setEditError('')
           setEditName((productLine && productLine.name) || '')
           setEditDescription((productLine && productLine.description) || '')
         }}
-        >CANCEL</SecondaryButton>}
-        <SecondaryButton type="button" onClick={() => setShowDeleteConfirm(true)}>DELETE</SecondaryButton>
+        >CANCEL</PageSecondaryButton>}
+        <PageSecondaryButton type="button" onClick={() => setShowDeleteConfirm(true)}>DELETE</PageSecondaryButton>
       </PageActions>
 
       <Section>
@@ -388,9 +365,9 @@ const ProductLineDetailPage = () => {
       <RelatedObjectsTableSection
         title="Associated Products"
         actions={(
-          <PrimaryButton type="button" onClick={() => setShowAddProductModal(true)}>
+          <PagePrimaryButton type="button" onClick={() => setShowAddProductModal(true)}>
             Add Product
-          </PrimaryButton>
+          </PagePrimaryButton>
         )}
         columns={[
           { key: 'product_id', label: 'Product ID', width: '1.1fr' },

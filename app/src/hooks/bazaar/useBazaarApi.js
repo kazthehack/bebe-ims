@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { apiBase, getBlob, getJson, postJson, putJson, tenantQuery } from 'hooks/http/httpClient'
+import { apiBase, deleteJson, getBlob, getJson, postJson, putJson, tenantQuery } from 'hooks/http/httpClient'
 
 export const useStockResource = (tenantId = 'tenant-admin') => {
   const [productStock, setProductStock] = useState([])
@@ -93,12 +93,28 @@ export const useReceiptsResource = (tenantId = 'tenant-admin') => {
     load()
   }, [load])
 
-  const createReceipt = async (payload) => {
+  const createReceipt = useCallback(async (payload) => {
     await postJson(`/receipts?${tenantQuery(tenantId)}`, payload)
     await load()
-  }
+  }, [tenantId, load])
 
-  return { receipts, loading, error, createReceipt, reload: load }
+  const getReceipt = useCallback(async (receiptId) => (
+    getJson(`/receipts/${encodeURIComponent(receiptId)}?${tenantQuery(tenantId)}`)
+  ), [tenantId])
+
+  const resolveVariantByQr = useCallback(async (qrCode) => (
+    getJson(`/products/variants/resolve/${encodeURIComponent(String(qrCode || '').trim())}?${tenantQuery(tenantId)}`)
+  ), [tenantId])
+
+  return {
+    receipts,
+    loading,
+    error,
+    createReceipt,
+    getReceipt,
+    resolveVariantByQr,
+    reload: load,
+  }
 }
 
 export const useSessionsResource = (tenantId = 'tenant-admin') => {
@@ -124,15 +140,30 @@ export const useSessionsResource = (tenantId = 'tenant-admin') => {
   }, [load])
 
   const createSession = async (payload) => {
-    await postJson(`/sessions/web-pos?${tenantQuery(tenantId)}`, payload)
+    const created = await postJson(`/sessions/web-pos?${tenantQuery(tenantId)}`, payload)
     await load()
+    return created
   }
 
-  return { sessions, loading, error, createSession, reload: load }
+  const closeSession = async (sessionId, payload = {}) => {
+    const closed = await postJson(`/sessions/web-pos/${encodeURIComponent(sessionId)}/close?${tenantQuery(tenantId)}`, payload)
+    await load()
+    return closed
+  }
+
+  return {
+    sessions,
+    loading,
+    error,
+    createSession,
+    closeSession,
+    reload: load,
+  }
 }
 
 export const useSitesResource = (tenantId = 'tenant-admin') => {
   const [sites, setSites] = useState([])
+  const [siteEventsById, setSiteEventsById] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const sortSites = (items) => (items || []).slice().sort((left, right) => {
@@ -162,23 +193,106 @@ export const useSitesResource = (tenantId = 'tenant-admin') => {
     load()
   }, [load])
 
-  const createSite = async (payload) => {
+  const createSite = useCallback(async (payload) => {
     await postJson(`/sites?${tenantQuery(tenantId)}`, payload)
+    await load()
+  }, [tenantId, load])
+
+  const updateSite = useCallback(async (siteId, payload) => {
+    await putJson(`/sites/${encodeURIComponent(siteId)}?${tenantQuery(tenantId)}`, payload)
+    await load()
+  }, [tenantId, load])
+
+  const loadSiteEvents = useCallback(async (siteId) => {
+    const data = await getJson(`/sites/${encodeURIComponent(siteId)}/events?${tenantQuery(tenantId)}`)
+    const events = data.events || []
+    setSiteEventsById((prev) => ({ ...prev, [siteId]: events }))
+    return events
+  }, [tenantId])
+
+  const assignEventToSite = useCallback(async ({ siteId, eventId, makeActive = true }) => {
+    await postJson(`/sites/${encodeURIComponent(siteId)}/events/assign?${tenantQuery(tenantId)}`, {
+      event_id: eventId,
+      make_active: Boolean(makeActive),
+    })
+    await load()
+    await loadSiteEvents(siteId)
+  }, [tenantId, load, loadSiteEvents])
+
+  const returnAllInventoryToGlobal = useCallback(async (siteId) => {
+    const result = await postJson(`/sites/${encodeURIComponent(siteId)}/inventory/return-all?${tenantQuery(tenantId)}`, {})
+    await load()
+    return result
+  }, [tenantId, load])
+
+  const closeSiteEvent = useCallback(async (siteId, eventId) => {
+    const result = await postJson(`/sites/${encodeURIComponent(siteId)}/events/${encodeURIComponent(eventId)}/close?${tenantQuery(tenantId)}`, {})
+    await load()
+    await loadSiteEvents(siteId)
+    return result
+  }, [tenantId, load, loadSiteEvents])
+
+  return {
+    apiBase,
+    sites,
+    siteEventsById,
+    loading,
+    error,
+    createSite,
+    updateSite,
+    loadSiteEvents,
+    assignEventToSite,
+    returnAllInventoryToGlobal,
+    closeSiteEvent,
+    reload: load,
+  }
+}
+
+export const useEventsResource = (tenantId = 'tenant-admin') => {
+  const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await getJson(`/events?${tenantQuery(tenantId)}`)
+      setEvents(data.events || [])
+    } catch (err) {
+      setError(err.message || 'Failed to load events.')
+    } finally {
+      setLoading(false)
+    }
+  }, [tenantId])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const createEvent = async (payload) => {
+    await postJson(`/events?${tenantQuery(tenantId)}`, payload)
     await load()
   }
 
-  const updateSite = async (siteId, payload) => {
-    await putJson(`/sites/${encodeURIComponent(siteId)}?${tenantQuery(tenantId)}`, payload)
+  const updateEvent = async (eventId, payload) => {
+    await putJson(`/events/${encodeURIComponent(eventId)}?${tenantQuery(tenantId)}`, payload)
+    await load()
+  }
+
+  const deleteEvent = async (eventId) => {
+    await deleteJson(`/events/${encodeURIComponent(eventId)}?${tenantQuery(tenantId)}`)
     await load()
   }
 
   return {
     apiBase,
-    sites,
+    events,
     loading,
     error,
-    createSite,
-    updateSite,
+    createEvent,
+    updateEvent,
+    deleteEvent,
     reload: load,
   }
 }
@@ -313,5 +427,105 @@ export const useInventoryResource = (tenantId = 'tenant-admin') => {
     adjustGlobalInventory,
     exportInventoryWorkbook,
     reload: loadGlobal,
+  }
+}
+
+export const usePartnersResource = (tenantId = 'tenant-admin') => {
+  const [partnerships, setPartnerships] = useState([])
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const query = tenantQuery(tenantId)
+      const [partnershipData, requestData] = await Promise.all([
+        getJson(`/partners/partnerships?${query}`),
+        getJson(`/partners/requests?${query}`),
+      ])
+      setPartnerships(partnershipData.partnerships || [])
+      setRequests(requestData.requests || [])
+    } catch (err) {
+      setError(err.message || 'Failed to load partners resources.')
+    } finally {
+      setLoading(false)
+    }
+  }, [tenantId])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const createPartnership = useCallback(async (payload) => {
+    await postJson(`/partners/partnerships?${tenantQuery(tenantId)}`, payload)
+    await load()
+  }, [tenantId, load])
+
+  const updatePartnership = useCallback(async (partnershipId, payload) => {
+    await putJson(`/partners/partnerships/${encodeURIComponent(partnershipId)}?${tenantQuery(tenantId)}`, payload)
+    await load()
+  }, [tenantId, load])
+
+  const deletePartnership = useCallback(async (partnershipId) => {
+    await deleteJson(`/partners/partnerships/${encodeURIComponent(partnershipId)}?${tenantQuery(tenantId)}`)
+    await load()
+  }, [tenantId, load])
+
+  const createRequest = useCallback(async (payload) => {
+    await postJson(`/partners/requests?${tenantQuery(tenantId)}`, payload)
+    await load()
+  }, [tenantId, load])
+
+  const updateRequest = useCallback(async (requestId, payload) => {
+    await putJson(`/partners/requests/${encodeURIComponent(requestId)}?${tenantQuery(tenantId)}`, payload)
+    await load()
+  }, [tenantId, load])
+
+  const deleteRequest = useCallback(async (requestId) => {
+    await deleteJson(`/partners/requests/${encodeURIComponent(requestId)}?${tenantQuery(tenantId)}`)
+    await load()
+  }, [tenantId, load])
+
+  const getPartnership = useCallback(async (partnershipId) => (
+    getJson(`/partners/partnerships/${encodeURIComponent(partnershipId)}?${tenantQuery(tenantId)}`)
+  ), [tenantId])
+
+  const getRequest = useCallback(async (requestId) => (
+    getJson(`/partners/requests/${encodeURIComponent(requestId)}?${tenantQuery(tenantId)}`)
+  ), [tenantId])
+
+  const getPartnershipRemittances = useCallback(async (partnershipId) => (
+    getJson(`/partners/partnerships/${encodeURIComponent(partnershipId)}/remittances?${tenantQuery(tenantId)}`)
+  ), [tenantId])
+
+  const getPartnershipRequests = useCallback(async (partnershipId) => (
+    getJson(`/partners/partnerships/${encodeURIComponent(partnershipId)}/requests?${tenantQuery(tenantId)}`)
+  ), [tenantId])
+
+  const createRemittance = useCallback(async (partnershipId, payload) => {
+    await postJson(`/partners/partnerships/${encodeURIComponent(partnershipId)}/remittances?${tenantQuery(tenantId)}`, payload)
+    await load()
+  }, [tenantId, load])
+
+  return {
+    apiBase,
+    partnerships,
+    requests,
+    loading,
+    error,
+    createPartnership,
+    updatePartnership,
+    deletePartnership,
+    createRequest,
+    updateRequest,
+    deleteRequest,
+    getPartnership,
+    getRequest,
+    getPartnershipRemittances,
+    getPartnershipRequests,
+    createRemittance,
+    reload: load,
   }
 }

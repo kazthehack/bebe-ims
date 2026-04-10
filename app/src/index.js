@@ -16,6 +16,16 @@ import App from 'components/App'
 
 ReactModal.setAppElement('#root')
 
+// Force-disable any previously registered service worker so tablet/PWA
+// clients do not keep stale JS bundles.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((registration) => {
+      registration.unregister()
+    })
+  })
+}
+
 const localState = localStore.loadState() || {}
 const sessionState = sessionStore.loadState() || {}
 const persistedState = {

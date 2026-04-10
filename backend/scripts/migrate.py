@@ -581,16 +581,22 @@ def seed_default_events() -> None:
     repository = ObjectRepository()
     tenant_id = "tenant-admin"
 
-    for event_id, title, start_date, end_date, status in DEFAULT_EVENTS:
+    for index, (event_id, title, start_date, end_date, status) in enumerate(DEFAULT_EVENTS, start=1):
         created = create_object_if_missing(
             repository,
             tenant_id=tenant_id,
             object_type="event",
             object_id=event_id,
             payload={
+                "code": f"EVT-{index:03d}",
                 "title": title,
+                "organizer": "Bebe Inventory",
+                "rent_cost_per_day": 0.0,
                 "start_date": start_date,
                 "end_date": end_date,
+                "start_time": "09:00",
+                "end_time": "18:00",
+                "location": None,
                 "status": status,
             },
         )

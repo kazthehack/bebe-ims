@@ -340,7 +340,7 @@ const InventoryListPage = () => {
                   <Cell>{item.tertiary_qty}</Cell>
                   <Cell>
                     <ActionButton type="button" onClick={() => history.push(`/inventory/${item.inventory_id || item.product_variant_id}`)}>
-                      View
+                      VIEW
                     </ActionButton>
                   </Cell>
                 </Row>
@@ -364,7 +364,7 @@ const InventoryListPage = () => {
                   <Cell>{Number(item.view_qty || 0)}</Cell>
                   <Cell>
                     <ActionButton type="button" onClick={() => history.push(`/inventory/${item.inventory_id || item.product_variant_id}`)}>
-                      View
+                      VIEW
                     </ActionButton>
                   </Cell>
                 </CompactRow>

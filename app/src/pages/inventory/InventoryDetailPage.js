@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
 import { useHistory, useParams } from 'react-router-dom'
+import QRCode from 'qrcode.react'
 import PageContent from 'components/pages/PageContent'
 import FormModal from 'components/reusable/modals/FormModal'
+import QuantityStepper from 'components/reusable/controls/QuantityStepper'
 import { useInventoryResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import {
@@ -19,6 +21,10 @@ const Section = styled.section`
   background: #fff;
   padding: 14px;
   margin-bottom: 10px;
+`
+
+const DescriptionSection = styled(Section)`
+  position: relative;
 `
 
 const SectionHeader = styled.div`
@@ -38,6 +44,7 @@ const Grid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px 16px;
+  padding-right: 210px;
 `
 
 const Label = styled.div`
@@ -53,6 +60,33 @@ const Value = styled.div`
   min-height: 38px;
   display: flex;
   align-items: center;
+`
+
+const QrPreviewWrap = styled.div`
+  border: 1px solid #d7e0ec;
+  border-radius: 4px;
+  background: #f6f9fc;
+  width: fit-content;
+  padding: 8px;
+`
+
+const FloatingQrPanel = styled.div`
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: 1px solid #d7e0ec;
+  border-radius: 4px;
+  background: #f6f9fc;
+  padding: 10px;
+`
+
+const QrCodeText = styled.div`
+  color: #243648;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
+  max-width: 170px;
+  word-break: break-all;
 `
 
 const Table = styled.div`
@@ -142,33 +176,6 @@ const Cell = styled.div`
   padding: 0 10px;
   color: #243648;
   font-size: 13px;
-`
-
-const InlineAdjust = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-`
-
-const InlineInput = styled.input`
-  width: 74px;
-  height: 30px;
-  border: 1px solid #bec8d3;
-  border-radius: 4px;
-  padding: 0 8px;
-  background: #f0f3f6;
-`
-
-const InlineButton = styled.button`
-  width: 30px;
-  height: 30px;
-  border: 1px solid #25384c;
-  border-radius: 4px;
-  background: ${({ disabled }) => (disabled ? '#e2e8f0' : '#25384c')};
-  color: ${({ disabled }) => (disabled ? '#8a9aab' : '#fff')};
-  cursor: ${({ disabled }) => (disabled ? 'not-allowed' : 'pointer')};
-  font-size: 14px;
-  font-weight: 700;
 `
 
 const ErrorText = styled.div`
@@ -399,20 +406,20 @@ const InventoryDetailPage = () => {
     setInlineQtyBySite((prev) => ({ ...prev, [siteId]: value }))
   }
   const parseInlineQty = (siteId) => {
-    const qty = Number(qtyForSite(siteId))
-    return Number.isFinite(qty) && qty > 0 ? qty : 0
+    const raw = qtyForSite(siteId)
+    const normalized = raw === '' || raw === undefined || raw === null ? '1' : String(raw)
+    const qty = Number.parseFloat(normalized)
+    return Number.isFinite(qty) && qty > 0 ? qty : 1
   }
 
   const applyInlineGlobalAdd = async () => {
     if (!detail) return
     setInlineError('')
     const qty = parseInlineQty('global')
-    if (qty <= 0) {
-      setInlineError('Qty must be greater than zero.')
-      return
-    }
     try {
+      setQtyForSite('global', String(qty))
       await receiveToMain({ product_variant_id: detail.product_variant_id, qty })
+      setQtyForSite('global', '1')
       await load()
     } catch (err) {
       setInlineError(err.message || 'Failed to add stock.')
@@ -423,20 +430,13 @@ const InventoryDetailPage = () => {
     setInlineError('')
     setLossError('')
     const qty = parseInlineQty('global')
-    if (qty <= 0) {
-      setInlineError('Qty must be greater than zero.')
-      return
-    }
+    setQtyForSite('global', String(qty))
     setShowLossModal(true)
   }
 
   const applyInlineGlobalLoss = async () => {
     if (!detail) return
     const qty = parseInlineQty('global')
-    if (qty <= 0) {
-      setLossError('Qty must be greater than zero.')
-      return
-    }
     if (!String(lossReason || '').trim()) {
       setLossError('Reason is required.')
       return
@@ -451,6 +451,7 @@ const InventoryDetailPage = () => {
       })
       setShowLossModal(false)
       setLossReason('')
+      setQtyForSite('global', '1')
       await load()
     } catch (err) {
       setLossError(err.message || 'Failed to record loss adjustment.')
@@ -463,16 +464,14 @@ const InventoryDetailPage = () => {
     if (!detail) return
     setInlineError('')
     const qty = parseInlineQty(siteId)
-    if (qty <= 0) {
-      setInlineError('Qty must be greater than zero.')
-      return
-    }
     try {
+      setQtyForSite(siteId, String(qty))
       await dispatchToSite({
         product_variant_id: detail.product_variant_id,
         site_id: siteId,
         qty,
       })
+      setQtyForSite(siteId, '1')
       await load()
     } catch (err) {
       setInlineError(err.message || 'Failed to dispense stock.')
@@ -483,17 +482,15 @@ const InventoryDetailPage = () => {
     if (!detail) return
     setInlineError('')
     const qty = parseInlineQty(siteId)
-    if (qty <= 0) {
-      setInlineError('Qty must be greater than zero.')
-      return
-    }
     try {
+      setQtyForSite(siteId, String(qty))
       await transferInventory({
         product_variant_id: detail.product_variant_id,
         source_site_id: siteId,
         destination_site_id: 'main',
         qty,
       })
+      setQtyForSite(siteId, '1')
       await load()
     } catch (err) {
       setInlineError(err.message || 'Failed to pull stock back to storage.')
@@ -547,8 +544,15 @@ const InventoryDetailPage = () => {
       {!loading && error && <Section>{error}</Section>}
       {!loading && detail && (
         <>
-          <Section>
+          <DescriptionSection>
             <SectionTitle>Description</SectionTitle>
+            <FloatingQrPanel>
+              <Label>QR Code</Label>
+              <QrPreviewWrap>
+                <QRCode value={detail.qr_code || detail.product_variant_id || detail.sku} size={144} includeMargin level="M" />
+              </QrPreviewWrap>
+              <QrCodeText>{detail.qr_code || '-'}</QrCodeText>
+            </FloatingQrPanel>
             <Grid>
               <div>
                 <Label>Product Line</Label>
@@ -571,7 +575,7 @@ const InventoryDetailPage = () => {
                 <Value>{detail.product_description || '-'}</Value>
               </div>
             </Grid>
-          </Section>
+          </DescriptionSection>
 
           <Section>
             <SectionHeader>
@@ -609,18 +613,16 @@ const InventoryDetailPage = () => {
                 <Cell>Global</Cell>
                 <Cell>{globalQty}</Cell>
                 <Cell>
-                  <InlineAdjust>
-                    <InlineButton type="button" onClick={openGlobalLossModal}>-</InlineButton>
-                    <InlineInput
-                      type="number"
-                      min="1"
-                      step="1"
-                      placeholder="1"
-                      value={qtyForSite('global')}
-                      onChange={(event) => setQtyForSite('global', event.target.value)}
-                    />
-                    <InlineButton type="button" onClick={applyInlineGlobalAdd}>+</InlineButton>
-                  </InlineAdjust>
+                  <QuantityStepper
+                    value={qtyForSite('global')}
+                    onChange={(nextValue) => setQtyForSite('global', nextValue)}
+                    onDecrement={openGlobalLossModal}
+                    onIncrement={applyInlineGlobalAdd}
+                    filledButtons
+                    min={1}
+                    step={1}
+                    placeholder="1"
+                  />
                 </Cell>
               </Row>
               <Row>
@@ -635,18 +637,16 @@ const InventoryDetailPage = () => {
                   <Cell>{siteNameById[site.id] || site.id}</Cell>
                   <Cell>{siteQtyById[site.id] || 0}</Cell>
                   <Cell>
-                    <InlineAdjust>
-                      <InlineButton type="button" onClick={() => applyInlinePullBack(site.id)}>-</InlineButton>
-                      <InlineInput
-                        type="number"
-                        min="1"
-                        step="1"
-                        placeholder="1"
-                        value={qtyForSite(site.id)}
-                        onChange={(event) => setQtyForSite(site.id, event.target.value)}
-                      />
-                      <InlineButton type="button" onClick={() => applyInlineDispatch(site.id)}>+</InlineButton>
-                    </InlineAdjust>
+                    <QuantityStepper
+                      value={qtyForSite(site.id)}
+                      onChange={(nextValue) => setQtyForSite(site.id, nextValue)}
+                      onDecrement={() => applyInlinePullBack(site.id)}
+                      onIncrement={() => applyInlineDispatch(site.id)}
+                      filledButtons
+                      min={1}
+                      step={1}
+                      placeholder="1"
+                    />
                   </Cell>
                 </Row>
               ))}

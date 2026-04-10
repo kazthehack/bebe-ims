@@ -4,7 +4,7 @@ from fastapi.responses import RedirectResponse
 
 from app.core.config import get_settings
 from app.routers import auth, health, resources, object_api
-from app.routers.v1 import product_lines, products, receipts, sessions, sites, slicer, stock
+from app.routers.v1 import events, product_lines, products, receipts, sessions, sites, slicer, stock
 
 settings = get_settings()
 
@@ -30,6 +30,7 @@ app.include_router(product_lines.router, prefix=settings.api_prefix)
 app.include_router(products.router, prefix=settings.api_prefix)
 app.include_router(stock.router, prefix=settings.api_prefix)
 app.include_router(sites.router, prefix=settings.api_prefix)
+app.include_router(events.router, prefix=settings.api_prefix)
 app.include_router(slicer.router, prefix=settings.api_prefix)
 app.include_router(receipts.router, prefix=settings.api_prefix)
 app.include_router(sessions.router, prefix=settings.api_prefix)
