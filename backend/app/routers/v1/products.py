@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from app.controllers.product import Product
 from app.controllers.product_line import ProductLine
 from app.controllers.product_recipe_part import ProductRecipePart
+from app.controllers.product_stock import ProductStock
 from app.controllers.product_variant import ProductVariant
 from app.controllers.part import Part
 from app.controllers.supply import Supply
@@ -13,6 +14,7 @@ from app.domain.record_mapper import StoredRecord, map_record
 from app.models.product import ProductDocument
 from app.models.product_line import ProductLineDocument
 from app.models.product_recipe_part import ProductRecipePartDocument
+from app.models.product_stock import ProductStockDocument
 from app.models.product_variant import ProductVariantDocument
 from app.models.part import PartDocument
 from app.models.supply import SupplyDocument
@@ -43,6 +45,7 @@ recipe_part_controller = ProductRecipePart()
 product_line_controller = ProductLine()
 supply_controller = Supply()
 part_controller = Part()
+product_stock_controller = ProductStock()
 
 
 def _normalize_supply_type(value: str | None) -> SupplyType:
@@ -82,6 +85,7 @@ def _to_product(record: StoredRecord[ProductDocument]) -> ProductRead:
         ip=record.payload.ip,
         category=record.payload.category,
         list_price=float(record.payload.list_price or 0),
+        capacity_threshold_per_site=float(record.payload.capacity_threshold_per_site or 8.0),
         description=record.payload.description,
         design_source=record.payload.design_source,
         third_party_source_url=record.payload.third_party_source_url,
@@ -301,6 +305,30 @@ def update_product_variant(id: str, payload: ProductVariantUpdate, tenant_id: st
     merged['qr_code'] = existing.payload.qr_code
     record = map_record(variant_controller.update(id, tenant_id, merged), ProductVariantDocument)
     return _to_variant(record)
+
+
+@router.delete('/variants/{id}')
+def delete_product_variant(id: str, tenant_id: str = Query('tenant-admin')) -> dict[str, bool]:
+    variant_controller.get(id, tenant_id)
+
+    stock_records = [map_record(record, ProductStockDocument) for record in product_stock_controller.list(tenant_id)]
+    has_stock = any(
+        stock.payload.product_variant_id == id
+        and (float(stock.payload.qty_on_hand or 0) > 0 or float(stock.payload.qty_reserved or 0) > 0)
+        for stock in stock_records
+    )
+    if has_stock:
+        raise HTTPException(
+            status_code=409,
+            detail='Cannot delete variant with existing stock. Transfer/dispense stock to zero first.',
+        )
+
+    recipe_records = [map_record(record, ProductRecipePartDocument) for record in recipe_part_controller.list(tenant_id)]
+    for recipe in recipe_records:
+        if recipe.payload.variant_id == id:
+            recipe_part_controller.delete(recipe.object_id, tenant_id)
+
+    return {'deleted': variant_controller.delete(id, tenant_id)}
 
 
 @router.get('/variants/{id}/recipe-parts', response_model=ProductRecipePartListResponse)

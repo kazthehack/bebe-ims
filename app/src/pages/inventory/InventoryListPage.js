@@ -4,6 +4,7 @@ import { useHistory, useLocation } from 'react-router-dom'
 import PageContent from 'components/pages/PageContent'
 import ListPageShell from 'components/reusable/layouts/ListPageShell'
 import ListFiltersRow from 'components/reusable/layouts/ListFiltersRow'
+import CapacityBar from 'components/reusable/analytics/CapacityBar'
 import { useInventoryResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
 import {
   buildInventoryRows,
@@ -39,7 +40,7 @@ const PaginationButton = styled.button`
 
 const Header = styled.div`
   display: grid;
-  grid-template-columns: 1.2fr 1.2fr 1.2fr 0.8fr 0.8fr 0.9fr 0.9fr 0.9fr 0.7fr;
+  grid-template-columns: 1.1fr 1.1fr 1.1fr 0.7fr 0.7fr 0.8fr 0.8fr 0.8fr 1.1fr 0.7fr;
   font-size: 12px;
   color: #4f6278;
   font-weight: 700;
@@ -48,7 +49,7 @@ const Header = styled.div`
 
 const Row = styled.div`
   display: grid;
-  grid-template-columns: 1.2fr 1.2fr 1.2fr 0.8fr 0.8fr 0.9fr 0.9fr 0.9fr 0.7fr;
+  grid-template-columns: 1.1fr 1.1fr 1.1fr 0.7fr 0.7fr 0.8fr 0.8fr 0.8fr 1.1fr 0.7fr;
   border: 1px solid #d9e0e8;
   border-radius: 4px;
   background: #e6eaef;
@@ -97,6 +98,42 @@ const ActionButton = styled.button`
   cursor: pointer;
 `
 
+const CapacityHeaderButton = styled.button`
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+`
+
+const CapacityCellWrap = styled.div`
+  min-width: 120px;
+`
+
+const SiteQtyWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+`
+
+const SiteQtyBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ $tone }) => ($tone === 'green' ? '#1b5e20' : $tone === 'yellow' ? '#7a4f00' : '#8b1d1d')};
+  background: ${({ $tone }) => ($tone === 'green' ? '#e3f4e6' : $tone === 'yellow' ? '#fdf4dc' : '#f9e2e3')};
+`
+
 const ToolbarRow = styled.div`
   display: flex;
   justify-content: space-between;
@@ -127,6 +164,16 @@ const PrimaryButton = styled.button`
 
 const PAGE_SIZE = 20
 
+const siteTone = (siteQty, thresholdPerSite) => {
+  const safeThreshold = Math.max(1, Number(thresholdPerSite || 8))
+  const qty = Math.max(0, Number(siteQty || 0))
+  const redMax = Math.ceil(safeThreshold * 0.3)
+  const yellowMax = Math.ceil(safeThreshold * 0.6)
+  if (qty > yellowMax) return 'green'
+  if (qty > redMax) return 'yellow'
+  return 'red'
+}
+
 const InventoryListPage = () => {
   const location = useLocation()
   const restoredState = {
@@ -143,6 +190,7 @@ const InventoryListPage = () => {
   const [productLineFilter, setProductLineFilter] = useState(() => String(restoredState.productLineFilter || 'all'))
   const [variantFilter, setVariantFilter] = useState(() => String(restoredState.variantFilter || 'all'))
   const [availabilityFilter, setAvailabilityFilter] = useState(() => String(restoredState.availabilityFilter || 'all'))
+  const [capacitySort, setCapacitySort] = useState('none')
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
   const {
@@ -239,9 +287,23 @@ const InventoryListPage = () => {
   const isLoading = (isGlobalTab || isStorageTab) ? loading : siteLoading
   const activeError = (isGlobalTab || isStorageTab) ? error : siteError
   const activeSiteLabel = (tabs.find((tab) => tab.key === activeTab) || {}).label || 'Site'
-  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+  const displayRows = useMemo(() => {
+    if (!isGlobalTab || capacitySort === 'none') return rows
+    const direction = capacitySort === 'asc' ? 1 : -1
+    return rows.slice().sort((left, right) => {
+      const leftTarget = Math.max(1, Number(left.capacity_target || (Number(left.capacity_threshold_per_site || 8) * 4)))
+      const rightTarget = Math.max(1, Number(right.capacity_target || (Number(right.capacity_threshold_per_site || 8) * 4)))
+      const leftRatio = Number(left.global_qty || 0) / leftTarget
+      const rightRatio = Number(right.global_qty || 0) / rightTarget
+      if (leftRatio !== rightRatio) return (leftRatio - rightRatio) * direction
+      const leftName = String(left.variant_name || left.sku || '').toLowerCase()
+      const rightName = String(right.variant_name || right.sku || '').toLowerCase()
+      return leftName.localeCompare(rightName)
+    })
+  }, [rows, isGlobalTab, capacitySort])
+  const totalPages = Math.max(1, Math.ceil(displayRows.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const pagedRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const pagedRows = displayRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   const filterDefinitions = useMemo(
     () => ([
@@ -289,6 +351,14 @@ const InventoryListPage = () => {
     }
   }
 
+  const cycleCapacitySort = () => {
+    setCapacitySort((prev) => {
+      if (prev === 'none') return 'desc'
+      if (prev === 'desc') return 'asc'
+      return 'none'
+    })
+  }
+
   return (
     <PageContent title="Inventory">
       <ListPageShell
@@ -326,6 +396,11 @@ const InventoryListPage = () => {
                 <div>Primary (A)</div>
                 <div>Secondary (B)</div>
                 <div>Tertiary (C)</div>
+                <div>
+                  <CapacityHeaderButton type="button" onClick={cycleCapacitySort}>
+                    Capacity
+                  </CapacityHeaderButton>
+                </div>
                 <div>Action</div>
               </Header>
               {pagedRows.map((item) => (
@@ -335,9 +410,35 @@ const InventoryListPage = () => {
                   <Cell>{item.variant_name || item.sku || '-'}</Cell>
                   <Cell>{item.global_qty}</Cell>
                   <Cell>{item.storage_qty}</Cell>
-                  <Cell>{item.primary_qty}</Cell>
-                  <Cell>{item.secondary_qty}</Cell>
-                  <Cell>{item.tertiary_qty}</Cell>
+                  <Cell>
+                    <SiteQtyWrap>
+                      <SiteQtyBadge $tone={siteTone(Number(item.primary_qty || 0), Number(item.capacity_threshold_per_site || 8))}>
+                        {item.primary_qty}
+                      </SiteQtyBadge>
+                    </SiteQtyWrap>
+                  </Cell>
+                  <Cell>
+                    <SiteQtyWrap>
+                      <SiteQtyBadge $tone={siteTone(Number(item.secondary_qty || 0), Number(item.capacity_threshold_per_site || 8))}>
+                        {item.secondary_qty}
+                      </SiteQtyBadge>
+                    </SiteQtyWrap>
+                  </Cell>
+                  <Cell>
+                    <SiteQtyWrap>
+                      <SiteQtyBadge $tone={siteTone(Number(item.tertiary_qty || 0), Number(item.capacity_threshold_per_site || 8))}>
+                        {item.tertiary_qty}
+                      </SiteQtyBadge>
+                    </SiteQtyWrap>
+                  </Cell>
+                  <Cell>
+                    <CapacityCellWrap>
+                      <CapacityBar
+                        value={Number(item.global_qty || 0)}
+                        target={Math.max(1, Number(item.capacity_target || (Number(item.capacity_threshold_per_site || 8) * 4)))}
+                      />
+                    </CapacityCellWrap>
+                  </Cell>
                   <Cell>
                     <ActionButton type="button" onClick={() => history.push(`/inventory/${item.inventory_id || item.product_variant_id}`)}>
                       VIEW
@@ -374,10 +475,10 @@ const InventoryListPage = () => {
         </Table>
 
         {isLoading && <Meta>Loading inventory...</Meta>}
-        {!isLoading && !rows.length && <Meta>No inventory found for this tab.</Meta>}
+        {!isLoading && !displayRows.length && <Meta>No inventory found for this tab.</Meta>}
         {activeError && <Meta>{activeError}</Meta>}
         {exportError && <Meta>{exportError}</Meta>}
-        {!isLoading && rows.length > 0 && (
+        {!isLoading && displayRows.length > 0 && (
           <PaginationBar>
             <Meta>Page {safePage} / {totalPages}</Meta>
             <PaginationButton type="button" onClick={() => setPage((prev) => Math.max(1, prev - 1))} disabled={safePage <= 1}>

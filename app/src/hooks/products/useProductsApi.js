@@ -21,6 +21,7 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
   const [products, setProducts] = useState([])
   const [variants, setVariants] = useState([])
   const [productLines, setProductLines] = useState([])
+  const [inventoryItems, setInventoryItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
@@ -30,14 +31,16 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
     setError('')
     try {
       const query = tenantQuery(tenantId)
-      const [productData, variantData, productLineData] = await Promise.all([
+      const [productData, variantData, productLineData, inventoryData] = await Promise.all([
         getJson(`/products?${query}`),
         getJson(`/products/variants?${query}`),
         getJson(`/product-lines?${query}`),
+        getJson(`/stock/inventory/global?${query}`),
       ])
       setProducts([...(productData.products || [])].sort(byProductLineThenProduct))
       setVariants([...(variantData.variants || [])])
       setProductLines([...(productLineData.product_lines || [])].sort(byProductLineNameThenCode))
+      setInventoryItems([...(inventoryData.items || [])])
     } catch (err) {
       setError(err.message || 'Failed to load products.')
     } finally {
@@ -55,6 +58,7 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
     ip,
     category,
     list_price,
+    capacity_threshold_per_site,
     description,
     design_source,
     third_party_source_url,
@@ -67,6 +71,7 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
       ip,
       category,
       list_price,
+      capacity_threshold_per_site,
       description,
       design_source,
       third_party_source_url,
@@ -129,6 +134,27 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
     return grouped
   }, [variants])
 
+  const storageCapacityByVariantId = useMemo(
+    () => (inventoryItems || []).reduce((acc, item) => {
+      const variantId = String(item.product_variant_id || '')
+      if (!variantId) return acc
+      acc[variantId] = Number(item.master_qty_on_hand || 0)
+      return acc
+    }, {}),
+    [inventoryItems],
+  )
+
+  const storageCapacityByProductId = useMemo(
+    () => (inventoryItems || []).reduce((acc, item) => {
+      const productId = String(item.product_id || '')
+      if (!productId) return acc
+      const globalQty = Number(item.master_qty_on_hand || 0)
+      acc[productId] = Number(acc[productId] || 0) + globalQty
+      return acc
+    }, {}),
+    [inventoryItems],
+  )
+
   const createProductLine = async ({ name, description, active = true }) => {
     const created = await postJson(`/product-lines?${tenantQuery(tenantId)}`, {
       name,
@@ -157,6 +183,8 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
     products: filtered,
     variants,
     variantsByProductId,
+    storageCapacityByVariantId,
+    storageCapacityByProductId,
     productLines,
     loading,
     error,
@@ -176,6 +204,7 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
 export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
   const [productDetail, setProductDetail] = useState(null)
   const [inventoryByVariantId, setInventoryByVariantId] = useState({})
+  const [inventoryMetricsByVariantId, setInventoryMetricsByVariantId] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -193,13 +222,37 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
       }
       if (!cancelled) {
         setProductDetail(productData)
-        const byVariant = (inventoryData.items || [])
+        const metricsByVariant = (inventoryData.items || [])
           .filter((item) => item.product_id === productId)
           .reduce((acc, item) => {
-            acc[item.product_variant_id] = Number(item.master_qty_on_hand || 0)
+            const variantId = String(item.product_variant_id || '')
+            if (!variantId) return acc
+            const globalQty = Number(item.master_qty_on_hand || 0)
+            const primaryQty = Number(item.primary_qty_on_hand || 0)
+            const secondaryQty = Number(item.secondary_qty_on_hand || 0)
+            const tertiaryQty = Number(item.tertiary_qty_on_hand || 0)
+            const storageQty = Math.max(
+              0,
+              Number(item.master_qty_on_hand || 0)
+                - primaryQty
+                - secondaryQty
+                - tertiaryQty,
+            )
+            acc[variantId] = {
+              global_qty: globalQty,
+              storage_qty: storageQty,
+              primary_qty: primaryQty,
+              secondary_qty: secondaryQty,
+              tertiary_qty: tertiaryQty,
+            }
             return acc
           }, {})
-        setInventoryByVariantId(byVariant)
+        const qtyByVariant = Object.keys(metricsByVariant).reduce((acc, variantId) => {
+          acc[variantId] = Number(metricsByVariant[variantId].global_qty || 0)
+          return acc
+        }, {})
+        setInventoryByVariantId(qtyByVariant)
+        setInventoryMetricsByVariantId(metricsByVariant)
       }
     } catch (err) {
       if (!cancelled) setError(err.message || 'Failed to load product detail.')
@@ -245,6 +298,7 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
     ip,
     category,
     list_price,
+    capacity_threshold_per_site,
     description,
     design_source,
     third_party_source_url,
@@ -257,6 +311,7 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
       ip,
       category,
       list_price,
+      capacity_threshold_per_site,
       description,
       design_source,
       third_party_source_url,
@@ -280,6 +335,7 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
   return {
     productDetail,
     inventoryByVariantId,
+    inventoryMetricsByVariantId,
     loading,
     error,
     apiBase,
@@ -404,6 +460,11 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
     return updated
   }, [variantId, tenantId, load])
 
+  const deleteVariant = useCallback(async () => {
+    const result = await deleteJson(`/products/variants/${encodeURIComponent(variantId)}?${tenantQuery(tenantId)}`)
+    return result
+  }, [variantId, tenantId])
+
   return {
     variantDetail,
     recipeParts,
@@ -417,6 +478,7 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
     createRecipePart,
     parse3mfProject,
     updateVariant,
+    deleteVariant,
     reload: () => load(false),
   }
 }

@@ -6,6 +6,7 @@ import FormModal from 'components/reusable/modals/FormModal'
 import ConfirmActionModal from 'components/reusable/modals/ConfirmActionModal'
 import RelatedObjectsTableSection from 'components/reusable/details/RelatedObjectsTableSection'
 import GraphWithTableSection from 'components/reusable/analytics/GraphWithTableSection'
+import CapacityBar from 'components/reusable/analytics/CapacityBar'
 import QuantityStepper from 'components/reusable/controls/QuantityStepper'
 import { useProductDetail, useProductsList } from 'hooks/products/useProductsApi'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
@@ -156,6 +157,43 @@ const ErrorText = styled.div`
   font-size: 12px;
 `
 
+const CapacityCellWrap = styled.div`
+  display: grid;
+  gap: 4px;
+`
+
+const CapacityTopRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  gap: 6px;
+`
+
+const CapacityText = styled.div`
+  font-size: 11px;
+  color: #41576d;
+  line-height: 1.35;
+  display: grid;
+  gap: 4px;
+`
+
+const MiniMetricRow = styled.div`
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 6px;
+`
+
+const MiniMetricLabel = styled.span`
+  color: #4f6278;
+`
+
+const MiniMetricValue = styled.span`
+  font-weight: 700;
+  color: #243648;
+`
+
+
 const ModalMeta = styled.div`
   margin-top: 6px;
   color: #4b6176;
@@ -187,6 +225,7 @@ const money = (value) => new Intl.NumberFormat('en-PH', {
 }).format(Number(value || 0))
 
 const alpha = (value) => String(value || '').trim().toLowerCase()
+const DEFAULT_THRESHOLD_PER_SITE = 8
 
 const ProductDetailPage = () => {
   const location = useLocation()
@@ -213,6 +252,7 @@ const ProductDetailPage = () => {
   const {
     productDetail,
     inventoryByVariantId,
+    inventoryMetricsByVariantId,
     loading,
     error,
     createVariant,
@@ -225,6 +265,7 @@ const ProductDetailPage = () => {
   const [editCategory, setEditCategory] = useState('')
   const [editIp, setEditIp] = useState('')
   const [editListPrice, setEditListPrice] = useState('')
+  const [editCapacityThresholdPerSite, setEditCapacityThresholdPerSite] = useState(String(DEFAULT_THRESHOLD_PER_SITE))
   const [editDescription, setEditDescription] = useState('')
   const [editDesignSource, setEditDesignSource] = useState('')
   const [editCustomDesignSource, setEditCustomDesignSource] = useState('')
@@ -245,6 +286,8 @@ const ProductDetailPage = () => {
   const [quickLossError, setQuickLossError] = useState('')
   const [quickLossSubmitting, setQuickLossSubmitting] = useState(false)
   const product = productDetail ? productDetail.product : null
+  const capacityThresholdPerSite = Math.max(1, Number((product && product.capacity_threshold_per_site) || DEFAULT_THRESHOLD_PER_SITE))
+  const capacityTarget = capacityThresholdPerSite * 4
 
   const breadcrumbTitle = (
     <BreadcrumbTitle items={[
@@ -311,6 +354,7 @@ const ProductDetailPage = () => {
     setEditIp(product.ip || '')
     setEditCategory(product.category || '')
     setEditListPrice(String(product.list_price || 0))
+    setEditCapacityThresholdPerSite(String(Math.max(1, Number(product.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))))
     setEditDescription(product.description || '')
     const source = String(product.design_source || '')
     const knownSource = DESIGN_SOURCE_OPTIONS.some((option) => option.value === source)
@@ -410,6 +454,59 @@ const ProductDetailPage = () => {
         sku: variant.sku || 'N/A',
         name: variant.name || 'N/A',
         global_stock: Number(inventoryByVariantId[variant.id] || 0),
+        capacity: (
+          <CapacityCellWrap>
+            <CapacityTopRow>
+              <CapacityBar
+                value={Number((inventoryMetricsByVariantId[variant.id] || {}).global_qty || 0)}
+                target={capacityTarget}
+                textPosition="right"
+              />
+            </CapacityTopRow>
+            <CapacityText>
+              <MiniMetricRow>
+                <MiniMetricLabel>Storage</MiniMetricLabel>
+                <CapacityBar
+                  value={Number((inventoryMetricsByVariantId[variant.id] || {}).storage_qty || 0)}
+                  target={capacityThresholdPerSite}
+                  height={6}
+                  textPosition="none"
+                />
+                <MiniMetricValue>{Number((inventoryMetricsByVariantId[variant.id] || {}).storage_qty || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
+              </MiniMetricRow>
+              <MiniMetricRow>
+                <MiniMetricLabel>Site 1</MiniMetricLabel>
+                <CapacityBar
+                  value={Number((inventoryMetricsByVariantId[variant.id] || {}).primary_qty || 0)}
+                  target={capacityThresholdPerSite}
+                  height={6}
+                  textPosition="none"
+                />
+                <MiniMetricValue>{Number((inventoryMetricsByVariantId[variant.id] || {}).primary_qty || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
+              </MiniMetricRow>
+              <MiniMetricRow>
+                <MiniMetricLabel>Site 2</MiniMetricLabel>
+                <CapacityBar
+                  value={Number((inventoryMetricsByVariantId[variant.id] || {}).secondary_qty || 0)}
+                  target={capacityThresholdPerSite}
+                  height={6}
+                  textPosition="none"
+                />
+                <MiniMetricValue>{Number((inventoryMetricsByVariantId[variant.id] || {}).secondary_qty || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
+              </MiniMetricRow>
+              <MiniMetricRow>
+                <MiniMetricLabel>Site 3</MiniMetricLabel>
+                <CapacityBar
+                  value={Number((inventoryMetricsByVariantId[variant.id] || {}).tertiary_qty || 0)}
+                  target={capacityThresholdPerSite}
+                  height={6}
+                  textPosition="none"
+                />
+                <MiniMetricValue>{Number((inventoryMetricsByVariantId[variant.id] || {}).tertiary_qty || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
+              </MiniMetricRow>
+            </CapacityText>
+          </CapacityCellWrap>
+        ),
         adjust: (
           <QuantityStepper
             buttonSize={28}
@@ -434,7 +531,7 @@ const ProductDetailPage = () => {
         ),
       }
     }),
-    [variants, quickQtyByVariant, quickBusyByVariant, inventoryByVariantId, history],
+    [variants, quickQtyByVariant, quickBusyByVariant, inventoryByVariantId, inventoryMetricsByVariantId, history, capacityTarget, capacityThresholdPerSite],
   )
 
   const handleCreateVariant = async () => {
@@ -468,6 +565,11 @@ const ProductDetailPage = () => {
       setEditError('Name is required.')
       return
     }
+    const parsedCapacityThreshold = Number(editCapacityThresholdPerSite)
+    if (!Number.isFinite(parsedCapacityThreshold) || parsedCapacityThreshold < 1) {
+      setEditError('Capacity threshold per site must be at least 1.')
+      return
+    }
     if (editDesignSource === CUSTOM_DESIGN_SOURCE_VALUE && !editCustomDesignSource.trim()) {
       setEditError('Custom Design Source is required when Custom is selected.')
       return
@@ -479,6 +581,7 @@ const ProductDetailPage = () => {
         ip: editIp.trim() || null,
         category: editCategory || null,
         list_price: Number(editListPrice || 0),
+        capacity_threshold_per_site: parsedCapacityThreshold,
         description: editDescription.trim() || null,
         design_source: (
           editDesignSource === CUSTOM_DESIGN_SOURCE_VALUE
@@ -531,6 +634,9 @@ const ProductDetailPage = () => {
                   setEditIp((product && product.ip) || '')
                   setEditCategory((product && product.category) || '')
                   setEditListPrice(String((product && product.list_price) || 0))
+                  setEditCapacityThresholdPerSite(
+                    String(Math.max(1, Number((product && product.capacity_threshold_per_site) || DEFAULT_THRESHOLD_PER_SITE))),
+                  )
                   setEditDescription((product && product.description) || '')
                   const source = String((product && product.design_source) || '')
                   const knownSource = DESIGN_SOURCE_OPTIONS.some((option) => option.value === source)
@@ -579,6 +685,20 @@ const ProductDetailPage = () => {
                 <Label>List Price</Label>
                 {!isEditing && <Value>{money(product.list_price)}</Value>}
                 {isEditing && <Input type="number" min="0" step="0.01" value={editListPrice} onChange={event => setEditListPrice(event.target.value)} placeholder="0.00" />}
+              </div>
+              <div>
+                <Label>Capacity Threshold / Site</Label>
+                {!isEditing && <Value>{capacityThresholdPerSite}</Value>}
+                {isEditing && (
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={editCapacityThresholdPerSite}
+                    onChange={event => setEditCapacityThresholdPerSite(event.target.value)}
+                    placeholder="8"
+                  />
+                )}
               </div>
               <div>
                 <Label>Design Source</Label>
@@ -649,6 +769,7 @@ const ProductDetailPage = () => {
               { key: 'sku', label: 'Variant SKU', width: '1.1fr' },
               { key: 'name', label: 'Variant Name', width: '1.4fr' },
               { key: 'global_stock', label: 'Global Stock', width: '0.8fr' },
+              { key: 'capacity', label: 'Capacity', width: '1fr' },
               { key: 'adjust', label: 'Adjust', width: '1fr' },
               { key: 'actions', label: 'Actions', width: '0.7fr' },
             ]}

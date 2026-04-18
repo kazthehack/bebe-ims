@@ -1,0 +1,12 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/bebe-ims.ts",
+  "context": {
+    "projectName": "bebe-ims",
+    "environmentName": "prod",
+    "apiPrefix": "/api/v1",
+    "tableName": "bebe_ims",
+    "backendCpu": 512,
+    "backendMemoryMiB": 1024,
+    "backendDesiredCount": 1
+  }
+}

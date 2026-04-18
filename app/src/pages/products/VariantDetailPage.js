@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { useParams } from 'react-router-dom'
+import { useHistory, useParams } from 'react-router-dom'
 import QRCode from 'qrcode.react'
 import PageContent from 'components/pages/PageContent'
 import RelatedObjectsTableSection from 'components/reusable/details/RelatedObjectsTableSection'
+import ConfirmActionModal from 'components/reusable/modals/ConfirmActionModal'
 import { PagePrimaryButton, PageSecondaryButton } from 'components/reusable/buttons/PageButtons'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import { useVariantDetail } from 'hooks/products/useProductsApi'
@@ -110,6 +111,7 @@ const money = (value) => new Intl.NumberFormat('en-PH', {
 }).format(Number(value || 0))
 
 const VariantDetailPage = () => {
+  const history = useHistory()
   const { id } = useParams()
   const {
     variantDetail,
@@ -123,6 +125,7 @@ const VariantDetailPage = () => {
     createPart,
     createRecipePart,
     updateVariant,
+    deleteVariant,
   } = useVariantDetail(id)
 
   const [showAddRecipePartModal, setShowAddRecipePartModal] = useState(false)
@@ -139,6 +142,8 @@ const VariantDetailPage = () => {
   const [variantYieldUnits, setVariantYieldUnits] = useState('1')
   const [variantPrintHours, setVariantPrintHours] = useState('0')
   const [variantFormError, setVariantFormError] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   React.useEffect(() => {
     if (!variantDetail) return
@@ -367,6 +372,17 @@ const VariantDetailPage = () => {
     }
   }
 
+  const handleDeleteVariant = async () => {
+    setDeleteError('')
+    try {
+      await deleteVariant()
+      history.push(`/products/${variantDetail.product_id}`)
+    } catch (err) {
+      setDeleteError(err.message || 'Failed to delete variant.')
+      setShowDeleteConfirm(false)
+    }
+  }
+
   return (
     <PageContent title={breadcrumbTitle}>
       {loading && <Section>Loading variant details...</Section>}
@@ -390,6 +406,7 @@ const VariantDetailPage = () => {
                 CANCEL
               </PageSecondaryButton>
             )}
+            <PageSecondaryButton type="button" onClick={() => setShowDeleteConfirm(true)}>DELETE</PageSecondaryButton>
           </PageActions>
           <DetailSection>
             <SectionTitle>Variant Details</SectionTitle>
@@ -467,6 +484,7 @@ const VariantDetailPage = () => {
               </div>
             </Grid>
             {variantFormError && <DescriptionValue>{variantFormError}</DescriptionValue>}
+            {deleteError && <DescriptionValue>{deleteError}</DescriptionValue>}
           </DetailSection>
 
           <RelatedObjectsTableSection
@@ -583,6 +601,21 @@ const VariantDetailPage = () => {
             onChangeConsumableQuantity={setConsumableQuantity}
             onClose={() => setShowAddRecipePartModal(false)}
             onSubmit={handleCreateRecipePart}
+          />
+
+          <ConfirmActionModal
+            open={showDeleteConfirm}
+            title="Delete Variant"
+            description={`You are deleting variant: ${variantDetail.name || variantDetail.id}`}
+            helperText="This action cannot be undone."
+            helperVariant="danger"
+            requiredText={variantDetail.sku || variantDetail.id}
+            requiredTextLabel="Type SKU to confirm"
+            inputPlaceholder="Enter variant SKU"
+            confirmLabel="Delete"
+            cancelLabel="Cancel"
+            onClose={() => setShowDeleteConfirm(false)}
+            onConfirm={handleDeleteVariant}
           />
         </>
       )}

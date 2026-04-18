@@ -32,8 +32,8 @@ ensure-slicer-cli:
 
 install:
 	$(MAKE) ensure-slicer-cli
-	python3 -m venv .venv
-	. .venv/bin/activate && pip install -r requirements-dev.txt
+	python3 -m venv --clear .venv
+	. .venv/bin/activate && python -m pip install -r requirements-dev.txt
 
 build:
 	test -d .venv || $(MAKE) install

@@ -121,7 +121,7 @@ const AddRecipePartModal = ({
       cancelLabel="Cancel"
       width="640px"
       actionsAlign="right"
-      closeControl="dot"
+      closeControl="glyph"
     >
       {!isConsumable && (
         <>

@@ -636,7 +636,7 @@ def seed_default_sites() -> None:
     tenant_id = "tenant-admin"
 
     for object_id, code, name, location in DEFAULT_SITES:
-        upsert_object(
+        created = create_object_if_missing(
             repository,
             tenant_id=tenant_id,
             object_type="site",
@@ -649,7 +649,10 @@ def seed_default_sites() -> None:
                 "active": True,
             },
         )
-        print(f"[migrate] upserted site: {object_id} ({name})")
+        if created:
+            print(f"[migrate] seeded site: {object_id} ({name})")
+        else:
+            print(f"[migrate] skip existing site: {object_id}")
 
 
 def seed_inventory_from_workbook() -> None:

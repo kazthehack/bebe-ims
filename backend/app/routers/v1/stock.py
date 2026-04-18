@@ -470,6 +470,7 @@ def list_inventory_global(tenant_id: str = Query('tenant-admin')) -> InventoryGl
             product_id=variant.payload.product_id,
             product_line_name=product.payload.product_line_name if product else None,
             product_name=product.payload.name if product else variant.payload.product_id,
+            capacity_threshold_per_site=float(product.payload.capacity_threshold_per_site or 8.0) if product else 8.0,
             main_qty_on_hand=main_qty,
             sites_qty_on_hand=sites_qty,
             master_qty_on_hand=master_qty,

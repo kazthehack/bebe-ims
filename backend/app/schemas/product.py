@@ -10,6 +10,7 @@ class ProductCreate(BaseModel):
     ip: str | None = None
     category: str | None = None
     list_price: float | None = None
+    capacity_threshold_per_site: float = Field(default=8.0, ge=1.0)
     description: str | None = None
     design_source: str | None = None
     third_party_source_url: str | None = None
@@ -26,6 +27,7 @@ class ProductRead(BaseModel):
     ip: str | None = None
     category: str | None = None
     list_price: float
+    capacity_threshold_per_site: float = 8.0
     description: str | None = None
     design_source: str | None = None
     third_party_source_url: str | None = None
@@ -41,6 +43,7 @@ class ProductUpdate(BaseModel):
     ip: str | None = None
     category: str | None = None
     list_price: float | None = None
+    capacity_threshold_per_site: float | None = Field(default=None, ge=1.0)
     description: str | None = None
     design_source: str | None = None
     third_party_source_url: str | None = None

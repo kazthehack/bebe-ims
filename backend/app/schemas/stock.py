@@ -35,6 +35,7 @@ class InventoryGlobalItemRead(BaseModel):
     product_id: str
     product_line_name: str | None = None
     product_name: str
+    capacity_threshold_per_site: float = 8.0
     main_qty_on_hand: float
     sites_qty_on_hand: float
     master_qty_on_hand: float

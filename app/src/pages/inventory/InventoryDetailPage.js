@@ -5,6 +5,7 @@ import QRCode from 'qrcode.react'
 import PageContent from 'components/pages/PageContent'
 import FormModal from 'components/reusable/modals/FormModal'
 import QuantityStepper from 'components/reusable/controls/QuantityStepper'
+import CapacityBar from 'components/reusable/analytics/CapacityBar'
 import { useInventoryResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import {
@@ -124,7 +125,7 @@ const StockSummaryLabel = styled.div`
 
 const Header = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1fr 1.2fr;
+  grid-template-columns: 1fr 1.6fr 1.2fr;
   font-size: 12px;
   color: #4f6278;
   font-weight: 700;
@@ -133,7 +134,7 @@ const Header = styled.div`
 
 const Row = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1fr 1.2fr;
+  grid-template-columns: 1fr 1.6fr 1.2fr;
   border: 1px solid #d9e0e8;
   border-radius: 4px;
   background: #e6eaef;
@@ -521,6 +522,14 @@ const InventoryDetailPage = () => {
   const tertiaryQty = Number(siteQtyById[siteIdByRole.tertiary] || 0)
   const globalQty = Number((detail && detail.master_qty_on_hand) || 0)
   const storageQty = Math.max(0, globalQty - primaryQty - secondaryQty - tertiaryQty)
+  const globalItemForVariant = (globalItems || []).find(
+    (item) => String(item.product_variant_id) === String(detail && detail.product_variant_id),
+  )
+  const capacityThresholdPerSite = Math.max(1, Number((globalItemForVariant && globalItemForVariant.capacity_threshold_per_site) || 8))
+  const globalCapacityTarget = capacityThresholdPerSite * 4
+  const renderCapacityCell = (qty, target) => (
+    <CapacityBar value={Number(qty || 0)} target={Math.max(1, Number(target || 1))} />
+  )
 
   return (
     <PageContent title={breadcrumbTitle}>
@@ -606,12 +615,12 @@ const InventoryDetailPage = () => {
             <Table>
               <Header>
                 <div>Location</div>
-                <div>Qty</div>
+                <div>Capacity</div>
                 <div>Adjust</div>
               </Header>
               <Row>
                 <Cell>Global</Cell>
-                <Cell>{globalQty}</Cell>
+                <Cell>{renderCapacityCell(globalQty, globalCapacityTarget)}</Cell>
                 <Cell>
                   <QuantityStepper
                     value={qtyForSite('global')}
@@ -627,7 +636,7 @@ const InventoryDetailPage = () => {
               </Row>
               <Row>
                 <Cell>Storage</Cell>
-                <Cell>{storageQty}</Cell>
+                <Cell>{renderCapacityCell(storageQty, capacityThresholdPerSite)}</Cell>
                 <Cell>
                   -
                 </Cell>
@@ -635,7 +644,7 @@ const InventoryDetailPage = () => {
               {activeSites.map((site) => (
                 <Row key={site.id}>
                   <Cell>{siteNameById[site.id] || site.id}</Cell>
-                  <Cell>{siteQtyById[site.id] || 0}</Cell>
+                  <Cell>{renderCapacityCell(siteQtyById[site.id] || 0, capacityThresholdPerSite)}</Cell>
                   <Cell>
                     <QuantityStepper
                       value={qtyForSite(site.id)}

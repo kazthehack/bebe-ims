@@ -19,6 +19,7 @@ class ProductDocument(ObjectDocument):
     ip: str | None = None
     category: str | None = None
     list_price: float = 0.0
+    capacity_threshold_per_site: float = 8.0
     description: str | None = None
     design_source: str | None = None
     third_party_source_url: str | None = None

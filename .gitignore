@@ -65,3 +65,4 @@ backend/.pytest_cache/
 app/build/
 app/node_modules/
 legacy/
+infra/cdk/cdk.out/

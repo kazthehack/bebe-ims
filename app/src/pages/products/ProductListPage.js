@@ -6,6 +6,7 @@ import ConfirmActionModal from 'components/reusable/modals/ConfirmActionModal'
 import NoticeModal from 'components/reusable/modals/NoticeModal'
 import ListFiltersRow from 'components/reusable/layouts/ListFiltersRow'
 import WorkspaceTabs from 'components/reusable/layouts/WorkspaceTabs'
+import CapacityBar from 'components/reusable/analytics/CapacityBar'
 import { useProductsList } from 'hooks/products/useProductsApi'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import AddProductModal from './modals/AddProductModal'
@@ -64,7 +65,7 @@ const Table = styled.div`
 
 const ProductHeader = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1.1fr 1.4fr 1fr 1fr 1fr 0.7fr;
+  grid-template-columns: 0.9fr 1fr 1.3fr 0.8fr 0.9fr 0.9fr 1.1fr 0.7fr;
   font-size: 12px;
   color: #4f6278;
   font-weight: 700;
@@ -73,7 +74,7 @@ const ProductHeader = styled.div`
 
 const ProductRow = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1.1fr 1.4fr 1fr 1fr 1fr 0.7fr;
+  grid-template-columns: 0.9fr 1fr 1.3fr 0.8fr 0.9fr 0.9fr 1.1fr 0.7fr;
   border: 1px solid #d9e0e8;
   border-radius: 4px;
   background: #e6eaef;
@@ -128,6 +129,21 @@ const Cell = styled.div`
   font-size: 14px;
 `
 
+const CapacityCellWrap = styled.div`
+  min-width: 120px;
+`
+
+const CapacityHeaderButton = styled.button`
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+`
+
+
 const Meta = styled.div`
   margin-top: 8px;
   color: #5f6e7d;
@@ -170,6 +186,7 @@ const PaginationButton = styled.button`
 `
 
 const PAGE_SIZE = 20
+const DEFAULT_THRESHOLD_PER_SITE = 8
 
 const money = (value) => new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -223,6 +240,7 @@ const ProductListPage = ({ title }) => {
   const [productsIpFilter, setProductsIpFilter] = useState(() => String(restoredState.productsIpFilter || 'all'))
   const [variantsLineFilter, setVariantsLineFilter] = useState(() => String(restoredState.variantsLineFilter || 'all'))
   const [variantsProductFilter, setVariantsProductFilter] = useState(() => String(restoredState.variantsProductFilter || 'all'))
+  const [capacitySort, setCapacitySort] = useState('none')
 
   const {
     allProducts,
@@ -232,6 +250,7 @@ const ProductListPage = ({ title }) => {
     error,
     search,
     setSearch,
+    storageCapacityByProductId,
     createProduct,
     deleteProduct,
     productLines,
@@ -293,6 +312,22 @@ const ProductListPage = ({ title }) => {
       }),
     [products, productsLineFilter, productsIpFilter],
   )
+  const sortedProducts = useMemo(() => {
+    if (capacitySort === 'none') return filteredProducts
+    const direction = capacitySort === 'asc' ? 1 : -1
+    return filteredProducts.slice().sort((left, right) => {
+      const leftThreshold = Math.max(1, Number(left.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))
+      const rightThreshold = Math.max(1, Number(right.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))
+      const leftTarget = leftThreshold * 4
+      const rightTarget = rightThreshold * 4
+      const leftGlobal = Number(storageCapacityByProductId[left.id] || 0)
+      const rightGlobal = Number(storageCapacityByProductId[right.id] || 0)
+      const leftRatio = leftGlobal / leftTarget
+      const rightRatio = rightGlobal / rightTarget
+      if (leftRatio !== rightRatio) return (leftRatio - rightRatio) * direction
+      return alpha(left.name || left.product_code || left.id).localeCompare(alpha(right.name || right.product_code || right.id))
+    })
+  }, [filteredProducts, capacitySort, storageCapacityByProductId])
 
   const filteredVariants = useMemo(() => {
     const query = String(variantSearch || '').trim().toLowerCase()
@@ -426,9 +461,9 @@ const ProductListPage = ({ title }) => {
     }
   }, [listStateForQuery])
 
-  const productsTotalPages = Math.max(1, Math.ceil((filteredProducts || []).length / PAGE_SIZE))
+  const productsTotalPages = Math.max(1, Math.ceil((sortedProducts || []).length / PAGE_SIZE))
   const safeProductsPage = Math.min(productsPage, productsTotalPages)
-  const pagedProducts = (filteredProducts || []).slice((safeProductsPage - 1) * PAGE_SIZE, safeProductsPage * PAGE_SIZE)
+  const pagedProducts = (sortedProducts || []).slice((safeProductsPage - 1) * PAGE_SIZE, safeProductsPage * PAGE_SIZE)
 
   const productLinesTotalPages = Math.max(1, Math.ceil((filteredProductLines || []).length / PAGE_SIZE))
   const safeProductLinesPage = Math.min(productLinesPage, productLinesTotalPages)
@@ -546,6 +581,14 @@ const ProductListPage = ({ title }) => {
     }
   }
 
+  const cycleCapacitySort = () => {
+    setCapacitySort((prev) => {
+      if (prev === 'none') return 'desc'
+      if (prev === 'desc') return 'asc'
+      return 'none'
+    })
+  }
+
   const breadcrumbItems = activeTab === 'products'
     ? [{ label: title }]
     : [{ label: title, to: `/products?${listQuery}` }, { label: activeTab === 'variants' ? 'Product Variants' : 'Product Lines' }]
@@ -605,11 +648,20 @@ const ProductListPage = ({ title }) => {
                 <div>IP</div>
                 <div>Pricing Tier</div>
                 <div>List Price</div>
+                <div>
+                  <CapacityHeaderButton type="button" onClick={cycleCapacitySort}>
+                    Capacity
+                  </CapacityHeaderButton>
+                </div>
                 <div>Actions</div>
               </ProductHeader>
 
               {loading && <Meta>Loading products...</Meta>}
-              {!loading && pagedProducts.map(item => (
+              {!loading && pagedProducts.map(item => {
+                const thresholdPerSite = Math.max(1, Number(item.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))
+                const capacityTarget = thresholdPerSite * 4
+                const globalCapacity = Number(storageCapacityByProductId[item.id] || 0)
+                return (
                 <ProductRow key={item.id}>
                   <Cell>{item.product_code || item.sku || item.id}</Cell>
                   <Cell>{item.product_line || 'N/A'}</Cell>
@@ -618,6 +670,11 @@ const ProductListPage = ({ title }) => {
                   <Cell>{displayLabelForTier(item.category)}</Cell>
                   <Cell>{money(item.list_price)}</Cell>
                   <Cell>
+                    <CapacityCellWrap>
+                      <CapacityBar value={globalCapacity} target={capacityTarget} />
+                    </CapacityCellWrap>
+                  </Cell>
+                  <Cell>
                     <Actions>
                       <ActionButton type="button" onClick={() => history.push(`/products/${item.id}?${listQuery}`)}>VIEW</ActionButton>
                       <span>|</span>
@@ -625,7 +682,8 @@ const ProductListPage = ({ title }) => {
                     </Actions>
                   </Cell>
                 </ProductRow>
-              ))}
+                )
+              })}
             </Table>
             {!loading && filteredProducts.length > 0 && (
               <PaginationBar>
