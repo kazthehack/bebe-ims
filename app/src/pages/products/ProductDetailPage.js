@@ -226,6 +226,22 @@ const money = (value) => new Intl.NumberFormat('en-PH', {
 
 const alpha = (value) => String(value || '').trim().toLowerCase()
 const DEFAULT_THRESHOLD_PER_SITE = 8
+const NO_IP_VALUE = '__no_ip__'
+const FSN_OPTIONS = [
+  { value: 'fast', label: 'Fast' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'slow', label: 'Slow' },
+  { value: 'non_moving', label: 'Non-Moving' },
+]
+const parseMultiFilter = (rawValue) => {
+  if (rawValue == null || rawValue === 'all') return null
+  if (String(rawValue) === '__none__') return []
+  const parsed = String(rawValue)
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  return parsed.length ? parsed : null
+}
 
 const ProductDetailPage = () => {
   const location = useLocation()
@@ -245,6 +261,7 @@ const ProductDetailPage = () => {
     variantsPage: Math.max(1, Number(listContext.variantsPage || 1)),
     productsLineFilter: String(listContext.productsLineFilter || 'all'),
     productsIpFilter: String(listContext.productsIpFilter || 'all'),
+    productsFsnFilter: String(listContext.productsFsnFilter || 'fast,normal,slow'),
     variantsLineFilter: String(listContext.variantsLineFilter || 'all'),
     variantsProductFilter: String(listContext.variantsProductFilter || 'all'),
   }), [listContext])
@@ -263,6 +280,7 @@ const ProductDetailPage = () => {
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState('')
   const [editCategory, setEditCategory] = useState('')
+  const [editFsn, setEditFsn] = useState('normal')
   const [editIp, setEditIp] = useState('')
   const [editListPrice, setEditListPrice] = useState('')
   const [editCapacityThresholdPerSite, setEditCapacityThresholdPerSite] = useState(String(DEFAULT_THRESHOLD_PER_SITE))
@@ -300,11 +318,17 @@ const ProductDetailPage = () => {
   const navigationProducts = useMemo(
     () => (allProducts || [])
       .filter((item) => {
-        const lineFilter = String(listContext.productsLineFilter || 'all')
-        const ipFilter = String(listContext.productsIpFilter || 'all')
+        const lineFilters = parseMultiFilter(String(listContext.productsLineFilter || 'all'))
+        const ipFilters = parseMultiFilter(String(listContext.productsIpFilter || 'all'))
+        const fsnFilter = String(listContext.productsFsnFilter || 'fast,normal,slow')
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean)
         const query = String(listContext.productsSearch || '').trim().toLowerCase()
-        if (lineFilter !== 'all' && String(item.product_line || '') !== lineFilter) return false
-        if (ipFilter !== 'all' && String(item.ip || '') !== ipFilter) return false
+        if (lineFilters && !lineFilters.includes(String(item.product_line || ''))) return false
+        const normalizedIp = String(item.ip || '').trim() || NO_IP_VALUE
+        if (ipFilters && !ipFilters.includes(normalizedIp)) return false
+        if (fsnFilter.length && !fsnFilter.includes(String(item.fsn || 'normal'))) return false
         if (!query) return true
         return (
           String(item.product_code || '').toLowerCase().includes(query)
@@ -322,7 +346,7 @@ const ProductDetailPage = () => {
         if (productCompare !== 0) return productCompare
         return alpha(a.product_code || a.id).localeCompare(alpha(b.product_code || b.id))
       }),
-    [allProducts, listContext.productsLineFilter, listContext.productsIpFilter, listContext.productsSearch],
+    [allProducts, listContext.productsLineFilter, listContext.productsIpFilter, listContext.productsFsnFilter, listContext.productsSearch],
   )
 
   const currentProductIndex = useMemo(
@@ -353,6 +377,7 @@ const ProductDetailPage = () => {
     setEditName(product.name || '')
     setEditIp(product.ip || '')
     setEditCategory(product.category || '')
+    setEditFsn(product.fsn || 'normal')
     setEditListPrice(String(product.list_price || 0))
     setEditCapacityThresholdPerSite(String(Math.max(1, Number(product.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))))
     setEditDescription(product.description || '')
@@ -454,6 +479,7 @@ const ProductDetailPage = () => {
         sku: variant.sku || 'N/A',
         name: variant.name || 'N/A',
         global_stock: Number(inventoryByVariantId[variant.id] || 0),
+        fsn: ((FSN_OPTIONS.find((option) => option.value === String(variant.fsn || 'normal')) || {}).label) || 'Normal',
         capacity: (
           <CapacityCellWrap>
             <CapacityTopRow>
@@ -580,6 +606,7 @@ const ProductDetailPage = () => {
         product_line_id: product.product_line_id,
         ip: editIp.trim() || null,
         category: editCategory || null,
+        fsn: editFsn || 'normal',
         list_price: Number(editListPrice || 0),
         capacity_threshold_per_site: parsedCapacityThreshold,
         description: editDescription.trim() || null,
@@ -633,6 +660,7 @@ const ProductDetailPage = () => {
                   setEditName((product && product.name) || '')
                   setEditIp((product && product.ip) || '')
                   setEditCategory((product && product.category) || '')
+                  setEditFsn((product && product.fsn) || 'normal')
                   setEditListPrice(String((product && product.list_price) || 0))
                   setEditCapacityThresholdPerSite(
                     String(Math.max(1, Number((product && product.capacity_threshold_per_site) || DEFAULT_THRESHOLD_PER_SITE))),
@@ -678,6 +706,19 @@ const ProductDetailPage = () => {
                 {isEditing && (
                   <Select value={editCategory} onChange={event => setEditCategory(event.target.value)}>
                     {PRICING_TIER_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </Select>
+                )}
+              </div>
+              <div>
+                <Label>FSN</Label>
+                {!isEditing && (
+                  <Value>
+                    {((FSN_OPTIONS.find((option) => option.value === String(product.fsn || 'normal')) || {}).label) || 'Normal'}
+                  </Value>
+                )}
+                {isEditing && (
+                  <Select value={editFsn} onChange={event => setEditFsn(event.target.value)}>
+                    {FSN_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </Select>
                 )}
               </div>
@@ -769,6 +810,7 @@ const ProductDetailPage = () => {
               { key: 'sku', label: 'Variant SKU', width: '1.1fr' },
               { key: 'name', label: 'Variant Name', width: '1.4fr' },
               { key: 'global_stock', label: 'Global Stock', width: '0.8fr' },
+              { key: 'fsn', label: 'FSN', width: '0.7fr' },
               { key: 'capacity', label: 'Capacity', width: '1fr' },
               { key: 'adjust', label: 'Adjust', width: '1fr' },
               { key: 'actions', label: 'Actions', width: '0.7fr' },

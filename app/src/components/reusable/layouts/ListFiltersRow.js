@@ -1,6 +1,8 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import styled from 'styled-components'
+import DropdownCheckboxFilter from 'components/reusable/controls/DropdownCheckboxFilter'
+import DropdownSelectFilter from 'components/reusable/controls/DropdownSelectFilter'
 
 const Row = styled.div`
   display: flex;
@@ -26,15 +28,6 @@ const SearchInput = styled.input`
   background: #f0f3f6;
 `
 
-const FilterSelect = styled.select`
-  border: 1px solid #bec8d3;
-  border-radius: 4px;
-  height: 38px;
-  min-width: ${({ $minWidth }) => $minWidth || '180px'};
-  padding: 0 10px;
-  background: #f0f3f6;
-`
-
 const ListFiltersRow = ({
   searchValue,
   onSearchChange,
@@ -50,18 +43,28 @@ const ListFiltersRow = ({
         placeholder={searchPlaceholder}
       />
       {(filters || []).map((filter) => (
-        <FilterSelect
-          key={filter.key}
-          value={filter.value}
-          onChange={(event) => filter.onChange(event.target.value)}
-          $minWidth={filter.minWidth}
-        >
-          {(filter.options || []).map((option) => (
-            <option key={`${filter.key}-${option.value}`} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </FilterSelect>
+        filter.type === 'multi-checkbox' ? (
+          <DropdownCheckboxFilter
+            key={filter.key}
+            label={filter.label || 'Filter'}
+            title={filter.title || filter.label || 'Filter'}
+            options={filter.options || []}
+            selectedValues={filter.selectedValues || []}
+            onToggle={filter.onToggle}
+            onChangeSelected={filter.onChangeSelected}
+            width={filter.minWidth || '180px'}
+            menuWidth={filter.menuWidth || filter.minWidth || '180px'}
+          />
+        ) : (
+          <DropdownSelectFilter
+            key={filter.key}
+            value={filter.value}
+            onChange={filter.onChange}
+            minWidth={filter.minWidth}
+            menuWidth={filter.menuWidth}
+            options={filter.options || []}
+          />
+        )
       ))}
     </Left>
     {right}
@@ -74,9 +77,16 @@ ListFiltersRow.propTypes = {
   searchPlaceholder: PropTypes.string,
   filters: PropTypes.arrayOf(PropTypes.shape({
     key: PropTypes.string.isRequired,
-    value: PropTypes.string.isRequired,
-    onChange: PropTypes.func.isRequired,
+    type: PropTypes.oneOf(['single-select', 'multi-checkbox']),
+    value: PropTypes.string,
+    onChange: PropTypes.func,
+    selectedValues: PropTypes.arrayOf(PropTypes.string),
+    onToggle: PropTypes.func,
+    onChangeSelected: PropTypes.func,
+    label: PropTypes.string,
+    title: PropTypes.string,
     minWidth: PropTypes.string,
+    menuWidth: PropTypes.string,
     options: PropTypes.arrayOf(PropTypes.shape({
       value: PropTypes.string.isRequired,
       label: PropTypes.string.isRequired,

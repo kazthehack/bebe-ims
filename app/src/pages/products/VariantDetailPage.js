@@ -110,6 +110,13 @@ const money = (value) => new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 2,
 }).format(Number(value || 0))
 
+const FSN_OPTIONS = [
+  { value: 'fast', label: 'Fast' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'slow', label: 'Slow' },
+  { value: 'non_moving', label: 'Non-Moving' },
+]
+
 const VariantDetailPage = () => {
   const history = useHistory()
   const { id } = useParams()
@@ -141,6 +148,7 @@ const VariantDetailPage = () => {
   const [variantName, setVariantName] = useState('')
   const [variantYieldUnits, setVariantYieldUnits] = useState('1')
   const [variantPrintHours, setVariantPrintHours] = useState('0')
+  const [variantFsn, setVariantFsn] = useState('normal')
   const [variantFormError, setVariantFormError] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -148,6 +156,7 @@ const VariantDetailPage = () => {
   React.useEffect(() => {
     if (!variantDetail) return
     setVariantName(variantDetail.name || '')
+    setVariantFsn(variantDetail.fsn || 'normal')
     setVariantYieldUnits(String(variantDetail.yield_units || 1))
     setVariantPrintHours(String(variantDetail.print_hours || 0))
   }, [variantDetail])
@@ -364,6 +373,7 @@ const VariantDetailPage = () => {
     try {
       await updateVariant({
         name: variantName.trim() || null,
+        fsn: variantFsn || 'normal',
         yield_units: Number(variantYieldUnits),
         print_hours: Number(variantPrintHours || 0),
       })
@@ -399,6 +409,7 @@ const VariantDetailPage = () => {
                   setIsEditing(false)
                   setVariantFormError('')
                   setVariantName(variantDetail.name || '')
+                  setVariantFsn(variantDetail.fsn || 'normal')
                   setVariantYieldUnits(String(variantDetail.yield_units || 1))
                   setVariantPrintHours(String(variantDetail.print_hours || 0))
                 }}
@@ -435,6 +446,15 @@ const VariantDetailPage = () => {
                 <Label>Name</Label>
                 {!isEditing && <Value>{variantDetail.name || 'N/A'}</Value>}
                 {isEditing && <Input value={variantName} onChange={event => setVariantName(event.target.value)} />}
+              </div>
+              <div>
+                <Label>FSN</Label>
+                {!isEditing && <Value>{((FSN_OPTIONS.find((option) => option.value === String(variantDetail.fsn || 'normal')) || {}).label) || 'Normal'}</Value>}
+                {isEditing && (
+                  <select value={variantFsn} onChange={event => setVariantFsn(event.target.value)} style={{ height: 38, border: '1px solid #bec8d3', borderRadius: 4, padding: '0 10px', background: '#f0f3f6' }}>
+                    {FSN_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                )}
               </div>
               <div>
                 <Label>Total Cost</Label>

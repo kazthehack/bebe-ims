@@ -225,6 +225,18 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ]
+const STATUS_FILTER_OPTIONS = STATUS_OPTIONS.map((option) => option.value)
+
+const parseMultiFilter = (rawValue, allowedValues) => {
+  if (rawValue == null || rawValue === 'all') return [...allowedValues]
+  if (String(rawValue) === '__none__') return []
+  const allowed = new Set(allowedValues)
+  const parsed = String(rawValue)
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => allowed.has(value))
+  return parsed.length ? parsed : [...allowedValues]
+}
 
 const money = (value) => `PHP ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -286,8 +298,9 @@ const EventsPage = () => {
 
   const filteredEvents = useMemo(() => {
     const query = String(search || '').trim().toLowerCase()
+    const selectedStatuses = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
     return (events || []).filter((item) => {
-      if (statusFilter !== 'all' && String(item.status || '').toLowerCase() !== statusFilter) return false
+      if (!selectedStatuses.includes(String(item.status || '').toLowerCase())) return false
       if (!query) return true
       return [
         item.code,
@@ -413,10 +426,18 @@ const EventsPage = () => {
               filters={[
                 {
                   key: 'events-status',
-                  value: statusFilter,
-                  onChange: setStatusFilter,
+                  type: 'multi-checkbox',
+                  label: 'Status',
+                  title: 'Status',
+                  selectedValues: parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS),
+                  onToggle: (value) => {
+                    const current = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
+                    const has = current.includes(value)
+                    const next = has ? current.filter((item) => item !== value) : [...current, value]
+                    setStatusFilter(next.length ? next.join(',') : '__none__')
+                  },
+                  onChangeSelected: (nextSelected) => setStatusFilter(nextSelected.length ? nextSelected.join(',') : '__none__'),
                   options: [
-                    { value: 'all', label: 'All Status' },
                     ...STATUS_OPTIONS,
                   ],
                 },

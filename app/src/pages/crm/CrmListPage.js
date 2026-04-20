@@ -11,6 +11,18 @@ import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import { usePartnersResource } from 'hooks/bazaar/useBazaarApi'
 
 const PAGE_SIZE = 20
+const STATUS_FILTER_OPTIONS = ['active', 'open', 'outstanding', 'inactive', 'done']
+
+const parseMultiFilter = (rawValue, allowedValues) => {
+  if (rawValue == null || rawValue === 'all') return [...allowedValues]
+  if (String(rawValue) === '__none__') return []
+  const allowed = new Set(allowedValues)
+  const parsed = String(rawValue)
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => allowed.has(value))
+  return parsed.length ? parsed : [...allowedValues]
+}
 
 const Surface = styled.div`
   background: #f3f5f7;
@@ -423,8 +435,9 @@ const CrmListPage = () => {
 
   const filteredPartnerships = useMemo(() => {
     const query = String(search || '').trim().toLowerCase()
+    const selectedStatuses = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
     return (partnerships || []).filter((item) => {
-      if (statusFilter !== 'all' && String(item.status || '').toLowerCase() !== statusFilter) return false
+      if (!selectedStatuses.includes(String(item.status || '').toLowerCase())) return false
       if (!query) return true
       return `${item.code} ${item.name} ${item.contact_person || ''} ${item.contact_number || ''}`.toLowerCase().includes(query)
     })
@@ -432,8 +445,9 @@ const CrmListPage = () => {
 
   const filteredRequests = useMemo(() => {
     const query = String(search || '').trim().toLowerCase()
+    const selectedStatuses = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
     return (requests || []).filter((item) => {
-      if (statusFilter !== 'all' && String(item.status || '').toLowerCase() !== statusFilter) return false
+      if (!selectedStatuses.includes(String(item.status || '').toLowerCase())) return false
       if (!query) return true
       return `${item.code} ${item.title} ${item.partnership_name || ''} ${item.notes || ''}`.toLowerCase().includes(query)
     })
@@ -625,10 +639,18 @@ const CrmListPage = () => {
               searchPlaceholder={activeTab === 'partnerships' ? 'Search partnerships' : 'Search requests'}
               filters={[{
                 key: 'status',
-                value: statusFilter,
-                onChange: setStatusFilter,
+                type: 'multi-checkbox',
+                label: 'Status',
+                title: 'Status',
+                selectedValues: parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS),
+                onToggle: (value) => {
+                  const current = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
+                  const has = current.includes(value)
+                  const next = has ? current.filter((item) => item !== value) : [...current, value]
+                  setStatusFilter(next.length ? next.join(',') : '__none__')
+                },
+                onChangeSelected: (nextSelected) => setStatusFilter(nextSelected.length ? nextSelected.join(',') : '__none__'),
                 options: [
-                  { value: 'all', label: 'All Status' },
                   { value: 'active', label: 'Active' },
                   { value: 'open', label: 'Open' },
                   { value: 'outstanding', label: 'Outstanding' },

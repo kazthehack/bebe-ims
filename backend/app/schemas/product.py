@@ -1,8 +1,11 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.domain.enums import SupplyType
+
+FsnValue = Literal['fast', 'normal', 'slow', 'non_moving']
 
 class ProductCreate(BaseModel):
     name: str
@@ -10,6 +13,7 @@ class ProductCreate(BaseModel):
     ip: str | None = None
     category: str | None = None
     list_price: float | None = None
+    fsn: FsnValue = 'normal'
     capacity_threshold_per_site: float = Field(default=8.0, ge=1.0)
     description: str | None = None
     design_source: str | None = None
@@ -27,6 +31,7 @@ class ProductRead(BaseModel):
     ip: str | None = None
     category: str | None = None
     list_price: float
+    fsn: FsnValue = 'normal'
     capacity_threshold_per_site: float = 8.0
     description: str | None = None
     design_source: str | None = None
@@ -43,6 +48,7 @@ class ProductUpdate(BaseModel):
     ip: str | None = None
     category: str | None = None
     list_price: float | None = None
+    fsn: FsnValue | None = None
     capacity_threshold_per_site: float | None = Field(default=None, ge=1.0)
     description: str | None = None
     design_source: str | None = None
@@ -59,6 +65,7 @@ class ProductVariantCreate(BaseModel):
     product_id: str
     sku: str | None = None
     name: str | None = None
+    fsn: FsnValue | None = None
     yield_units: int = 1
     print_hours: float = 0.0
     image_url: str | None = None
@@ -69,6 +76,7 @@ class ProductVariantRead(BaseModel):
     product_id: str
     sku: str
     name: str | None = None
+    fsn: FsnValue = 'normal'
     yield_units: int
     print_hours: float
     qr_code: str | None = None
@@ -83,6 +91,7 @@ class ProductVariantListResponse(BaseModel):
 
 class ProductVariantUpdate(BaseModel):
     name: str | None = None
+    fsn: FsnValue | None = None
     yield_units: int | None = None
     print_hours: float | None = None
     image_url: str | None = None

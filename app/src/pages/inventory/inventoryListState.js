@@ -3,6 +3,15 @@ export const STORAGE_TAB = 'storage'
 export const INVENTORY_LIST_STATE_KEY = 'bebe_ims_inventory_list_state_v1'
 
 const alpha = (value) => String(value || '').trim().toLowerCase()
+const parseMultiFilter = (rawValue) => {
+  if (rawValue == null || rawValue === 'all') return null
+  if (String(rawValue) === '__none__') return []
+  const parsed = String(rawValue)
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  return parsed.length ? parsed : null
+}
 
 export const readInventoryListState = () => {
   try {
@@ -135,6 +144,9 @@ export const buildInventoryRows = ({
 
   return baseRows
     .filter((item) => {
+      const selectedProductLines = parseMultiFilter(productLineFilter)
+      const selectedVariants = parseMultiFilter(variantFilter)
+      const selectedAvailability = parseMultiFilter(availabilityFilter)
       if (query && ![
         item.product_line_name,
         item.sku,
@@ -142,10 +154,13 @@ export const buildInventoryRows = ({
         item.product_name,
         item.product_variant_id,
       ].join(' ').toLowerCase().includes(query)) return false
-      if (productLineFilter !== 'all' && String(item.product_line_name || '') !== productLineFilter) return false
-      if (variantFilter !== 'all' && String(item.variant_name || '') !== variantFilter) return false
-      if (availabilityFilter === 'with-stock' && Number(item.view_qty || 0) <= 0) return false
-      if (availabilityFilter === 'zero-stock' && Number(item.view_qty || 0) > 0) return false
+      if (selectedProductLines && !selectedProductLines.includes(String(item.product_line_name || ''))) return false
+      if (selectedVariants && !selectedVariants.includes(String(item.variant_name || ''))) return false
+      if (selectedAvailability) {
+        const hasStock = Number(item.view_qty || 0) > 0
+        const availabilityTag = hasStock ? 'with-stock' : 'zero-stock'
+        if (!selectedAvailability.includes(availabilityTag)) return false
+      }
       return true
     })
     .sort((a, b) => {

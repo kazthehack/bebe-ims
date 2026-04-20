@@ -81,6 +81,7 @@ brand_controller = SupplyBrand()
 site_controller = Site()
 
 MAIN_SITE_ID = 'main'
+VALID_FSN_VALUES = {'fast', 'normal', 'slow', 'non_moving'}
 
 
 def _available(qty_on_hand: float, qty_reserved: float) -> float:
@@ -118,6 +119,13 @@ def _normalize_brand_id(value: str | None) -> str:
     slug = re.sub(r'[^a-z0-9 -]', '', base).replace(' ', '-')
     slug = re.sub(r'-+', '-', slug).strip('-')
     return slug
+
+
+def _normalize_fsn(value: str | None, fallback: str = 'normal') -> str:
+    normalized = str(value or '').strip().lower()
+    if normalized in VALID_FSN_VALUES:
+        return normalized
+    return fallback
 
 
 def _normalize_brand_display(value: str | None) -> str:
@@ -470,6 +478,10 @@ def list_inventory_global(tenant_id: str = Query('tenant-admin')) -> InventoryGl
             product_id=variant.payload.product_id,
             product_line_name=product.payload.product_line_name if product else None,
             product_name=product.payload.name if product else variant.payload.product_id,
+            fsn=_normalize_fsn(
+                variant.payload.fsn,
+                _normalize_fsn(product.payload.fsn if product else None, 'normal'),
+            ),
             capacity_threshold_per_site=float(product.payload.capacity_threshold_per_site or 8.0) if product else 8.0,
             main_qty_on_hand=main_qty,
             sites_qty_on_hand=sites_qty,

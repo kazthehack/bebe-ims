@@ -214,6 +214,19 @@ const SpacedMeta = styled(Meta)`
   margin-bottom: 8px;
 `
 
+const STATUS_FILTER_OPTIONS = ['active', 'inactive']
+
+const parseMultiFilter = (rawValue, allowedValues) => {
+  if (rawValue == null || rawValue === 'all') return [...allowedValues]
+  if (String(rawValue) === '__none__') return []
+  const allowed = new Set(allowedValues)
+  const parsed = String(rawValue)
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => allowed.has(value))
+  return parsed.length ? parsed : [...allowedValues]
+}
+
 const SitesPage = () => {
   const history = useHistory()
   const { id } = useParams()
@@ -254,9 +267,10 @@ const SitesPage = () => {
 
   const filteredSites = useMemo(() => {
     const query = String(search || '').trim().toLowerCase()
+    const selectedStatuses = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
     return (sites || []).filter((site) => {
-      if (statusFilter === 'active' && !site.active) return false
-      if (statusFilter === 'inactive' && site.active) return false
+      const normalizedStatus = site.active ? 'active' : 'inactive'
+      if (!selectedStatuses.includes(normalizedStatus)) return false
       if (!query) return true
       return [
         site.code,
@@ -466,10 +480,18 @@ const SitesPage = () => {
               filters={[
                 {
                   key: 'site-status',
-                  value: statusFilter,
-                  onChange: setStatusFilter,
+                  type: 'multi-checkbox',
+                  label: 'Status',
+                  title: 'Status',
+                  selectedValues: parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS),
+                  onToggle: (value) => {
+                    const current = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
+                    const has = current.includes(value)
+                    const next = has ? current.filter((item) => item !== value) : [...current, value]
+                    setStatusFilter(next.length ? next.join(',') : '__none__')
+                  },
+                  onChangeSelected: (nextSelected) => setStatusFilter(nextSelected.length ? nextSelected.join(',') : '__none__'),
                   options: [
-                    { value: 'all', label: 'All Status' },
                     { value: 'active', label: 'Active' },
                     { value: 'inactive', label: 'Inactive' },
                   ],

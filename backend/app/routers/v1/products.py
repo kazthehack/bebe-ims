@@ -47,6 +47,15 @@ supply_controller = Supply()
 part_controller = Part()
 product_stock_controller = ProductStock()
 
+VALID_FSN_VALUES = {'fast', 'normal', 'slow', 'non_moving'}
+
+
+def _normalize_fsn(value: str | None, fallback: str = 'normal') -> str:
+    normalized = str(value or '').strip().lower()
+    if normalized in VALID_FSN_VALUES:
+        return normalized
+    return fallback
+
 
 def _normalize_supply_type(value: str | None) -> SupplyType:
     raw = str(value or '').strip().lower()
@@ -85,6 +94,7 @@ def _to_product(record: StoredRecord[ProductDocument]) -> ProductRead:
         ip=record.payload.ip,
         category=record.payload.category,
         list_price=float(record.payload.list_price or 0),
+        fsn=_normalize_fsn(record.payload.fsn, 'normal'),
         capacity_threshold_per_site=float(record.payload.capacity_threshold_per_site or 8.0),
         description=record.payload.description,
         design_source=record.payload.design_source,
@@ -108,12 +118,19 @@ def _to_part(record: StoredRecord[PartDocument]) -> PartRead:
     )
 
 
-def _to_variant(record: StoredRecord[ProductVariantDocument]) -> ProductVariantRead:
+def _to_variant(record: StoredRecord[ProductVariantDocument], tenant_id: str = 'tenant-admin') -> ProductVariantRead:
+    parent_fsn = 'normal'
+    try:
+        product = map_record(product_controller.get(record.payload.product_id, tenant_id), ProductDocument)
+        parent_fsn = _normalize_fsn(product.payload.fsn, 'normal')
+    except Exception:
+        parent_fsn = 'normal'
     return ProductVariantRead(
         id=record.object_id,
         product_id=record.payload.product_id,
         sku=record.payload.sku,
         name=record.payload.name,
+        fsn=_normalize_fsn(record.payload.fsn, parent_fsn),
         yield_units=int(record.payload.yield_units or 1),
         print_hours=float(record.payload.print_hours or 0),
         qr_code=record.payload.qr_code,
@@ -228,6 +245,7 @@ def create_product(payload: ProductCreate, tenant_id: str = Query('tenant-admin'
 
     product_line = map_record(product_line_record, ProductLineDocument)
     create_payload = payload.model_dump(exclude_none=True)
+    create_payload['fsn'] = _normalize_fsn(create_payload.get('fsn'), 'normal')
     create_payload['product_line_id'] = product_line.object_id
     create_payload['product_line_name'] = product_line.payload.name
     create_payload['product_line_code'] = product_line.payload.code
@@ -239,6 +257,7 @@ def create_product(payload: ProductCreate, tenant_id: str = Query('tenant-admin'
         variant_controller.create(tenant_id, {
             'product_id': record.object_id,
             'name': record.payload.name,
+            'fsn': _normalize_fsn(record.payload.fsn, 'normal'),
             'yield_units': 1,
             'print_hours': 0.0,
         })
@@ -265,6 +284,8 @@ def update_product(id: str, payload: ProductUpdate, tenant_id: str = Query('tena
     existing = map_record(product_controller.get(id, tenant_id), ProductDocument)
     product_line = map_record(product_line_controller.get(payload.product_line_id, tenant_id), ProductLineDocument)
     update_payload = payload.model_dump(exclude_none=True)
+    if 'fsn' in update_payload:
+        update_payload['fsn'] = _normalize_fsn(update_payload.get('fsn'), 'normal')
     update_payload['product_code'] = existing.payload.product_code or existing.payload.sku or existing.object_id
     update_payload['product_line_id'] = product_line.object_id
     update_payload['product_line_name'] = product_line.payload.name
@@ -282,7 +303,7 @@ def list_product_variants(
     product_id: str | None = None,
 ) -> ProductVariantListResponse:
     records = [map_record(record, ProductVariantDocument) for record in variant_controller.list(tenant_id)]
-    variants = [_to_variant(record) for record in records]
+    variants = [_to_variant(record, tenant_id) for record in records]
     if product_id:
         variants = [variant for variant in variants if variant.product_id == product_id]
     return ProductVariantListResponse(variants=variants)
@@ -290,7 +311,7 @@ def list_product_variants(
 
 @router.get('/variants/{id}', response_model=ProductVariantRead)
 def get_product_variant(id: str, tenant_id: str = Query('tenant-admin')) -> ProductVariantRead:
-    return _to_variant(map_record(variant_controller.get(id, tenant_id), ProductVariantDocument))
+    return _to_variant(map_record(variant_controller.get(id, tenant_id), ProductVariantDocument), tenant_id)
 
 
 @router.put('/variants/{id}', response_model=ProductVariantRead)
@@ -298,13 +319,15 @@ def update_product_variant(id: str, payload: ProductVariantUpdate, tenant_id: st
     existing = map_record(variant_controller.get(id, tenant_id), ProductVariantDocument)
     merged = existing.payload.model_dump(exclude_none=True)
     updates = payload.model_dump(exclude_none=True)
+    if 'fsn' in updates:
+        updates['fsn'] = _normalize_fsn(updates.get('fsn'), 'normal')
     merged.update(updates)
     merged['yield_units'] = max(1, int(merged.get('yield_units') or 1))
     merged['print_hours'] = float(merged.get('print_hours') or 0)
     merged['sku'] = existing.payload.sku
     merged['qr_code'] = existing.payload.qr_code
     record = map_record(variant_controller.update(id, tenant_id, merged), ProductVariantDocument)
-    return _to_variant(record)
+    return _to_variant(record, tenant_id)
 
 
 @router.delete('/variants/{id}')
@@ -446,18 +469,21 @@ def create_variant_recipe_part(
 @router.post('/variants', response_model=ProductVariantRead)
 def create_product_variant(payload: ProductVariantCreate, tenant_id: str = Query('tenant-admin')) -> ProductVariantRead:
     product_controller.get(payload.product_id, tenant_id)
+    create_payload = payload.model_dump(exclude_none=True)
+    if 'fsn' in create_payload and create_payload.get('fsn') is not None:
+        create_payload['fsn'] = _normalize_fsn(create_payload.get('fsn'), 'normal')
     record = map_record(
-        variant_controller.create(tenant_id, payload.model_dump(exclude_none=True)),
+        variant_controller.create(tenant_id, create_payload),
         ProductVariantDocument,
     )
-    return _to_variant(record)
+    return _to_variant(record, tenant_id)
 
 
 @router.get('/variants/resolve/{qr_code}', response_model=ProductVariantRead)
 def resolve_variant_by_qr(qr_code: str, tenant_id: str = Query('tenant-admin')) -> ProductVariantRead:
     records = [map_record(record, ProductVariantDocument) for record in variant_controller.list(tenant_id)]
     for record in records:
-        variant = _to_variant(record)
+        variant = _to_variant(record, tenant_id)
         if variant.qr_code == qr_code:
             return variant
     raise HTTPException(status_code=404, detail='Variant not found for qr_code')
@@ -467,5 +493,5 @@ def resolve_variant_by_qr(qr_code: str, tenant_id: str = Query('tenant-admin')) 
 def get_product(id: str, tenant_id: str = Query('tenant-admin')) -> ProductDetailResponse:
     product = _to_product(map_record(product_controller.get(id, tenant_id), ProductDocument))
     variant_records = [map_record(record, ProductVariantDocument) for record in variant_controller.list(tenant_id)]
-    variants = [_to_variant(record) for record in variant_records if record.payload.product_id == id]
+    variants = [_to_variant(record, tenant_id) for record in variant_records if record.payload.product_id == id]
     return ProductDetailResponse(product=product, variants=variants)

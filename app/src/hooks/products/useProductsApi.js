@@ -58,6 +58,7 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
     ip,
     category,
     list_price,
+    fsn,
     capacity_threshold_per_site,
     description,
     design_source,
@@ -71,6 +72,7 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
       ip,
       category,
       list_price,
+      fsn,
       capacity_threshold_per_site,
       description,
       design_source,
@@ -298,6 +300,7 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
     ip,
     category,
     list_price,
+    fsn,
     capacity_threshold_per_site,
     description,
     design_source,
@@ -311,6 +314,7 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
       ip,
       category,
       list_price,
+      fsn,
       capacity_threshold_per_site,
       description,
       design_source,
@@ -450,9 +454,10 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
     return postForm(`/slicer/parse-3mf?${tenantQuery(tenantId)}`, formData)
   }, [tenantId])
 
-  const updateVariant = useCallback(async ({ name, yield_units, print_hours }) => {
+  const updateVariant = useCallback(async ({ name, fsn, yield_units, print_hours }) => {
     const updated = await putJson(`/products/variants/${encodeURIComponent(variantId)}?${tenantQuery(tenantId)}`, {
       name,
+      fsn,
       yield_units,
       print_hours,
     })

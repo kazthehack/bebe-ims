@@ -163,6 +163,18 @@ const PrimaryButton = styled.button`
 `
 
 const PAGE_SIZE = 20
+const AVAILABILITY_FILTER_OPTIONS = ['with-stock', 'zero-stock']
+
+const parseMultiFilter = (rawValue, allowedValues) => {
+  if (rawValue == null || rawValue === 'all') return [...allowedValues]
+  if (String(rawValue) === '__none__') return []
+  const allowed = new Set(allowedValues)
+  const parsed = String(rawValue)
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => allowed.has(value))
+  return parsed.length ? parsed : [...allowedValues]
+}
 
 const siteTone = (siteQty, thresholdPerSite) => {
   const safeThreshold = Math.max(1, Number(thresholdPerSite || 8))
@@ -306,36 +318,60 @@ const InventoryListPage = () => {
   const pagedRows = displayRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   const filterDefinitions = useMemo(
-    () => ([
-      {
-        key: 'product-line',
-        value: productLineFilter,
-        onChange: setProductLineFilter,
-        options: [
-          { value: 'all', label: 'All Product Lines' },
-          ...productLineOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
-        ],
-      },
-      {
-        key: 'variant',
-        value: variantFilter,
-        onChange: setVariantFilter,
-        options: [
-          { value: 'all', label: 'All Variants' },
-          ...variantOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
-        ],
-      },
-      {
-        key: 'availability',
-        value: availabilityFilter,
-        onChange: setAvailabilityFilter,
-        options: [
-          { value: 'all', label: 'All Availability' },
-          { value: 'with-stock', label: 'With Stock' },
-          { value: 'zero-stock', label: 'Zero Stock' },
-        ],
-      },
-    ]),
+    () => {
+      const productLineValues = productLineOptions.filter((value) => value !== 'all')
+      const variantValues = variantOptions.filter((value) => value !== 'all')
+      return [
+        {
+          key: 'product-line',
+          type: 'multi-checkbox',
+          label: 'Product Line',
+          title: 'Product Line',
+          selectedValues: parseMultiFilter(productLineFilter, productLineValues),
+          onToggle: (value) => {
+            const current = parseMultiFilter(productLineFilter, productLineValues)
+            const has = current.includes(value)
+            const next = has ? current.filter((item) => item !== value) : [...current, value]
+            setProductLineFilter(next.length ? next.join(',') : '__none__')
+          },
+          onChangeSelected: (nextSelected) => setProductLineFilter(nextSelected.length ? nextSelected.join(',') : '__none__'),
+          options: productLineValues.map((value) => ({ value, label: value })),
+        },
+        {
+          key: 'variant',
+          type: 'multi-checkbox',
+          label: 'Variant',
+          title: 'Variant',
+          selectedValues: parseMultiFilter(variantFilter, variantValues),
+          onToggle: (value) => {
+            const current = parseMultiFilter(variantFilter, variantValues)
+            const has = current.includes(value)
+            const next = has ? current.filter((item) => item !== value) : [...current, value]
+            setVariantFilter(next.length ? next.join(',') : '__none__')
+          },
+          onChangeSelected: (nextSelected) => setVariantFilter(nextSelected.length ? nextSelected.join(',') : '__none__'),
+          options: variantValues.map((value) => ({ value, label: value })),
+        },
+        {
+          key: 'availability',
+          type: 'multi-checkbox',
+          label: 'Availability',
+          title: 'Availability',
+          selectedValues: parseMultiFilter(availabilityFilter, AVAILABILITY_FILTER_OPTIONS),
+          onToggle: (value) => {
+            const current = parseMultiFilter(availabilityFilter, AVAILABILITY_FILTER_OPTIONS)
+            const has = current.includes(value)
+            const next = has ? current.filter((item) => item !== value) : [...current, value]
+            setAvailabilityFilter(next.length ? next.join(',') : '__none__')
+          },
+          onChangeSelected: (nextSelected) => setAvailabilityFilter(nextSelected.length ? nextSelected.join(',') : '__none__'),
+          options: [
+            { value: 'with-stock', label: 'With Stock' },
+            { value: 'zero-stock', label: 'Zero Stock' },
+          ],
+        },
+      ]
+    },
     [productLineFilter, productLineOptions, variantFilter, variantOptions, availabilityFilter],
   )
 

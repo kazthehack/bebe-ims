@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -35,6 +36,7 @@ class InventoryGlobalItemRead(BaseModel):
     product_id: str
     product_line_name: str | None = None
     product_name: str
+    fsn: Literal['fast', 'normal', 'slow', 'non_moving'] = 'normal'
     capacity_threshold_per_site: float = 8.0
     main_qty_on_hand: float
     sites_qty_on_hand: float

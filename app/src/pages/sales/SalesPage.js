@@ -8,6 +8,18 @@ import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import { useEventsResource, useReceiptsResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
 
 const PAGE_SIZE = 20
+const STATUS_FILTER_OPTIONS = ['posted', 'open', 'done', 'void']
+
+const parseMultiFilter = (rawValue, allowedValues) => {
+  if (rawValue == null || rawValue === 'all') return [...allowedValues]
+  if (String(rawValue) === '__none__') return []
+  const allowed = new Set(allowedValues)
+  const parsed = String(rawValue)
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => allowed.has(value))
+  return parsed.length ? parsed : [...allowedValues]
+}
 
 const Surface = styled.div`
   background: #f3f5f7;
@@ -273,10 +285,11 @@ const SalesPage = () => {
   const filteredReceipts = useMemo(() => {
     const query = String(search || '').trim().toLowerCase()
     const eventId = activeTab.startsWith('event:') ? activeTab.replace('event:', '') : ''
+    const selectedStatuses = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
     return (receipts || [])
       .filter((receipt) => {
         if (eventId && receipt.event_id !== eventId) return false
-        if (statusFilter !== 'all' && String(receipt.status || '').toLowerCase() !== statusFilter) return false
+        if (!selectedStatuses.includes(String(receipt.status || '').toLowerCase())) return false
         if (!query) return true
         const eventName = eventNameById[receipt.event_id] || receipt.event_id || ''
         const siteName = siteNameById[receipt.site_id] || receipt.site_id || ''
@@ -414,15 +427,21 @@ const SalesPage = () => {
               searchPlaceholder="Search receipts"
               filters={[{
                 key: 'status',
-                value: statusFilter,
-                onChange: setStatusFilter,
-                options: [
-                  { value: 'all', label: 'All Status' },
-                  { value: 'posted', label: 'Posted' },
-                  { value: 'open', label: 'Open' },
-                  { value: 'done', label: 'Done' },
-                  { value: 'void', label: 'Void' },
-                ],
+                type: 'multi-checkbox',
+                label: 'Status',
+                title: 'Status',
+                selectedValues: parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS),
+                onToggle: (value) => {
+                  const current = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
+                  const has = current.includes(value)
+                  const next = has ? current.filter((item) => item !== value) : [...current, value]
+                  setStatusFilter(next.length ? next.join(',') : '__none__')
+                },
+                onChangeSelected: (nextSelected) => setStatusFilter(nextSelected.length ? nextSelected.join(',') : '__none__'),
+                options: STATUS_FILTER_OPTIONS.map((value) => ({
+                  value,
+                  label: value.charAt(0).toUpperCase() + value.slice(1),
+                })),
               }]}
             />
           </Toolbar>

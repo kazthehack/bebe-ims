@@ -44,8 +44,18 @@ const TabPanel = styled.div`
 const Toolbar = styled.div`
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 12px;
+`
+
+const ToolbarFilters = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 520px;
 `
 
 const Button = styled.button`
@@ -65,7 +75,7 @@ const Table = styled.div`
 
 const ProductHeader = styled.div`
   display: grid;
-  grid-template-columns: 0.9fr 1fr 1.3fr 0.8fr 0.9fr 0.9fr 1.1fr 0.7fr;
+  grid-template-columns: 0.9fr 1fr 1.3fr 0.8fr 0.9fr 0.9fr 0.9fr 1.1fr 0.7fr;
   font-size: 12px;
   color: #4f6278;
   font-weight: 700;
@@ -74,7 +84,7 @@ const ProductHeader = styled.div`
 
 const ProductRow = styled.div`
   display: grid;
-  grid-template-columns: 0.9fr 1fr 1.3fr 0.8fr 0.9fr 0.9fr 1.1fr 0.7fr;
+  grid-template-columns: 0.9fr 1fr 1.3fr 0.8fr 0.9fr 0.9fr 0.9fr 1.1fr 0.7fr;
   border: 1px solid #d9e0e8;
   border-radius: 4px;
   background: #e6eaef;
@@ -187,6 +197,14 @@ const PaginationButton = styled.button`
 
 const PAGE_SIZE = 20
 const DEFAULT_THRESHOLD_PER_SITE = 8
+const DEFAULT_FSN_SELECTION = ['fast', 'normal', 'slow']
+const NO_IP_VALUE = '__no_ip__'
+const FSN_OPTIONS = [
+  { value: 'fast', label: 'Fast' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'slow', label: 'Slow' },
+  { value: 'non_moving', label: 'Non-Moving' },
+]
 
 const money = (value) => new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -203,6 +221,25 @@ const splitMultiline = (value) => (
 )
 
 const alpha = (value) => String(value || '').trim().toLowerCase()
+const parseFsnSelection = (value) => {
+  if (String(value || '') === '__none__') return []
+  const allowed = new Set(FSN_OPTIONS.map((item) => item.value))
+  const parsed = String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => allowed.has(item))
+  return parsed.length ? parsed : [...DEFAULT_FSN_SELECTION]
+}
+const parseMultiFilter = (rawValue, allowedValues) => {
+  if (rawValue == null || rawValue === 'all') return [...allowedValues]
+  if (String(rawValue) === '__none__') return []
+  const allowed = new Set(allowedValues)
+  const parsed = String(rawValue)
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => allowed.has(value))
+  return parsed.length ? parsed : [...allowedValues]
+}
 
 const ProductListPage = ({ title }) => {
   const location = useLocation()
@@ -238,6 +275,7 @@ const ProductListPage = ({ title }) => {
   const [variantsPage, setVariantsPage] = useState(() => Math.max(1, Number(restoredState.variantsPage || 1)))
   const [productsLineFilter, setProductsLineFilter] = useState(() => String(restoredState.productsLineFilter || 'all'))
   const [productsIpFilter, setProductsIpFilter] = useState(() => String(restoredState.productsIpFilter || 'all'))
+  const [productsFsnFilter, setProductsFsnFilter] = useState(() => parseFsnSelection(restoredState.productsFsnFilter))
   const [variantsLineFilter, setVariantsLineFilter] = useState(() => String(restoredState.variantsLineFilter || 'all'))
   const [variantsProductFilter, setVariantsProductFilter] = useState(() => String(restoredState.variantsProductFilter || 'all'))
   const [capacitySort, setCapacitySort] = useState('none')
@@ -287,7 +325,12 @@ const ProductListPage = ({ title }) => {
   )
 
   const productIpOptions = useMemo(
-    () => ['all', ...Array.from(new Set((allProducts || []).map((item) => String(item.ip || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
+    () => {
+      const uniqueIps = Array.from(new Set((allProducts || []).map((item) => String(item.ip || '').trim()).filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b))
+      const hasNoIp = (allProducts || []).some((item) => !String(item.ip || '').trim())
+      return ['all', ...(hasNoIp ? [NO_IP_VALUE] : []), ...uniqueIps]
+    },
     [allProducts],
   )
 
@@ -299,8 +342,12 @@ const ProductListPage = ({ title }) => {
   const filteredProducts = useMemo(
     () => (products || [])
       .filter((item) => {
-        if (productsLineFilter !== 'all' && String(item.product_line || '') !== productsLineFilter) return false
-        if (productsIpFilter !== 'all' && String(item.ip || '') !== productsIpFilter) return false
+        const selectedProductLines = parseMultiFilter(productsLineFilter, productLineFilterOptions.filter((value) => value !== 'all'))
+        const selectedIps = parseMultiFilter(productsIpFilter, productIpOptions.filter((value) => value !== 'all'))
+        if (!selectedProductLines.includes(String(item.product_line || ''))) return false
+        const normalizedIp = String(item.ip || '').trim() || NO_IP_VALUE
+        if (!selectedIps.includes(normalizedIp)) return false
+        if (!productsFsnFilter.includes(String(item.fsn || 'normal'))) return false
         return true
       })
       .sort((a, b) => {
@@ -310,7 +357,7 @@ const ProductListPage = ({ title }) => {
         if (productCompare !== 0) return productCompare
         return alpha(a.product_code || a.id).localeCompare(alpha(b.product_code || b.id))
       }),
-    [products, productsLineFilter, productsIpFilter],
+    [products, productsLineFilter, productsIpFilter, productsFsnFilter],
   )
   const sortedProducts = useMemo(() => {
     if (capacitySort === 'none') return filteredProducts
@@ -340,8 +387,10 @@ const ProductListPage = ({ title }) => {
     return searched
       .filter((item) => {
         const parent = productById[item.product_id]
-        if (variantsLineFilter !== 'all' && String((parent && parent.product_line) || '') !== variantsLineFilter) return false
-        if (variantsProductFilter !== 'all' && String((parent && parent.name) || '') !== variantsProductFilter) return false
+        const selectedVariantLines = parseMultiFilter(variantsLineFilter, productLineFilterOptions.filter((value) => value !== 'all'))
+        const selectedVariantProducts = parseMultiFilter(variantsProductFilter, productNameOptions.filter((value) => value !== 'all'))
+        if (!selectedVariantLines.includes(String((parent && parent.product_line) || ''))) return false
+        if (!selectedVariantProducts.includes(String((parent && parent.name) || ''))) return false
         return true
       })
       .sort((a, b) => {
@@ -397,7 +446,7 @@ const ProductListPage = ({ title }) => {
   React.useEffect(() => {
     if (!initializedRef.current) return
     setProductsPage(1)
-  }, [productsLineFilter, productsIpFilter])
+  }, [productsLineFilter, productsIpFilter, productsFsnFilter])
 
   React.useEffect(() => {
     if (!initializedRef.current) return
@@ -431,6 +480,7 @@ const ProductListPage = ({ title }) => {
     variantsPage,
     productsLineFilter,
     productsIpFilter,
+    productsFsnFilter: productsFsnFilter.length ? productsFsnFilter.join(',') : '__none__',
     variantsLineFilter,
     variantsProductFilter,
   }), [
@@ -443,6 +493,7 @@ const ProductListPage = ({ title }) => {
     variantsPage,
     productsLineFilter,
     productsIpFilter,
+    productsFsnFilter,
     variantsLineFilter,
     variantsProductFilter,
   ])
@@ -589,6 +640,16 @@ const ProductListPage = ({ title }) => {
     })
   }
 
+  const toggleFsnFilter = (value) => {
+    setProductsFsnFilter((prev) => {
+      const has = prev.includes(value)
+      if (has) {
+        return prev.filter((item) => item !== value)
+      }
+      return [...prev, value]
+    })
+  }
+
   const breadcrumbItems = activeTab === 'products'
     ? [{ label: title }]
     : [{ label: title, to: `/products?${listQuery}` }, { label: activeTab === 'variants' ? 'Product Variants' : 'Product Lines' }]
@@ -610,31 +671,59 @@ const ProductListPage = ({ title }) => {
         {activeTab === 'products' && (
           <TabPanel id="products-panel" role="tabpanel" aria-labelledby="products-tab">
             <Toolbar>
-              <ListFiltersRow
-                searchValue={search}
-                onSearchChange={setSearch}
-                searchPlaceholder="Search products"
-                filters={[
-                  {
-                    key: 'products-line',
-                    value: productsLineFilter,
-                    onChange: setProductsLineFilter,
-                    options: [
-                      { value: 'all', label: 'All Product Lines' },
-                      ...productLineFilterOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
-                    ],
-                  },
-                  {
-                    key: 'products-ip',
-                    value: productsIpFilter,
-                    onChange: setProductsIpFilter,
-                    options: [
-                      { value: 'all', label: 'All IP' },
-                      ...productIpOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
-                    ],
-                  },
-                ]}
-              />
+              <ToolbarFilters>
+                <ListFiltersRow
+                  searchValue={search}
+                  onSearchChange={setSearch}
+                  searchPlaceholder="Search products"
+                  filters={[
+                    {
+                      key: 'products-line',
+                      type: 'multi-checkbox',
+                      label: 'Product Line',
+                      title: 'Product Line',
+                      selectedValues: parseMultiFilter(productsLineFilter, productLineFilterOptions.filter((value) => value !== 'all')),
+                      onToggle: (value) => {
+                        const current = parseMultiFilter(productsLineFilter, productLineFilterOptions.filter((item) => item !== 'all'))
+                        const has = current.includes(value)
+                        const next = has ? current.filter((item) => item !== value) : [...current, value]
+                        setProductsLineFilter(next.length ? next.join(',') : '__none__')
+                      },
+                      onChangeSelected: (nextSelected) => setProductsLineFilter(nextSelected.length ? nextSelected.join(',') : '__none__'),
+                      options: productLineFilterOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
+                    },
+                    {
+                      key: 'products-ip',
+                      type: 'multi-checkbox',
+                      label: 'IP',
+                      title: 'IP',
+                      selectedValues: parseMultiFilter(productsIpFilter, productIpOptions.filter((value) => value !== 'all')),
+                      onToggle: (value) => {
+                        const current = parseMultiFilter(productsIpFilter, productIpOptions.filter((item) => item !== 'all'))
+                        const has = current.includes(value)
+                        const next = has ? current.filter((item) => item !== value) : [...current, value]
+                        setProductsIpFilter(next.length ? next.join(',') : '__none__')
+                      },
+                      onChangeSelected: (nextSelected) => setProductsIpFilter(nextSelected.length ? nextSelected.join(',') : '__none__'),
+                      options: productIpOptions
+                        .filter((value) => value !== 'all')
+                        .map((value) => ({ value, label: value === NO_IP_VALUE ? 'No IP' : value })),
+                    },
+                    {
+                      key: 'products-fsn',
+                      type: 'multi-checkbox',
+                      label: 'FSN',
+                      title: 'FSN',
+                      selectedValues: productsFsnFilter,
+                      onToggle: toggleFsnFilter,
+                      onChangeSelected: (nextSelected) => setProductsFsnFilter(nextSelected),
+                      minWidth: '180px',
+                      menuWidth: '180px',
+                      options: FSN_OPTIONS,
+                    },
+                  ]}
+                />
+              </ToolbarFilters>
               <div>
                 <Button $primary type="button" onClick={() => setShowProductModal(true)}>Add Product</Button>
               </div>
@@ -648,6 +737,7 @@ const ProductListPage = ({ title }) => {
                 <div>IP</div>
                 <div>Pricing Tier</div>
                 <div>List Price</div>
+                <div>FSN</div>
                 <div>
                   <CapacityHeaderButton type="button" onClick={cycleCapacitySort}>
                     Capacity
@@ -669,6 +759,7 @@ const ProductListPage = ({ title }) => {
                   <Cell>{item.ip || 'N/A'}</Cell>
                   <Cell>{displayLabelForTier(item.category)}</Cell>
                   <Cell>{money(item.list_price)}</Cell>
+                  <Cell>{((FSN_OPTIONS.find((option) => option.value === String(item.fsn || 'normal')) || {}).label) || 'Normal'}</Cell>
                   <Cell>
                     <CapacityCellWrap>
                       <CapacityBar value={globalCapacity} target={capacityTarget} />
@@ -764,21 +855,33 @@ const ProductListPage = ({ title }) => {
                 filters={[
                   {
                     key: 'variants-line',
-                    value: variantsLineFilter,
-                    onChange: setVariantsLineFilter,
-                    options: [
-                      { value: 'all', label: 'All Product Lines' },
-                      ...productLineFilterOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
-                    ],
+                    type: 'multi-checkbox',
+                    label: 'Product Line',
+                    title: 'Product Line',
+                    selectedValues: parseMultiFilter(variantsLineFilter, productLineFilterOptions.filter((value) => value !== 'all')),
+                    onToggle: (value) => {
+                      const current = parseMultiFilter(variantsLineFilter, productLineFilterOptions.filter((item) => item !== 'all'))
+                      const has = current.includes(value)
+                      const next = has ? current.filter((item) => item !== value) : [...current, value]
+                      setVariantsLineFilter(next.length ? next.join(',') : '__none__')
+                    },
+                    onChangeSelected: (nextSelected) => setVariantsLineFilter(nextSelected.length ? nextSelected.join(',') : '__none__'),
+                    options: productLineFilterOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
                   },
                   {
                     key: 'variants-product',
-                    value: variantsProductFilter,
-                    onChange: setVariantsProductFilter,
-                    options: [
-                      { value: 'all', label: 'All Products' },
-                      ...productNameOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
-                    ],
+                    type: 'multi-checkbox',
+                    label: 'Product',
+                    title: 'Product',
+                    selectedValues: parseMultiFilter(variantsProductFilter, productNameOptions.filter((value) => value !== 'all')),
+                    onToggle: (value) => {
+                      const current = parseMultiFilter(variantsProductFilter, productNameOptions.filter((item) => item !== 'all'))
+                      const has = current.includes(value)
+                      const next = has ? current.filter((item) => item !== value) : [...current, value]
+                      setVariantsProductFilter(next.length ? next.join(',') : '__none__')
+                    },
+                    onChangeSelected: (nextSelected) => setVariantsProductFilter(nextSelected.length ? nextSelected.join(',') : '__none__'),
+                    options: productNameOptions.filter((value) => value !== 'all').map((value) => ({ value, label: value })),
                   },
                 ]}
               />

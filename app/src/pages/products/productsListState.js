@@ -28,6 +28,7 @@ export const readProductsListStateFromSearch = (search) => {
       variantsPage: num('variants_page', 1),
       productsLineFilter: params.get('products_line') || undefined,
       productsIpFilter: params.get('products_ip') || undefined,
+      productsFsnFilter: params.get('products_fsn') || undefined,
       variantsLineFilter: params.get('variants_line') || undefined,
       variantsProductFilter: params.get('variants_product') || undefined,
     }
@@ -47,6 +48,7 @@ export const toProductsListQuery = (state) => {
   const variantsPage = Math.max(1, Number((state && state.variantsPage) || 1))
   const productsLineFilter = String((state && state.productsLineFilter) || 'all')
   const productsIpFilter = String((state && state.productsIpFilter) || 'all')
+  const productsFsnFilter = String((state && state.productsFsnFilter) || 'fast,normal,slow')
   const variantsLineFilter = String((state && state.variantsLineFilter) || 'all')
   const variantsProductFilter = String((state && state.variantsProductFilter) || 'all')
 
@@ -59,6 +61,7 @@ export const toProductsListQuery = (state) => {
   if (variantSearch) params.set('q_variant', variantSearch)
   if (productsLineFilter !== 'all') params.set('products_line', productsLineFilter)
   if (productsIpFilter !== 'all') params.set('products_ip', productsIpFilter)
+  if (productsFsnFilter !== 'fast,normal,slow') params.set('products_fsn', productsFsnFilter)
   if (variantsLineFilter !== 'all') params.set('variants_line', variantsLineFilter)
   if (variantsProductFilter !== 'all') params.set('variants_product', variantsProductFilter)
 
