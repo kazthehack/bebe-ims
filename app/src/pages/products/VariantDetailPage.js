@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { useHistory, useParams } from 'react-router-dom'
+import { useHistory, useLocation, useParams } from 'react-router-dom'
 import QRCode from 'qrcode.react'
 import PageContent from 'components/pages/PageContent'
 import RelatedObjectsTableSection from 'components/reusable/details/RelatedObjectsTableSection'
@@ -8,6 +8,12 @@ import ConfirmActionModal from 'components/reusable/modals/ConfirmActionModal'
 import { PagePrimaryButton, PageSecondaryButton } from 'components/reusable/buttons/PageButtons'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import { useVariantDetail } from 'hooks/products/useProductsApi'
+import { useListPageScope } from 'contexts/ListPageContext'
+import {
+  PRODUCTS_LIST_CONTEXT_SCOPE,
+  readProductsListStateFromSearch,
+  toProductsListQuery,
+} from './productsListState'
 import AddRecipePartModal from './modals/AddRecipePartModal'
 
 const Section = styled.section`
@@ -118,10 +124,32 @@ const FSN_OPTIONS = [
 ]
 
 const VariantDetailPage = () => {
+  const location = useLocation()
   const history = useHistory()
   const { id } = useParams()
+  const { scopeState } = useListPageScope(PRODUCTS_LIST_CONTEXT_SCOPE)
+  const listContext = useMemo(() => ({
+    ...scopeState,
+    ...readProductsListStateFromSearch(location.search),
+  }), [scopeState, location.search])
+  const listQuery = useMemo(() => toProductsListQuery({
+    activeTab: String(listContext.activeTab || 'products'),
+    productsSearch: String(listContext.productsSearch || ''),
+    productLineSearch: String(listContext.productLineSearch || ''),
+    variantSearch: String(listContext.variantSearch || ''),
+    productsPage: Math.max(1, Number(listContext.productsPage || 1)),
+    productLinesPage: Math.max(1, Number(listContext.productLinesPage || 1)),
+    variantsPage: Math.max(1, Number(listContext.variantsPage || 1)),
+    productsLineFilter: String(listContext.productsLineFilter || 'all'),
+    productsIpFilter: String(listContext.productsIpFilter || 'all'),
+    productsFsnFilter: String(listContext.productsFsnFilter || 'fast,normal,slow'),
+    variantsLineFilter: String(listContext.variantsLineFilter || 'all'),
+    variantsProductFilter: String(listContext.variantsProductFilter || 'all'),
+  }), [listContext])
   const {
     variantDetail,
+    parentProduct,
+    inventorySnapshot,
     recipeParts,
     parts,
     recipeTotalCost,
@@ -134,6 +162,19 @@ const VariantDetailPage = () => {
     updateVariant,
     deleteVariant,
   } = useVariantDetail(id)
+  const capacityThresholdPerSite = Math.max(
+    1,
+    Number((variantDetail && variantDetail.capacity_threshold_per_site) || (parentProduct && parentProduct.capacity_threshold_per_site) || 8),
+  )
+  const capacityTarget = capacityThresholdPerSite * 4
+  const globalQty = Math.max(0, Number((inventorySnapshot && inventorySnapshot.global_qty) || 0))
+  const tertiaryQty = Math.max(0, Number((inventorySnapshot && inventorySnapshot.tertiary_qty) || 0))
+  const capacityGap = Math.max(0, capacityTarget - globalQty)
+  const cannotSustainGlobal = globalQty < capacityTarget
+  const cannotSustainThirdSite = tertiaryQty < capacityThresholdPerSite
+  const needsProductionStatus = (globalQty < capacityThresholdPerSite || tertiaryQty < capacityThresholdPerSite)
+    ? 'Critical'
+    : ((cannotSustainGlobal || cannotSustainThirdSite) ? 'Warning' : 'Stable')
 
   const [showAddRecipePartModal, setShowAddRecipePartModal] = useState(false)
   const [addRecipePartMode, setAddRecipePartMode] = useState('filament')
@@ -149,6 +190,7 @@ const VariantDetailPage = () => {
   const [variantYieldUnits, setVariantYieldUnits] = useState('1')
   const [variantPrintHours, setVariantPrintHours] = useState('0')
   const [variantFsn, setVariantFsn] = useState('normal')
+  const [variantCapacityThreshold, setVariantCapacityThreshold] = useState('1')
   const [variantFormError, setVariantFormError] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -157,14 +199,15 @@ const VariantDetailPage = () => {
     if (!variantDetail) return
     setVariantName(variantDetail.name || '')
     setVariantFsn(variantDetail.fsn || 'normal')
+    setVariantCapacityThreshold(String(Math.max(1, Number(variantDetail.capacity_threshold_per_site || 1))))
     setVariantYieldUnits(String(variantDetail.yield_units || 1))
     setVariantPrintHours(String(variantDetail.print_hours || 0))
   }, [variantDetail])
 
   const breadcrumbTitle = (
     <BreadcrumbTitle items={[
-      { label: 'Products', to: '/products' },
-      { label: 'Product Detail', to: `/products/${variantDetail ? variantDetail.product_id : ''}` },
+      { label: 'Products', to: `/products?${listQuery}` },
+      { label: 'Product Detail', to: `/products/${variantDetail ? variantDetail.product_id : ''}?${listQuery}` },
       { label: 'Variant Detail' },
     ]}
     />
@@ -374,6 +417,7 @@ const VariantDetailPage = () => {
       await updateVariant({
         name: variantName.trim() || null,
         fsn: variantFsn || 'normal',
+        capacity_threshold_per_site: Math.max(1, Number(variantCapacityThreshold || 1)),
         yield_units: Number(variantYieldUnits),
         print_hours: Number(variantPrintHours || 0),
       })
@@ -386,7 +430,7 @@ const VariantDetailPage = () => {
     setDeleteError('')
     try {
       await deleteVariant()
-      history.push(`/products/${variantDetail.product_id}`)
+      history.push(`/products/${variantDetail.product_id}?${listQuery}`)
     } catch (err) {
       setDeleteError(err.message || 'Failed to delete variant.')
       setShowDeleteConfirm(false)
@@ -410,6 +454,7 @@ const VariantDetailPage = () => {
                   setVariantFormError('')
                   setVariantName(variantDetail.name || '')
                   setVariantFsn(variantDetail.fsn || 'normal')
+                  setVariantCapacityThreshold(String(Math.max(1, Number(variantDetail.capacity_threshold_per_site || 1))))
                   setVariantYieldUnits(String(variantDetail.yield_units || 1))
                   setVariantPrintHours(String(variantDetail.print_hours || 0))
                 }}
@@ -457,8 +502,41 @@ const VariantDetailPage = () => {
                 )}
               </div>
               <div>
+                <Label>Capacity Threshold / Site</Label>
+                {!isEditing && <Value>{Math.max(1, Number(variantDetail.capacity_threshold_per_site || 1))}</Value>}
+                {isEditing && (
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={variantCapacityThreshold}
+                    onChange={event => setVariantCapacityThreshold(event.target.value)}
+                  />
+                )}
+              </div>
+              <div>
+                <Label>Capacity Target (Global)</Label>
+                <Value>{capacityTarget}</Value>
+              </div>
+              <div>
                 <Label>Total Cost</Label>
                 <Value>{money(recipeTotalCost)}</Value>
+              </div>
+              <div>
+                <Label>Current Global Qty</Label>
+                <Value>{globalQty}</Value>
+              </div>
+              <div>
+                <Label>Current Site C Qty</Label>
+                <Value>{tertiaryQty}</Value>
+              </div>
+              <div>
+                <Label>Capacity Gap</Label>
+                <Value>{capacityGap}</Value>
+              </div>
+              <div>
+                <Label>Needs Production Status</Label>
+                <Value>{needsProductionStatus}</Value>
               </div>
               <div>
                 <Label>Yield (units)</Label>

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import PropTypes from 'prop-types'
 import styled from 'styled-components'
 import Checkbox from 'components/common/input/Checkbox'
@@ -54,11 +54,18 @@ const Menu = styled.div`
   box-shadow: 0 8px 18px rgba(17, 26, 37, 0.12);
 `
 
+const HeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+`
+
 const Title = styled.div`
   font-size: 12px;
   color: #4f6278;
   font-weight: 700;
-  margin-bottom: 8px;
 `
 
 const OptionsColumn = styled.div`
@@ -68,9 +75,9 @@ const OptionsColumn = styled.div`
 
 const QuickActions = styled.div`
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 8px;
-  margin-top: 10px;
+  margin-left: auto;
 `
 
 const QuickActionButton = styled.button`
@@ -92,43 +99,63 @@ const DropdownCheckboxFilter = ({
   onChangeSelected,
   width,
   menuWidth,
-}) => (
-  <Dropdown>
-    <Trigger $width={width}>
-      {label}
-      <Chevron aria-hidden="true" />
-    </Trigger>
-    <Menu $menuWidth={menuWidth}>
-      <Title>{title || label}</Title>
-      <OptionsColumn>
-        {options.map((option) => (
-          <Checkbox
-            key={option.value}
-            checked={selectedValues.includes(option.value)}
-            label={option.label}
-            onChange={() => onToggle(option.value)}
-          />
-        ))}
-      </OptionsColumn>
-      {onChangeSelected && (
-        <QuickActions>
-          <QuickActionButton
-            type="button"
-            onClick={() => onChangeSelected(options.map((option) => option.value))}
-          >
-            Select All
-          </QuickActionButton>
-          <QuickActionButton
-            type="button"
-            onClick={() => onChangeSelected([])}
-          >
-            Clear All
-          </QuickActionButton>
-        </QuickActions>
-      )}
-    </Menu>
-  </Dropdown>
-)
+}) => {
+  const detailsRef = useRef(null)
+
+  useEffect(() => {
+    const handleOutsidePointer = (event) => {
+      if (!detailsRef.current || !detailsRef.current.open) return
+      if (detailsRef.current.contains(event.target)) return
+      detailsRef.current.open = false
+    }
+    document.addEventListener('mousedown', handleOutsidePointer)
+    document.addEventListener('touchstart', handleOutsidePointer)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsidePointer)
+      document.removeEventListener('touchstart', handleOutsidePointer)
+    }
+  }, [])
+
+  return (
+    <Dropdown ref={detailsRef}>
+      <Trigger $width={width}>
+        {label}
+        <Chevron aria-hidden="true" />
+      </Trigger>
+      <Menu $menuWidth={menuWidth}>
+        <HeaderRow>
+          <Title>{title || label}</Title>
+          {onChangeSelected && (
+            <QuickActions>
+              <QuickActionButton
+                type="button"
+                onClick={() => onChangeSelected(options.map((option) => option.value))}
+              >
+                Select All
+              </QuickActionButton>
+              <QuickActionButton
+                type="button"
+                onClick={() => onChangeSelected([])}
+              >
+                Clear All
+              </QuickActionButton>
+            </QuickActions>
+          )}
+        </HeaderRow>
+        <OptionsColumn>
+          {options.map((option) => (
+            <Checkbox
+              key={option.value}
+              checked={selectedValues.includes(option.value)}
+              label={option.label}
+              onChange={() => onToggle(option.value)}
+            />
+          ))}
+        </OptionsColumn>
+      </Menu>
+    </Dropdown>
+  )
+}
 
 DropdownCheckboxFilter.propTypes = {
   label: PropTypes.string.isRequired,

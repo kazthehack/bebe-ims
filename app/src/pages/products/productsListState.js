@@ -1,14 +1,13 @@
-export const PRODUCTS_LIST_STATE_KEY = 'bebe_ims_products_list_state_v1'
+import { listPageStoreUtils } from 'contexts/ListPageContext'
+
+export const PRODUCTS_LIST_CONTEXT_SCOPE = 'products'
 
 export const readProductsListState = () => {
-  try {
-    const raw = window.sessionStorage.getItem(PRODUCTS_LIST_STATE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    return typeof parsed === 'object' && parsed ? parsed : {}
-  } catch (_err) {
-    return {}
-  }
+  return listPageStoreUtils.readScope(PRODUCTS_LIST_CONTEXT_SCOPE)
+}
+
+export const writeProductsListState = (nextState) => {
+  listPageStoreUtils.writeScope(PRODUCTS_LIST_CONTEXT_SCOPE, nextState)
 }
 
 export const readProductsListStateFromSearch = (search) => {

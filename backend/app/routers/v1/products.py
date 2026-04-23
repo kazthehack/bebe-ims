@@ -23,6 +23,7 @@ from app.schemas.product import (
     PartListResponse,
     PartRead,
     ProductCreate,
+    ProductCapacityThresholdUpdate,
     ProductDetailResponse,
     ProductListResponse,
     ProductRecipePartCreate,
@@ -55,6 +56,57 @@ def _normalize_fsn(value: str | None, fallback: str = 'normal') -> str:
     if normalized in VALID_FSN_VALUES:
         return normalized
     return fallback
+
+
+def _apply_price_tier_threshold_cap(threshold_per_site: float, list_price: float) -> float:
+    price = float(list_price or 0)
+    threshold = float(threshold_per_site or 0)
+    if price >= 300:
+        return min(threshold, 1.0)
+    if price >= 250:
+        return min(threshold, 2.0)
+    return threshold
+
+
+def _to_whole_units(value: float) -> float:
+    return float(max(0, int(round(value))))
+
+
+def _effective_variant_thresholds(
+    variants: list[StoredRecord[ProductVariantDocument]],
+    product_threshold_per_site: float,
+    product_list_price: float,
+) -> dict[str, float]:
+    if not variants:
+        return {}
+    explicit_sum = float(sum(
+        _to_whole_units(float(variant.payload.capacity_threshold_per_site or 0))
+        for variant in variants
+        if variant.payload.capacity_threshold_per_site is not None
+    ))
+    unresolved_count = max(0, len(variants) - sum(
+        1 for variant in variants if variant.payload.capacity_threshold_per_site is not None
+    ))
+    remaining = float(product_threshold_per_site - explicit_sum)
+    whole_remaining = int(round(max(0.0, remaining)))
+    base_share = int(whole_remaining / unresolved_count) if unresolved_count > 0 else 0
+    remainder = whole_remaining - (base_share * unresolved_count)
+    unresolved_ids = [
+        variant.object_id
+        for variant in sorted(variants, key=lambda item: item.object_id)
+        if variant.payload.capacity_threshold_per_site is None
+    ]
+    unresolved_rank = {variant_id: index for index, variant_id in enumerate(unresolved_ids)}
+    computed: dict[str, float] = {}
+    for variant in variants:
+        if variant.payload.capacity_threshold_per_site is not None:
+            raw = _to_whole_units(float(variant.payload.capacity_threshold_per_site))
+        else:
+            rank = unresolved_rank.get(variant.object_id, 0)
+            bonus = 1 if rank < remainder else 0
+            raw = float(base_share + bonus)
+        computed[variant.object_id] = _to_whole_units(_apply_price_tier_threshold_cap(raw, product_list_price))
+    return computed
 
 
 def _normalize_supply_type(value: str | None) -> SupplyType:
@@ -120,17 +172,37 @@ def _to_part(record: StoredRecord[PartDocument]) -> PartRead:
 
 def _to_variant(record: StoredRecord[ProductVariantDocument], tenant_id: str = 'tenant-admin') -> ProductVariantRead:
     parent_fsn = 'normal'
+    parent_threshold = 8.0
+    parent_price = 0.0
     try:
         product = map_record(product_controller.get(record.payload.product_id, tenant_id), ProductDocument)
         parent_fsn = _normalize_fsn(product.payload.fsn, 'normal')
+        parent_threshold = float(product.payload.capacity_threshold_per_site or 8.0)
+        parent_price = float(product.payload.list_price or 0)
+        product_variants = [
+            map_record(item, ProductVariantDocument)
+            for item in variant_controller.list(tenant_id)
+            if str(item.get('payload', {}).get('product_id') or '') == str(record.payload.product_id)
+        ]
+        thresholds = _effective_variant_thresholds(product_variants, parent_threshold, parent_price)
     except Exception:
         parent_fsn = 'normal'
+        parent_threshold = 8.0
+        parent_price = 0.0
+        thresholds = {
+            record.object_id: _apply_price_tier_threshold_cap(
+                float(record.payload.capacity_threshold_per_site or parent_threshold),
+                parent_price,
+            ),
+        }
+    variant_threshold = float(thresholds.get(record.object_id, record.payload.capacity_threshold_per_site or parent_threshold))
     return ProductVariantRead(
         id=record.object_id,
         product_id=record.payload.product_id,
         sku=record.payload.sku,
         name=record.payload.name,
         fsn=_normalize_fsn(record.payload.fsn, parent_fsn),
+        capacity_threshold_per_site=variant_threshold,
         yield_units=int(record.payload.yield_units or 1),
         print_hours=float(record.payload.print_hours or 0),
         qr_code=record.payload.qr_code,
@@ -297,6 +369,19 @@ def update_product(id: str, payload: ProductUpdate, tenant_id: str = Query('tena
     return _to_product(record)
 
 
+@router.put('/{id}/capacity-threshold', response_model=ProductRead)
+def update_product_capacity_threshold(
+    id: str,
+    payload: ProductCapacityThresholdUpdate,
+    tenant_id: str = Query('tenant-admin'),
+) -> ProductRead:
+    existing = map_record(product_controller.get(id, tenant_id), ProductDocument)
+    merged = existing.payload.model_dump(exclude_none=True)
+    merged['capacity_threshold_per_site'] = _to_whole_units(float(payload.capacity_threshold_per_site))
+    record = map_record(product_controller.update(id, tenant_id, merged), ProductDocument)
+    return _to_product(record)
+
+
 @router.get('/variants', response_model=ProductVariantListResponse)
 def list_product_variants(
     tenant_id: str = Query('tenant-admin'),
@@ -322,11 +407,34 @@ def update_product_variant(id: str, payload: ProductVariantUpdate, tenant_id: st
     if 'fsn' in updates:
         updates['fsn'] = _normalize_fsn(updates.get('fsn'), 'normal')
     merged.update(updates)
+    if 'capacity_threshold_per_site' in merged and merged.get('capacity_threshold_per_site') is not None:
+        merged['capacity_threshold_per_site'] = _to_whole_units(float(merged.get('capacity_threshold_per_site') or 0))
     merged['yield_units'] = max(1, int(merged.get('yield_units') or 1))
     merged['print_hours'] = float(merged.get('print_hours') or 0)
     merged['sku'] = existing.payload.sku
     merged['qr_code'] = existing.payload.qr_code
     record = map_record(variant_controller.update(id, tenant_id, merged), ProductVariantDocument)
+    if 'capacity_threshold_per_site' in updates:
+        product = map_record(product_controller.get(record.payload.product_id, tenant_id), ProductDocument)
+        product_variants = [
+            map_record(item, ProductVariantDocument)
+            for item in variant_controller.list(tenant_id)
+            if str(item.get('payload', {}).get('product_id') or '') == str(record.payload.product_id)
+        ]
+        previous_effective = _effective_variant_thresholds(
+            product_variants,
+            float(product.payload.capacity_threshold_per_site or 8.0),
+            float(product.payload.list_price or 0),
+        )
+        recomputed_total_threshold = _to_whole_units(float(sum(
+            float(item.payload.capacity_threshold_per_site)
+            if item.payload.capacity_threshold_per_site is not None
+            else float(previous_effective.get(item.object_id, 0.0))
+            for item in product_variants
+        )))
+        product_update_payload = product.payload.model_dump(exclude_none=True)
+        product_update_payload['capacity_threshold_per_site'] = recomputed_total_threshold
+        product_controller.update(product.object_id, tenant_id, product_update_payload)
     return _to_variant(record, tenant_id)
 
 

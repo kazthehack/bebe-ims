@@ -57,6 +57,10 @@ class ProductUpdate(BaseModel):
     image_url: str | None = None
 
 
+class ProductCapacityThresholdUpdate(BaseModel):
+    capacity_threshold_per_site: float = Field(ge=1.0)
+
+
 class ProductListResponse(BaseModel):
     products: list[ProductRead]
 
@@ -66,6 +70,7 @@ class ProductVariantCreate(BaseModel):
     sku: str | None = None
     name: str | None = None
     fsn: FsnValue | None = None
+    capacity_threshold_per_site: float | None = Field(default=None, ge=1.0)
     yield_units: int = 1
     print_hours: float = 0.0
     image_url: str | None = None
@@ -77,6 +82,7 @@ class ProductVariantRead(BaseModel):
     sku: str
     name: str | None = None
     fsn: FsnValue = 'normal'
+    capacity_threshold_per_site: float | None = None
     yield_units: int
     print_hours: float
     qr_code: str | None = None
@@ -92,6 +98,7 @@ class ProductVariantListResponse(BaseModel):
 class ProductVariantUpdate(BaseModel):
     name: str | None = None
     fsn: FsnValue | None = None
+    capacity_threshold_per_site: float | None = Field(default=None, ge=1.0)
     yield_units: int | None = None
     print_hours: float | None = None
     image_url: str | None = None

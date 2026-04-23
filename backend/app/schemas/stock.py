@@ -38,6 +38,7 @@ class InventoryGlobalItemRead(BaseModel):
     product_name: str
     fsn: Literal['fast', 'normal', 'slow', 'non_moving'] = 'normal'
     capacity_threshold_per_site: float = 8.0
+    variant_capacity_threshold_per_site: float = 8.0
     main_qty_on_hand: float
     sites_qty_on_hand: float
     master_qty_on_hand: float
@@ -145,6 +146,24 @@ class InventoryGlobalAdjustRead(BaseModel):
     product_variant_id: str
     qty_delta: float
     site_qty_on_hand: float
+
+
+class InventorySiteWriteoffCreate(BaseModel):
+    product_variant_id: str
+    site_id: str
+    qty: float
+    reason: str
+    disposition: Literal['loss', 'manual_sale'] = 'loss'
+
+
+class InventorySiteWriteoffRead(BaseModel):
+    site_id: str
+    product_variant_id: str
+    qty: float
+    qty_delta: float
+    site_qty_on_hand: float
+    reason: str
+    disposition: Literal['loss', 'manual_sale'] = 'loss'
 
 
 class SupplyCreate(BaseModel):

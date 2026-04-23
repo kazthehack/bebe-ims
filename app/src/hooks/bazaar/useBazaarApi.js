@@ -397,6 +397,50 @@ export const useInventoryResource = (tenantId = 'tenant-admin') => {
     return result
   }
 
+  const writeoffSiteInventory = async ({
+    product_variant_id,
+    site_id,
+    qty,
+    reason,
+    disposition,
+  }) => {
+    const result = await postJson(`/stock/inventory/site-writeoff?${tenantQuery(tenantId)}`, {
+      product_variant_id,
+      site_id,
+      qty,
+      reason,
+      disposition,
+    })
+    await loadGlobal()
+    return result
+  }
+
+  const updateVariantFsn = async ({ variant_id, fsn }) => {
+    const result = await putJson(`/products/variants/${encodeURIComponent(variant_id)}?${tenantQuery(tenantId)}`, {
+      fsn,
+    })
+    await loadGlobal()
+    return result
+  }
+
+  const updateVariantsFsnBulk = async ({ variant_ids, fsn }) => {
+    const variantIds = Array.from(new Set((variant_ids || []).map((id) => String(id || '').trim()).filter(Boolean)))
+    if (!variantIds.length) return { updated: 0 }
+    await Promise.all(
+      variantIds.map((variantId) => putJson(`/products/variants/${encodeURIComponent(variantId)}?${tenantQuery(tenantId)}`, { fsn })),
+    )
+    await loadGlobal()
+    return { updated: variantIds.length }
+  }
+
+  const updateProductCapacityThreshold = async ({ product_id, capacity_threshold_per_site }) => {
+    const result = await putJson(`/products/${encodeURIComponent(product_id)}/capacity-threshold?${tenantQuery(tenantId)}`, {
+      capacity_threshold_per_site: Number(capacity_threshold_per_site),
+    })
+    await loadGlobal()
+    return result
+  }
+
   const exportInventoryWorkbook = async () => {
     const { blob, headers } = await getBlob(`/stock/inventory/export?${tenantQuery(tenantId)}`)
     const contentDisposition = headers.get('content-disposition') || ''
@@ -425,6 +469,10 @@ export const useInventoryResource = (tenantId = 'tenant-admin') => {
     receiveToMain,
     transferInventory,
     adjustGlobalInventory,
+    writeoffSiteInventory,
+    updateVariantFsn,
+    updateVariantsFsnBulk,
+    updateProductCapacityThreshold,
     exportInventoryWorkbook,
     reload: loadGlobal,
   }

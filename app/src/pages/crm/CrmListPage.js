@@ -9,9 +9,11 @@ import WorkspaceTabs from 'components/reusable/layouts/WorkspaceTabs'
 import { PagePrimaryButton, PageSecondaryButton } from 'components/reusable/buttons/PageButtons'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import { usePartnersResource } from 'hooks/bazaar/useBazaarApi'
+import { useListPageScope } from 'contexts/ListPageContext'
 
 const PAGE_SIZE = 20
 const STATUS_FILTER_OPTIONS = ['active', 'open', 'outstanding', 'inactive', 'done']
+const CRM_LIST_CONTEXT_SCOPE = 'crm'
 
 const parseMultiFilter = (rawValue, allowedValues) => {
   if (rawValue == null || rawValue === 'all') return [...allowedValues]
@@ -22,6 +24,40 @@ const parseMultiFilter = (rawValue, allowedValues) => {
     .map((value) => value.trim())
     .filter((value) => allowed.has(value))
   return parsed.length ? parsed : [...allowedValues]
+}
+
+const readCrmListStateFromSearch = (search) => {
+  try {
+    const params = new URLSearchParams(String(search || ''))
+    const num = (key, fallback = 1) => {
+      const parsed = Number(params.get(key) || fallback)
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+    }
+    return {
+      activeTab: params.get('tab') || undefined,
+      search: params.get('q') || undefined,
+      statusFilter: params.get('status') || undefined,
+      partnershipsPage: num('partnerships_page', 1),
+      requestsPage: num('requests_page', 1),
+    }
+  } catch (_err) {
+    return {}
+  }
+}
+
+const toCrmListQuery = (state) => {
+  const params = new URLSearchParams()
+  const activeTab = String((state && state.activeTab) || 'partnerships')
+  const search = String((state && state.search) || '')
+  const statusFilter = String((state && state.statusFilter) || 'all')
+  const partnershipsPage = Math.max(1, Number((state && state.partnershipsPage) || 1))
+  const requestsPage = Math.max(1, Number((state && state.requestsPage) || 1))
+  params.set('tab', activeTab)
+  params.set('partnerships_page', String(partnershipsPage))
+  params.set('requests_page', String(requestsPage))
+  if (search) params.set('q', search)
+  if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter)
+  return params.toString()
 }
 
 const Surface = styled.div`
@@ -258,6 +294,11 @@ const paginate = (rows, page) => {
 const CrmListPage = () => {
   const history = useHistory()
   const location = useLocation()
+  const { scopeState, setScopeState } = useListPageScope(CRM_LIST_CONTEXT_SCOPE)
+  const restoredState = useMemo(() => ({
+    ...scopeState,
+    ...readCrmListStateFromSearch(location.search),
+  }), [scopeState, location.search])
   const path = location.pathname || '/crm'
   const partnershipMatch = path.match(/^\/crm\/partnerships\/([^/]+)$/)
   const requestMatch = path.match(/^\/crm\/requests\/([^/]+)$/)
@@ -265,11 +306,11 @@ const CrmListPage = () => {
   const requestId = requestMatch ? decodeURIComponent(requestMatch[1]) : null
   const inDetail = Boolean(partnershipId || requestId)
 
-  const [activeTab, setActiveTab] = useState('partnerships')
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [partnershipsPage, setPartnershipsPage] = useState(1)
-  const [requestsPage, setRequestsPage] = useState(1)
+  const [activeTab, setActiveTab] = useState(() => String(restoredState.activeTab || 'partnerships'))
+  const [search, setSearch] = useState(() => String(restoredState.search || ''))
+  const [statusFilter, setStatusFilter] = useState(() => String(restoredState.statusFilter || 'all'))
+  const [partnershipsPage, setPartnershipsPage] = useState(() => Math.max(1, Number(restoredState.partnershipsPage || 1)))
+  const [requestsPage, setRequestsPage] = useState(() => Math.max(1, Number(restoredState.requestsPage || 1)))
   const [remittancesPage, setRemittancesPage] = useState(1)
   const [requestHistoryPage, setRequestHistoryPage] = useState(1)
 
@@ -359,6 +400,30 @@ const CrmListPage = () => {
     setPartnershipsPage(1)
     setRequestsPage(1)
   }, [search, statusFilter, activeTab])
+
+  const listQuery = useMemo(() => toCrmListQuery({
+    activeTab,
+    search,
+    statusFilter,
+    partnershipsPage,
+    requestsPage,
+  }), [activeTab, search, statusFilter, partnershipsPage, requestsPage])
+
+  useEffect(() => {
+    setScopeState({
+      activeTab,
+      search,
+      statusFilter,
+      partnershipsPage,
+      requestsPage,
+    })
+  }, [activeTab, search, statusFilter, partnershipsPage, requestsPage, setScopeState])
+
+  useEffect(() => {
+    const currentQuery = String(location.search || '').replace(/^\?/, '')
+    if (currentQuery === listQuery) return
+    history.replace(`/crm?${listQuery}`)
+  }, [history, location.search, listQuery])
 
   useEffect(() => {
     setRemittancesPage(1)
@@ -482,9 +547,9 @@ const CrmListPage = () => {
   const requestTitle = requestDetail ? (requestDetail.title || requestDetail.code || 'Request') : 'Request'
 
   const pageTitle = partnershipId ? (
-    <BreadcrumbTitle items={[{ label: 'Partners', to: '/crm' }, { label: 'Partnerships', to: '/crm' }, { label: partnershipTitle }]} />
+    <BreadcrumbTitle items={[{ label: 'Partners', to: `/crm?${listQuery}` }, { label: 'Partnerships', to: `/crm?${listQuery}` }, { label: partnershipTitle }]} />
   ) : requestId ? (
-    <BreadcrumbTitle items={[{ label: 'Partners', to: '/crm' }, { label: 'Requests', to: '/crm' }, { label: requestTitle }]} />
+    <BreadcrumbTitle items={[{ label: 'Partners', to: `/crm?${listQuery}` }, { label: 'Requests', to: `/crm?${listQuery}` }, { label: requestTitle }]} />
   ) : 'Partners'
 
   const openRequestModal = (prefilledPartnershipId = '') => {
@@ -607,10 +672,10 @@ const CrmListPage = () => {
     if (!pendingDelete) return
     if (pendingDelete.type === 'partnership') {
       await deletePartnership(pendingDelete.id)
-      if (partnershipId === pendingDelete.id) history.push('/crm')
+      if (partnershipId === pendingDelete.id) history.push(`/crm?${listQuery}`)
     } else {
       await deleteRequest(pendingDelete.id)
-      if (requestId === pendingDelete.id) history.push('/crm')
+      if (requestId === pendingDelete.id) history.push(`/crm?${listQuery}`)
       if (partnershipId) {
         const requestData = await getPartnershipRequests(partnershipId)
         setRequestHistory(requestData.requests || [])
@@ -677,7 +742,7 @@ const CrmListPage = () => {
                   <Cell>{item.contact_person || '-'}</Cell>
                   <Cell>{requestCountByPartnership[item.id] || 0}</Cell>
                   <ActionsCell>
-                    <ActionButton type="button" onClick={() => history.push(`/crm/partnerships/${item.id}`)}>VIEW</ActionButton>
+                    <ActionButton type="button" onClick={() => history.push(`/crm/partnerships/${item.id}?${listQuery}`)}>VIEW</ActionButton>
                     <span>|</span>
                     <ActionButton type="button" onClick={() => { setPendingDelete({ type: 'partnership', id: item.id, code: item.code, label: item.name }); setShowDeleteConfirm(true) }}>DELETE</ActionButton>
                   </ActionsCell>
@@ -705,7 +770,7 @@ const CrmListPage = () => {
                   <Cell>{dateRangeText(item.start_date, item.end_date)}</Cell>
                   <Cell>{String(item.status || '').toUpperCase()}</Cell>
                   <ActionsCell>
-                    <ActionButton type="button" onClick={() => history.push(`/crm/requests/${item.id}`)}>VIEW</ActionButton>
+                    <ActionButton type="button" onClick={() => history.push(`/crm/requests/${item.id}?${listQuery}`)}>VIEW</ActionButton>
                     <span>|</span>
                     <ActionButton type="button" onClick={() => { setPendingDelete({ type: 'request', id: item.id, code: item.code, label: item.title }); setShowDeleteConfirm(true) }}>DELETE</ActionButton>
                   </ActionsCell>
@@ -724,6 +789,7 @@ const CrmListPage = () => {
           {!loading && activeTab === 'partnerships' && filteredPartnerships.length > 0 && (
             <PaginationBar>
               <Meta>Page {pagedPartnerships.safePage} / {pagedPartnerships.totalPages}</Meta>
+              <PaginationButton type="button" onClick={() => setPartnershipsPage(1)} disabled={pagedPartnerships.safePage <= 1}>FIRST</PaginationButton>
               <PaginationButton type="button" onClick={() => setPartnershipsPage((p) => Math.max(1, p - 1))} disabled={pagedPartnerships.safePage <= 1}>Prev</PaginationButton>
               <PaginationButton type="button" onClick={() => setPartnershipsPage((p) => Math.min(pagedPartnerships.totalPages, p + 1))} disabled={pagedPartnerships.safePage >= pagedPartnerships.totalPages}>Next</PaginationButton>
             </PaginationBar>
@@ -732,6 +798,7 @@ const CrmListPage = () => {
           {!loading && activeTab === 'requests' && (
             <PaginationBar>
               <Meta>Page {pagedRequests.safePage} / {pagedRequests.totalPages}</Meta>
+              <PaginationButton type="button" onClick={() => setRequestsPage(1)} disabled={pagedRequests.safePage <= 1}>FIRST</PaginationButton>
               <PaginationButton type="button" onClick={() => setRequestsPage((p) => Math.max(1, p - 1))} disabled={pagedRequests.safePage <= 1}>Prev</PaginationButton>
               <PaginationButton type="button" onClick={() => setRequestsPage((p) => Math.min(pagedRequests.totalPages, p + 1))} disabled={pagedRequests.safePage >= pagedRequests.totalPages}>Next</PaginationButton>
             </PaginationBar>
@@ -838,6 +905,7 @@ const CrmListPage = () => {
             {remittances.length > 0 && (
               <PaginationBar>
                 <Meta>Page {pagedRemittances.safePage} / {pagedRemittances.totalPages}</Meta>
+                <PaginationButton type="button" onClick={() => setRemittancesPage(1)} disabled={pagedRemittances.safePage <= 1}>FIRST</PaginationButton>
                 <PaginationButton type="button" onClick={() => setRemittancesPage((p) => Math.max(1, p - 1))} disabled={pagedRemittances.safePage <= 1}>Prev</PaginationButton>
                 <PaginationButton type="button" onClick={() => setRemittancesPage((p) => Math.min(pagedRemittances.totalPages, p + 1))} disabled={pagedRemittances.safePage >= pagedRemittances.totalPages}>Next</PaginationButton>
               </PaginationBar>
@@ -854,7 +922,7 @@ const CrmListPage = () => {
               {pagedRequestHistory.rows.map((item) => (
                 <Row key={item.id} $columns="0.8fr 1.4fr 0.8fr 1.2fr 0.8fr 0.7fr">
                   <Cell>{item.code}</Cell><Cell>{item.title}</Cell><Cell>{money(item.cost_php)}</Cell><Cell>{dateRangeText(item.start_date, item.end_date)}</Cell><Cell>{String(item.status || '').toUpperCase()}</Cell>
-                  <ActionsCell><ActionButton type="button" onClick={() => history.push(`/crm/requests/${item.id}`)}>VIEW</ActionButton></ActionsCell>
+                  <ActionsCell><ActionButton type="button" onClick={() => history.push(`/crm/requests/${item.id}?${listQuery}`)}>VIEW</ActionButton></ActionsCell>
                 </Row>
               ))}
               {pagedRequestHistory.rows.length === 0 && (
@@ -865,6 +933,7 @@ const CrmListPage = () => {
             </Table>
             <PaginationBar>
               <Meta>Page {pagedRequestHistory.safePage} / {pagedRequestHistory.totalPages}</Meta>
+              <PaginationButton type="button" onClick={() => setRequestHistoryPage(1)} disabled={pagedRequestHistory.safePage <= 1}>FIRST</PaginationButton>
               <PaginationButton type="button" onClick={() => setRequestHistoryPage((p) => Math.max(1, p - 1))} disabled={pagedRequestHistory.safePage <= 1}>Prev</PaginationButton>
               <PaginationButton type="button" onClick={() => setRequestHistoryPage((p) => Math.min(pagedRequestHistory.totalPages, p + 1))} disabled={pagedRequestHistory.safePage >= pagedRequestHistory.totalPages}>Next</PaginationButton>
             </PaginationBar>

@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { useHistory, useParams } from 'react-router-dom'
+import { useHistory, useLocation, useParams } from 'react-router-dom'
 import PageContent from 'components/pages/PageContent'
 import FormModal from 'components/reusable/modals/FormModal'
 import ListFiltersRow from 'components/reusable/layouts/ListFiltersRow'
 import { PageDangerButton, PagePrimaryButton, PageSecondaryButton } from 'components/reusable/buttons/PageButtons'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import { useEventsResource, useInventoryResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
+import { useListPageScope } from 'contexts/ListPageContext'
 
 const Surface = styled.div`
   background: #f3f5f7;
@@ -227,14 +228,47 @@ const parseMultiFilter = (rawValue, allowedValues) => {
   return parsed.length ? parsed : [...allowedValues]
 }
 
+const SITES_LIST_CONTEXT_SCOPE = 'sites'
+
+const readSitesListStateFromSearch = (search) => {
+  try {
+    const params = new URLSearchParams(String(search || ''))
+    const pageRaw = Number(params.get('page') || 1)
+    return {
+      search: params.get('q') || undefined,
+      statusFilter: params.get('status') || undefined,
+      page: Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : undefined,
+    }
+  } catch (_err) {
+    return {}
+  }
+}
+
+const toSitesListQuery = (state) => {
+  const params = new URLSearchParams()
+  const search = String((state && state.search) || '')
+  const statusFilter = String((state && state.statusFilter) || 'all')
+  const page = Math.max(1, Number((state && state.page) || 1))
+  params.set('page', String(page))
+  if (search) params.set('q', search)
+  if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter)
+  return params.toString()
+}
+
 const SitesPage = () => {
+  const locationSearch = useLocation()
   const history = useHistory()
   const { id } = useParams()
+  const { scopeState, setScopeState } = useListPageScope(SITES_LIST_CONTEXT_SCOPE)
+  const restoredState = useMemo(() => ({
+    ...scopeState,
+    ...readSitesListStateFromSearch(locationSearch.search),
+  }), [scopeState, locationSearch.search])
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showAssignEventModal, setShowAssignEventModal] = useState(false)
-  const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [page, setPage] = useState(() => Math.max(1, Number(restoredState.page || 1)))
+  const [search, setSearch] = useState(() => String(restoredState.search || ''))
+  const [statusFilter, setStatusFilter] = useState(() => String(restoredState.statusFilter || 'all'))
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
   const [selectedEventId, setSelectedEventId] = useState('')
@@ -298,6 +332,26 @@ const SitesPage = () => {
     setPage(1)
   }, [filteredSites.length])
 
+  const listQuery = useMemo(() => toSitesListQuery({
+    search,
+    statusFilter,
+    page,
+  }), [search, statusFilter, page])
+
+  useEffect(() => {
+    setScopeState({
+      search,
+      statusFilter,
+      page,
+    })
+  }, [search, statusFilter, page, setScopeState])
+
+  useEffect(() => {
+    const currentQuery = String(locationSearch.search || '').replace(/^\?/, '')
+    if (currentQuery === listQuery) return
+    history.replace(`/sites?${listQuery}`)
+  }, [history, locationSearch.search, listQuery])
+
   useEffect(() => {
     if (!selectedSite) return
     setEditName(selectedSite.name || '')
@@ -346,7 +400,7 @@ const SitesPage = () => {
   const title = id
     ? (
       <BreadcrumbTitle items={[
-        { label: 'Sites', to: '/sites' },
+        { label: 'Sites', to: `/sites?${listQuery}` },
         { label: (selectedSite && selectedSite.name) || 'Site Detail' },
       ]}
       />
@@ -509,7 +563,7 @@ const SitesPage = () => {
               <div>Action</div>
             </Header>
             {pagedSites.map((site) => (
-              <Row key={site.id} type="button" onClick={() => history.push(`/sites/${site.id}`)}>
+              <Row key={site.id} type="button" onClick={() => history.push(`/sites/${site.id}?${listQuery}`)}>
                 <Cell>{site.code}</Cell>
                 <Cell>{site.name}</Cell>
                 <Cell>{site.location || '-'}</Cell>
@@ -524,6 +578,9 @@ const SitesPage = () => {
           {!loading && (sites || []).length > 0 && (
             <PaginationBar>
               <Meta>Page {safePage} / {totalPages}</Meta>
+              <PaginationButton type="button" onClick={() => setPage(1)} disabled={safePage <= 1}>
+                FIRST
+              </PaginationButton>
               <PaginationButton type="button" onClick={() => setPage((prev) => Math.max(1, prev - 1))} disabled={safePage <= 1}>
                 Prev
               </PaginationButton>
@@ -681,7 +738,7 @@ const SitesPage = () => {
                     <Cell>
                       <LinkButton
                         type="button"
-                        onClick={() => history.push(`/inventory/${item.inventory_id || item.product_variant_id}`)}
+                        onClick={() => history.push(`/inventory/${item.inventory_id || item.product_variant_id}?${listQuery}`)}
                       >
                         VIEW
                       </LinkButton>

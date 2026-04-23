@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { useHistory, useParams } from 'react-router-dom'
+import { useHistory, useLocation, useParams } from 'react-router-dom'
 import PageContent from 'components/pages/PageContent'
 import ListFiltersRow from 'components/reusable/layouts/ListFiltersRow'
 import WorkspaceTabs from 'components/reusable/layouts/WorkspaceTabs'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import { useEventsResource, useReceiptsResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
+import { useListPageScope } from 'contexts/ListPageContext'
 
 const PAGE_SIZE = 20
 const STATUS_FILTER_OPTIONS = ['posted', 'open', 'done', 'void']
+const SALES_LIST_CONTEXT_SCOPE = 'sales'
 
 const parseMultiFilter = (rawValue, allowedValues) => {
   if (rawValue == null || rawValue === 'all') return [...allowedValues]
@@ -19,6 +21,34 @@ const parseMultiFilter = (rawValue, allowedValues) => {
     .map((value) => value.trim())
     .filter((value) => allowed.has(value))
   return parsed.length ? parsed : [...allowedValues]
+}
+
+const readSalesListStateFromSearch = (search) => {
+  try {
+    const params = new URLSearchParams(String(search || ''))
+    const pageRaw = Number(params.get('page') || 1)
+    return {
+      activeTab: params.get('tab') || undefined,
+      search: params.get('q') || undefined,
+      statusFilter: params.get('status') || undefined,
+      page: Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : undefined,
+    }
+  } catch (_err) {
+    return {}
+  }
+}
+
+const toSalesListQuery = (state) => {
+  const params = new URLSearchParams()
+  const activeTab = String((state && state.activeTab) || 'global')
+  const search = String((state && state.search) || '')
+  const statusFilter = String((state && state.statusFilter) || 'all')
+  const page = Math.max(1, Number((state && state.page) || 1))
+  params.set('tab', activeTab)
+  params.set('page', String(page))
+  if (search) params.set('q', search)
+  if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter)
+  return params.toString()
 }
 
 const Surface = styled.div`
@@ -208,12 +238,18 @@ const paginate = (rows, page) => {
 }
 
 const SalesPage = () => {
+  const location = useLocation()
   const history = useHistory()
   const { id } = useParams()
-  const [activeTab, setActiveTab] = useState('global')
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [page, setPage] = useState(1)
+  const { scopeState, setScopeState } = useListPageScope(SALES_LIST_CONTEXT_SCOPE)
+  const restoredState = useMemo(() => ({
+    ...scopeState,
+    ...readSalesListStateFromSearch(location.search),
+  }), [scopeState, location.search])
+  const [activeTab, setActiveTab] = useState(() => String(restoredState.activeTab || 'global'))
+  const [search, setSearch] = useState(() => String(restoredState.search || ''))
+  const [statusFilter, setStatusFilter] = useState(() => String(restoredState.statusFilter || 'all'))
+  const [page, setPage] = useState(() => Math.max(1, Number(restoredState.page || 1)))
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
@@ -261,6 +297,28 @@ const SalesPage = () => {
   useEffect(() => {
     setPage(1)
   }, [activeTab, search, statusFilter])
+
+  const listQuery = useMemo(() => toSalesListQuery({
+    activeTab,
+    search,
+    statusFilter,
+    page,
+  }), [activeTab, search, statusFilter, page])
+
+  useEffect(() => {
+    setScopeState({
+      activeTab,
+      search,
+      statusFilter,
+      page,
+    })
+  }, [activeTab, search, statusFilter, page, setScopeState])
+
+  useEffect(() => {
+    const currentQuery = String(location.search || '').replace(/^\?/, '')
+    if (currentQuery === listQuery) return
+    history.replace(`/sales?${listQuery}`)
+  }, [history, location.search, listQuery])
 
   useEffect(() => {
     let cancelled = false
@@ -319,7 +377,7 @@ const SalesPage = () => {
   const title = id
     ? (
       <BreadcrumbTitle items={[
-        { label: 'Sales', to: '/sales' },
+        { label: 'Sales', to: `/sales?${listQuery}` },
         { label: detail ? detail.receipt_number : 'Receipt Detail' },
       ]}
       />
@@ -466,7 +524,7 @@ const SalesPage = () => {
                 <Cell>{peso(item.total_amount)}</Cell>
                 <Cell>{formatDateTime(item.created_at)}</Cell>
                 <ActionsCell>
-                  <ActionButton type="button" onClick={() => history.push(`/sales/${item.id}`)}>VIEW</ActionButton>
+                  <ActionButton type="button" onClick={() => history.push(`/sales/${item.id}?${listQuery}`)}>VIEW</ActionButton>
                 </ActionsCell>
               </Row>
             ))}
@@ -482,6 +540,7 @@ const SalesPage = () => {
           {!loading && (
             <PaginationBar>
               <Meta>Page {paged.safePage} / {paged.totalPages}</Meta>
+              <PaginationButton type="button" onClick={() => setPage(1)} disabled={paged.safePage <= 1}>FIRST</PaginationButton>
               <PaginationButton type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={paged.safePage <= 1}>Prev</PaginationButton>
               <PaginationButton type="button" onClick={() => setPage((p) => Math.min(paged.totalPages, p + 1))} disabled={paged.safePage >= paged.totalPages}>Next</PaginationButton>
             </PaginationBar>

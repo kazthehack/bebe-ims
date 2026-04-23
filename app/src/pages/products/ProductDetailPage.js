@@ -7,8 +7,9 @@ import ConfirmActionModal from 'components/reusable/modals/ConfirmActionModal'
 import RelatedObjectsTableSection from 'components/reusable/details/RelatedObjectsTableSection'
 import GraphWithTableSection from 'components/reusable/analytics/GraphWithTableSection'
 import CapacityBar from 'components/reusable/analytics/CapacityBar'
-import QuantityStepper from 'components/reusable/controls/QuantityStepper'
+import QuantityAdjustControl from 'components/reusable/controls/QuantityAdjustControl'
 import { useProductDetail, useProductsList } from 'hooks/products/useProductsApi'
+import { useListPageScope } from 'contexts/ListPageContext'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import AddProductVariantModal from './modals/AddProductVariantModal'
 import { PRICING_TIER_OPTIONS, displayLabelForTier } from './constants/pricingTiers'
@@ -19,7 +20,7 @@ import {
   displayLabelForDesignSource,
 } from './constants/designSources'
 import {
-  readProductsListState,
+  PRODUCTS_LIST_CONTEXT_SCOPE,
   readProductsListStateFromSearch,
   toProductsListQuery,
 } from './productsListState'
@@ -247,10 +248,11 @@ const ProductDetailPage = () => {
   const location = useLocation()
   const history = useHistory()
   const { id } = useParams()
+  const { scopeState } = useListPageScope(PRODUCTS_LIST_CONTEXT_SCOPE)
   const listContext = useMemo(() => ({
-    ...readProductsListState(),
+    ...scopeState,
     ...readProductsListStateFromSearch(location.search),
-  }), [location.search])
+  }), [scopeState, location.search])
   const listQuery = useMemo(() => toProductsListQuery({
     activeTab: String(listContext.activeTab || 'products'),
     productsSearch: String(listContext.productsSearch || ''),
@@ -402,12 +404,12 @@ const ProductDetailPage = () => {
       qr_code: variant.qr_code || 'N/A',
       name: variant.name || 'N/A',
       actions: (
-        <ActionButton type="button" onClick={() => history.push(`/products/variants/${variant.id}`)}>
+        <ActionButton type="button" onClick={() => history.push(`/products/variants/${variant.id}?${listQuery}`)}>
           VIEW
         </ActionButton>
       ),
     })),
-    [variants, history],
+    [variants, history, listQuery],
   )
 
   const resolveQuickQty = (variantId) => {
@@ -534,7 +536,7 @@ const ProductDetailPage = () => {
           </CapacityCellWrap>
         ),
         adjust: (
-          <QuantityStepper
+          <QuantityAdjustControl
             buttonSize={28}
             inputWidth={58}
             value={value}
@@ -551,7 +553,7 @@ const ProductDetailPage = () => {
           />
         ),
         actions: (
-          <ActionButton type="button" onClick={() => history.push(`/inventory/inv-${variant.id}`)}>
+          <ActionButton type="button" onClick={() => history.push(`/inventory/inv-${variant.id}?${listQuery}`)}>
             VIEW
           </ActionButton>
         ),
@@ -863,7 +865,7 @@ const ProductDetailPage = () => {
             confirmDisabled={quickLossSubmitting}
             width="460px"
             actionsAlign="right"
-            closeControl="x"
+            closeControl="glyph"
           >
             <ModalMeta>
               This will reduce global stock by <strong>{quickLossVariantId ? resolveQuickQty(quickLossVariantId) : 0}</strong>.

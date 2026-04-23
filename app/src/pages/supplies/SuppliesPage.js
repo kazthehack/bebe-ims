@@ -1097,6 +1097,9 @@ const SuppliesPage = () => {
         {!loading && rowsByTab.length > 0 && (
           <PaginationBar>
             <Meta>Page {safeListPage} / {listTotalPages}</Meta>
+            <PaginationButton type="button" onClick={() => setListPage(1)} disabled={safeListPage <= 1}>
+              FIRST
+            </PaginationButton>
             <PaginationButton type="button" onClick={() => setListPage((prev) => Math.max(1, prev - 1))} disabled={safeListPage <= 1}>
               Prev
             </PaginationButton>

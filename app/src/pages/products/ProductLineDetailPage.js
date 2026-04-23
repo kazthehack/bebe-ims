@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useHistory, useParams } from 'react-router-dom'
+import { useHistory, useLocation, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 import PageContent from 'components/pages/PageContent'
 import ConfirmActionModal from 'components/reusable/modals/ConfirmActionModal'
@@ -15,7 +15,13 @@ import {
   DESIGN_SOURCE_OPTIONS,
 } from 'pages/products/constants/designSources'
 import { useProductsList } from 'hooks/products/useProductsApi'
+import { useListPageScope } from 'contexts/ListPageContext'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
+import {
+  PRODUCTS_LIST_CONTEXT_SCOPE,
+  readProductsListStateFromSearch,
+  toProductsListQuery,
+} from './productsListState'
 
 const PageActions = styled.div`
   display: flex;
@@ -102,8 +108,28 @@ const DescriptionValue = styled.div`
 `
 
 const ProductLineDetailPage = () => {
+  const location = useLocation()
   const history = useHistory()
   const { id } = useParams()
+  const { scopeState } = useListPageScope(PRODUCTS_LIST_CONTEXT_SCOPE)
+  const listContext = useMemo(() => ({
+    ...scopeState,
+    ...readProductsListStateFromSearch(location.search),
+  }), [scopeState, location.search])
+  const listQuery = useMemo(() => toProductsListQuery({
+    activeTab: String(listContext.activeTab || 'products'),
+    productsSearch: String(listContext.productsSearch || ''),
+    productLineSearch: String(listContext.productLineSearch || ''),
+    variantSearch: String(listContext.variantSearch || ''),
+    productsPage: Math.max(1, Number(listContext.productsPage || 1)),
+    productLinesPage: Math.max(1, Number(listContext.productLinesPage || 1)),
+    variantsPage: Math.max(1, Number(listContext.variantsPage || 1)),
+    productsLineFilter: String(listContext.productsLineFilter || 'all'),
+    productsIpFilter: String(listContext.productsIpFilter || 'all'),
+    productsFsnFilter: String(listContext.productsFsnFilter || 'fast,normal,slow'),
+    variantsLineFilter: String(listContext.variantsLineFilter || 'all'),
+    variantsProductFilter: String(listContext.variantsProductFilter || 'all'),
+  }), [listContext])
   const {
     productLines,
     products,
@@ -173,18 +199,18 @@ const ProductLineDetailPage = () => {
       category: displayLabelForTier(product.category),
       list_price: money(product.list_price),
       actions: (
-        <ActionButton type="button" onClick={() => history.push(`/products/${product.id}`)}>
+        <ActionButton type="button" onClick={() => history.push(`/products/${product.id}?${listQuery}`)}>
           VIEW
         </ActionButton>
       ),
     })),
-    [relatedProducts, history],
+    [relatedProducts, history, listQuery],
   )
 
   const breadcrumbTitle = (
     <BreadcrumbTitle items={[
-      { label: 'Products', to: '/products' },
-      { label: 'Product Lines', to: '/products' },
+      { label: 'Products', to: `/products?${listQuery}` },
+      { label: 'Product Lines', to: `/products?${listQuery}` },
       { label: 'Product Line Detail' },
     ]}
     />
@@ -211,7 +237,7 @@ const ProductLineDetailPage = () => {
   const onDelete = async () => {
     try {
       await deleteProductLine(productLineRecordId)
-      history.push('/products')
+      history.push(`/products?${listQuery}`)
     } catch (err) {
       const message = String(err && err.message ? err.message : '')
       if (message.includes('409')) {

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import PropTypes from 'prop-types'
 import styled from 'styled-components'
 
@@ -76,6 +76,20 @@ const DropdownSelectFilter = ({ value, onChange, options, minWidth, menuWidth })
     const match = (options || []).find((option) => option.value === value)
     return match ? match.label : ((options && options[0] && options[0].label) || 'Select')
   }, [options, value])
+
+  useEffect(() => {
+    const handleOutsidePointer = (event) => {
+      if (!detailsRef.current || !detailsRef.current.open) return
+      if (detailsRef.current.contains(event.target)) return
+      detailsRef.current.open = false
+    }
+    document.addEventListener('mousedown', handleOutsidePointer)
+    document.addEventListener('touchstart', handleOutsidePointer)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsidePointer)
+      document.removeEventListener('touchstart', handleOutsidePointer)
+    }
+  }, [])
 
   return (
     <Dropdown ref={detailsRef}>

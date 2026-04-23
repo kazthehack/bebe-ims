@@ -353,6 +353,14 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
 
 export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
   const [variantDetail, setVariantDetail] = useState(null)
+  const [parentProduct, setParentProduct] = useState(null)
+  const [inventorySnapshot, setInventorySnapshot] = useState({
+    global_qty: 0,
+    storage_qty: 0,
+    primary_qty: 0,
+    secondary_qty: 0,
+    tertiary_qty: 0,
+  })
   const [recipeParts, setRecipeParts] = useState([])
   const [parts, setParts] = useState([])
   const [recipeTotalCost, setRecipeTotalCost] = useState(0)
@@ -375,14 +383,38 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
     setError('')
     try {
       const query = tenantQuery(tenantId)
-      const [variantData, recipeData, suppliesData, partsData] = await Promise.all([
-        getJson(`/products/variants/${variantId}?${query}`),
+      const variantData = await getJson(`/products/variants/${variantId}?${query}`)
+      const [recipeData, suppliesData, partsData, inventoryData] = await Promise.all([
         getJson(`/products/variants/${variantId}/recipe-parts?${query}`),
         getJson(`/stock/supplies?${query}`),
         getJson(`/products/parts?${query}`),
+        getJson(`/stock/inventory/global?${query}`),
       ])
+      let productData = null
+      try {
+        productData = await getJson(`/products/${encodeURIComponent(variantData.product_id)}?${query}`)
+      } catch (_err) {
+        productData = null
+      }
       if (!cancelled) {
         setVariantDetail(variantData)
+        setParentProduct((productData && productData.product) || null)
+        const inventoryRow = (inventoryData.items || []).find((item) => (
+          String(item.product_variant_id || '') === String(variantId || '')
+        ))
+        setInventorySnapshot({
+          global_qty: Number((inventoryRow && inventoryRow.master_qty_on_hand) || 0),
+          storage_qty: Math.max(
+            0,
+            Number((inventoryRow && inventoryRow.master_qty_on_hand) || 0)
+              - Number((inventoryRow && inventoryRow.primary_qty_on_hand) || 0)
+              - Number((inventoryRow && inventoryRow.secondary_qty_on_hand) || 0)
+              - Number((inventoryRow && inventoryRow.tertiary_qty_on_hand) || 0),
+          ),
+          primary_qty: Number((inventoryRow && inventoryRow.primary_qty_on_hand) || 0),
+          secondary_qty: Number((inventoryRow && inventoryRow.secondary_qty_on_hand) || 0),
+          tertiary_qty: Number((inventoryRow && inventoryRow.tertiary_qty_on_hand) || 0),
+        })
         setRecipeParts(recipeData.parts || [])
         setRecipeTotalCost(Number(recipeData.total_cost || 0))
         setRecipeSummary({
@@ -454,10 +486,11 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
     return postForm(`/slicer/parse-3mf?${tenantQuery(tenantId)}`, formData)
   }, [tenantId])
 
-  const updateVariant = useCallback(async ({ name, fsn, yield_units, print_hours }) => {
+  const updateVariant = useCallback(async ({ name, fsn, capacity_threshold_per_site, yield_units, print_hours }) => {
     const updated = await putJson(`/products/variants/${encodeURIComponent(variantId)}?${tenantQuery(tenantId)}`, {
       name,
       fsn,
+      capacity_threshold_per_site,
       yield_units,
       print_hours,
     })
@@ -472,6 +505,8 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
 
   return {
     variantDetail,
+    parentProduct,
+    inventorySnapshot,
     recipeParts,
     parts,
     recipeTotalCost,

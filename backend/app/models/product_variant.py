@@ -14,6 +14,7 @@ class ProductVariantDocument(ObjectDocument):
     sku: str
     name: str | None = None
     fsn: str | None = None
+    capacity_threshold_per_site: float | None = None
     yield_units: int = 1
     print_hours: float = 0.0
     qr_code: str | None = None

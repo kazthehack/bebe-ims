@@ -17,9 +17,9 @@ import {
   DESIGN_SOURCE_OPTIONS,
 } from './constants/designSources'
 import { productListPageDefaultProps, productListPagePropTypes } from './ProductListPage.types'
+import { useListPageScope } from 'contexts/ListPageContext'
 import {
-  PRODUCTS_LIST_STATE_KEY,
-  readProductsListState,
+  PRODUCTS_LIST_CONTEXT_SCOPE,
   readProductsListStateFromSearch,
   toProductsListQuery,
 } from './productsListState'
@@ -243,8 +243,9 @@ const parseMultiFilter = (rawValue, allowedValues) => {
 
 const ProductListPage = ({ title }) => {
   const location = useLocation()
+  const { scopeState, setScopeState } = useListPageScope(PRODUCTS_LIST_CONTEXT_SCOPE)
   const restoredState = {
-    ...readProductsListState(),
+    ...scopeState,
     ...readProductsListStateFromSearch(location.search),
   }
   const history = useHistory()
@@ -504,13 +505,15 @@ const ProductListPage = ({ title }) => {
   )
 
   React.useEffect(() => {
+    const currentQuery = String(location.search || '').replace(/^\?/, '')
+    if (currentQuery === listQuery) return
+    history.replace(`/products?${listQuery}`)
+  }, [history, location.search, listQuery])
+
+  React.useEffect(() => {
     if (!initializedRef.current) return
-    try {
-      window.sessionStorage.setItem(PRODUCTS_LIST_STATE_KEY, JSON.stringify(listStateForQuery))
-    } catch (_err) {
-      // ignore storage failures
-    }
-  }, [listStateForQuery])
+    setScopeState(listStateForQuery)
+  }, [listStateForQuery, setScopeState])
 
   const productsTotalPages = Math.max(1, Math.ceil((sortedProducts || []).length / PAGE_SIZE))
   const safeProductsPage = Math.min(productsPage, productsTotalPages)
@@ -779,6 +782,9 @@ const ProductListPage = ({ title }) => {
             {!loading && filteredProducts.length > 0 && (
               <PaginationBar>
                 <Meta>Page {safeProductsPage} / {productsTotalPages}</Meta>
+                <PaginationButton type="button" onClick={() => setProductsPage(1)} disabled={safeProductsPage <= 1}>
+                  FIRST
+                </PaginationButton>
                 <PaginationButton type="button" onClick={() => setProductsPage((prev) => Math.max(1, prev - 1))} disabled={safeProductsPage <= 1}>
                   Prev
                 </PaginationButton>
@@ -834,6 +840,9 @@ const ProductListPage = ({ title }) => {
             {!loading && filteredProductLines.length > 0 && (
               <PaginationBar>
                 <Meta>Page {safeProductLinesPage} / {productLinesTotalPages}</Meta>
+                <PaginationButton type="button" onClick={() => setProductLinesPage(1)} disabled={safeProductLinesPage <= 1}>
+                  FIRST
+                </PaginationButton>
                 <PaginationButton type="button" onClick={() => setProductLinesPage((prev) => Math.max(1, prev - 1))} disabled={safeProductLinesPage <= 1}>
                   Prev
                 </PaginationButton>
@@ -917,6 +926,9 @@ const ProductListPage = ({ title }) => {
             {!loading && filteredVariants.length > 0 && (
               <PaginationBar>
                 <Meta>Page {safeVariantsPage} / {variantsTotalPages}</Meta>
+                <PaginationButton type="button" onClick={() => setVariantsPage(1)} disabled={safeVariantsPage <= 1}>
+                  FIRST
+                </PaginationButton>
                 <PaginationButton type="button" onClick={() => setVariantsPage((prev) => Math.max(1, prev - 1))} disabled={safeVariantsPage <= 1}>
                   Prev
                 </PaginationButton>

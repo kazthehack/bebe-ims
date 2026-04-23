@@ -1,19 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { useHistory, useParams } from 'react-router-dom'
+import { useHistory, useLocation, useParams } from 'react-router-dom'
 import QRCode from 'qrcode.react'
 import PageContent from 'components/pages/PageContent'
 import FormModal from 'components/reusable/modals/FormModal'
-import QuantityStepper from 'components/reusable/controls/QuantityStepper'
+import QuantityAdjustControl from 'components/reusable/controls/QuantityAdjustControl'
 import CapacityBar from 'components/reusable/analytics/CapacityBar'
 import { useInventoryResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
+import { useListPageScope } from 'contexts/ListPageContext'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import {
   buildInventoryRows,
   GLOBAL_TAB,
-  toInventoryListQuery,
-  readInventoryListState,
+  INVENTORY_LIST_CONTEXT_SCOPE,
+  readInventoryListStateFromSearch,
   STORAGE_TAB,
+  toInventoryListQuery,
 } from './inventoryListState'
 
 const Section = styled.section`
@@ -216,6 +218,14 @@ const DetailTopActions = styled.div`
   margin-bottom: 10px;
 `
 
+const DetailLinkActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+`
+
 const NavButton = styled.button`
   height: 34px;
   border: 1px solid #bec8d3;
@@ -233,9 +243,31 @@ const NavButton = styled.button`
   }
 `
 
+const LinkButton = styled.button`
+  height: 34px;
+  border: 1px solid #bec8d3;
+  background: #f0f3f6;
+  color: #41576d;
+  border-radius: 4px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+`
+
+const ModalSelect = styled.select`
+  border: 1px solid #bec8d3;
+  border-radius: 4px;
+  height: 36px;
+  padding: 0 10px;
+  background: #f0f3f6;
+`
+
 const InventoryDetailPage = () => {
+  const location = useLocation()
   const history = useHistory()
   const { id } = useParams()
+  const { scopeState } = useListPageScope(INVENTORY_LIST_CONTEXT_SCOPE)
   const {
     loadInventoryDetail,
     loadInventoryAdjustments,
@@ -243,6 +275,7 @@ const InventoryDetailPage = () => {
     receiveToMain,
     transferInventory,
     adjustGlobalInventory,
+    writeoffSiteInventory,
     globalItems,
     loadSite,
   } = useInventoryResource()
@@ -258,26 +291,37 @@ const InventoryDetailPage = () => {
   const [lossReason, setLossReason] = useState('')
   const [lossError, setLossError] = useState('')
   const [lossSubmitting, setLossSubmitting] = useState(false)
+  const [showSiteWriteoffModal, setShowSiteWriteoffModal] = useState(false)
+  const [siteWriteoffSiteId, setSiteWriteoffSiteId] = useState('')
+  const [siteWriteoffReason, setSiteWriteoffReason] = useState('')
+  const [siteWriteoffDisposition, setSiteWriteoffDisposition] = useState('loss')
+  const [siteWriteoffError, setSiteWriteoffError] = useState('')
+  const [siteWriteoffSubmitting, setSiteWriteoffSubmitting] = useState(false)
 
   const listContext = useMemo(() => {
-    const raw = readInventoryListState()
+    const raw = {
+      ...scopeState,
+      ...readInventoryListStateFromSearch(location.search),
+    }
     return {
       activeTab: String(raw.activeTab || GLOBAL_TAB),
       search: String(raw.search || ''),
+      page: Math.max(1, Number(raw.page || 1)),
       productLineFilter: String(raw.productLineFilter || 'all'),
       variantFilter: String(raw.variantFilter || 'all'),
       availabilityFilter: String(raw.availabilityFilter || 'all'),
     }
-  }, [])
+  }, [scopeState, location.search])
 
   const breadcrumbTitle = (
+    // Keep list context stable across detail navigation and browser back/forward.
     <BreadcrumbTitle items={[
       {
         label: 'Inventory',
         to: `/inventory?${toInventoryListQuery({
           activeTab: listContext.activeTab,
           search: listContext.search,
-          page: Number((readInventoryListState().page || 1)),
+          page: listContext.page,
           productLineFilter: listContext.productLineFilter,
           variantFilter: listContext.variantFilter,
           availabilityFilter: listContext.availabilityFilter,
@@ -287,6 +331,14 @@ const InventoryDetailPage = () => {
     ]}
     />
   )
+  const listQuery = toInventoryListQuery({
+    activeTab: listContext.activeTab,
+    search: listContext.search,
+    page: listContext.page,
+    productLineFilter: listContext.productLineFilter,
+    variantFilter: listContext.variantFilter,
+    availabilityFilter: listContext.availabilityFilter,
+  })
 
   const load = async () => {
     if (!id) return
@@ -498,6 +550,47 @@ const InventoryDetailPage = () => {
     }
   }
 
+  const openSiteWriteoffModal = (siteId) => {
+    setInlineError('')
+    setSiteWriteoffError('')
+    setQtyForSite(siteId, String(parseInlineQty(siteId)))
+    setSiteWriteoffSiteId(siteId)
+    setSiteWriteoffReason('')
+    setSiteWriteoffDisposition('loss')
+    setShowSiteWriteoffModal(true)
+  }
+
+  const applySiteWriteoff = async () => {
+    if (!detail || !siteWriteoffSiteId) return
+    const qty = parseInlineQty(siteWriteoffSiteId)
+    const reason = String(siteWriteoffReason || '').trim()
+    if (!reason) {
+      setSiteWriteoffError('Reason is required.')
+      return
+    }
+    try {
+      setSiteWriteoffSubmitting(true)
+      setSiteWriteoffError('')
+      await writeoffSiteInventory({
+        product_variant_id: detail.product_variant_id,
+        site_id: siteWriteoffSiteId,
+        qty,
+        reason,
+        disposition: siteWriteoffDisposition === 'manual_sale' ? 'manual_sale' : 'loss',
+      })
+      setShowSiteWriteoffModal(false)
+      setSiteWriteoffSiteId('')
+      setSiteWriteoffReason('')
+      setSiteWriteoffDisposition('loss')
+      setQtyForSite(siteWriteoffSiteId, '1')
+      await load()
+    } catch (err) {
+      setSiteWriteoffError(err.message || 'Failed to write off site stock.')
+    } finally {
+      setSiteWriteoffSubmitting(false)
+    }
+  }
+
   const formatChange = (item) => {
     const qty = Number(item.qty_delta || 0)
     const type = String(item.adjustment_type || '').toUpperCase()
@@ -513,6 +606,9 @@ const InventoryDetailPage = () => {
     }
     if (type === 'TRANSFER_IN') {
       return `Received ${Math.abs(qty)} into ${site}`
+    }
+    if (String(item.notes || '').startsWith('Site write-off')) {
+      return String(item.notes)
     }
     return item.notes || type || 'Inventory change'
   }
@@ -537,18 +633,28 @@ const InventoryDetailPage = () => {
         <NavButton
           type="button"
           disabled={!previousRow}
-          onClick={() => previousRow && history.push(`/inventory/${previousRow.inventory_id || previousRow.product_variant_id}`)}
+          onClick={() => previousRow && history.push(`/inventory/${previousRow.inventory_id || previousRow.product_variant_id}?${listQuery}`)}
         >
           {'<'}
         </NavButton>
         <NavButton
           type="button"
           disabled={!nextRow}
-          onClick={() => nextRow && history.push(`/inventory/${nextRow.inventory_id || nextRow.product_variant_id}`)}
+          onClick={() => nextRow && history.push(`/inventory/${nextRow.inventory_id || nextRow.product_variant_id}?${listQuery}`)}
         >
           {'>'}
         </NavButton>
       </DetailTopActions>
+      {!loading && detail && (
+        <DetailLinkActions>
+          <LinkButton type="button" onClick={() => history.push(`/products/${detail.product_id}`)}>
+            PRODUCT
+          </LinkButton>
+          <LinkButton type="button" onClick={() => history.push(`/products/variants/${detail.product_variant_id}`)}>
+            VARIANT
+          </LinkButton>
+        </DetailLinkActions>
+      )}
       {loading && <Section>Loading inventory detail...</Section>}
       {!loading && error && <Section>{error}</Section>}
       {!loading && detail && (
@@ -622,7 +728,7 @@ const InventoryDetailPage = () => {
                 <Cell>Global</Cell>
                 <Cell>{renderCapacityCell(globalQty, globalCapacityTarget)}</Cell>
                 <Cell>
-                  <QuantityStepper
+                  <QuantityAdjustControl
                     value={qtyForSite('global')}
                     onChange={(nextValue) => setQtyForSite('global', nextValue)}
                     onDecrement={openGlobalLossModal}
@@ -646,7 +752,7 @@ const InventoryDetailPage = () => {
                   <Cell>{siteNameById[site.id] || site.id}</Cell>
                   <Cell>{renderCapacityCell(siteQtyById[site.id] || 0, capacityThresholdPerSite)}</Cell>
                   <Cell>
-                    <QuantityStepper
+                    <QuantityAdjustControl
                       value={qtyForSite(site.id)}
                       onChange={(nextValue) => setQtyForSite(site.id, nextValue)}
                       onDecrement={() => applyInlinePullBack(site.id)}
@@ -655,6 +761,10 @@ const InventoryDetailPage = () => {
                       min={1}
                       step={1}
                       placeholder="1"
+                      actionOnClick={() => openSiteWriteoffModal(site.id)}
+                      actionAriaLabel="Write off stock"
+                      actionTitle="Write off stock"
+                      actionIconClass="icon-cog"
                     />
                   </Cell>
                 </Row>
@@ -704,7 +814,7 @@ const InventoryDetailPage = () => {
             confirmDisabled={lossSubmitting}
             width="460px"
             actionsAlign="right"
-            closeControl="x"
+            closeControl="glyph"
           >
             <ModalMeta>
               This will reduce global stock by <strong>{parseInlineQty('global') || 0}</strong>.
@@ -718,6 +828,48 @@ const InventoryDetailPage = () => {
               />
             </ModalField>
             {lossError && <ErrorText>{lossError}</ErrorText>}
+          </FormModal>
+          <FormModal
+            open={showSiteWriteoffModal}
+            title="Site Write-Off"
+            onClose={() => {
+              setShowSiteWriteoffModal(false)
+              setSiteWriteoffSiteId('')
+              setSiteWriteoffReason('')
+              setSiteWriteoffDisposition('loss')
+              setSiteWriteoffError('')
+              setSiteWriteoffSubmitting(false)
+            }}
+            onConfirm={applySiteWriteoff}
+            confirmLabel={siteWriteoffSubmitting ? 'Saving...' : 'Save'}
+            cancelLabel="Cancel"
+            confirmDisabled={siteWriteoffSubmitting}
+            width="500px"
+            actionsAlign="right"
+            closeControl="glyph"
+          >
+            <ModalMeta>
+              This will permanently deduct <strong>{siteWriteoffSiteId ? (parseInlineQty(siteWriteoffSiteId) || 0) : 0}</strong> from <strong>{siteWriteoffSiteId ? (siteNameById[siteWriteoffSiteId] || siteWriteoffSiteId) : 'site'}</strong>. It will not return to storage.
+            </ModalMeta>
+            <ModalField>
+              <span>Type</span>
+              <ModalSelect
+                value={siteWriteoffDisposition}
+                onChange={(event) => setSiteWriteoffDisposition(event.target.value)}
+              >
+                <option value="loss">Complete Loss</option>
+                <option value="manual_sale">Manual Sale</option>
+              </ModalSelect>
+            </ModalField>
+            <ModalField>
+              <span>Reason (required)</span>
+              <ModalTextarea
+                value={siteWriteoffReason}
+                onChange={(event) => setSiteWriteoffReason(event.target.value)}
+                placeholder="e.g. event sale, damaged stock, untracked cash sale"
+              />
+            </ModalField>
+            {siteWriteoffError && <ErrorText>{siteWriteoffError}</ErrorText>}
           </FormModal>
         </>
       )}

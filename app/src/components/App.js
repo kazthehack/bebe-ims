@@ -7,6 +7,7 @@ import { Provider } from 'react-redux'
 import Notifications from 'components/Notifications'
 import CheckStoreCreationStatus from 'components/Demo/CheckStoreCreationStatus'
 import AppRouter from 'components/AppRouter'
+import { ListPageContextProvider } from 'contexts/ListPageContext'
 import GlobalStyle from 'styles/globalStyles'
 import { useWebVitals } from 'react-web-vitals'
 
@@ -27,7 +28,9 @@ const App = ({ store, ...props }) => {
       <GlobalStyle />
       <Provider store={store}>
         <Notifications>
-          <AppRouter {...props} />
+          <ListPageContextProvider>
+            <AppRouter {...props} />
+          </ListPageContextProvider>
           {!!APP_ENABLE_PUBLIC_DEMO_MODE &&
             <CheckStoreCreationStatus />
           }

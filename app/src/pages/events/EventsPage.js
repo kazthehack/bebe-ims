@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { useHistory, useParams } from 'react-router-dom'
+import { useHistory, useLocation, useParams } from 'react-router-dom'
 import PageContent from 'components/pages/PageContent'
 import FormModal from 'components/reusable/modals/FormModal'
 import ListFiltersRow from 'components/reusable/layouts/ListFiltersRow'
 import { PagePrimaryButton, PageSecondaryButton } from 'components/reusable/buttons/PageButtons'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import { useEventsResource } from 'hooks/bazaar/useBazaarApi'
+import { useListPageScope } from 'contexts/ListPageContext'
 
 const Surface = styled.div`
   background: #f3f5f7;
@@ -226,6 +227,7 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled' },
 ]
 const STATUS_FILTER_OPTIONS = STATUS_OPTIONS.map((option) => option.value)
+const EVENTS_LIST_CONTEXT_SCOPE = 'events'
 
 const parseMultiFilter = (rawValue, allowedValues) => {
   if (rawValue == null || rawValue === 'all') return [...allowedValues]
@@ -236,6 +238,31 @@ const parseMultiFilter = (rawValue, allowedValues) => {
     .map((value) => value.trim())
     .filter((value) => allowed.has(value))
   return parsed.length ? parsed : [...allowedValues]
+}
+
+const readEventsListStateFromSearch = (search) => {
+  try {
+    const params = new URLSearchParams(String(search || ''))
+    const pageRaw = Number(params.get('page') || 1)
+    return {
+      search: params.get('q') || undefined,
+      statusFilter: params.get('status') || undefined,
+      page: Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : undefined,
+    }
+  } catch (_err) {
+    return {}
+  }
+}
+
+const toEventsListQuery = (state) => {
+  const params = new URLSearchParams()
+  const search = String((state && state.search) || '')
+  const statusFilter = String((state && state.statusFilter) || 'all')
+  const page = Math.max(1, Number((state && state.page) || 1))
+  params.set('page', String(page))
+  if (search) params.set('q', search)
+  if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter)
+  return params.toString()
 }
 
 const money = (value) => `PHP ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -252,8 +279,14 @@ const deriveDays = (startDate, endDate) => {
 }
 
 const EventsPage = () => {
+  const location = useLocation()
   const history = useHistory()
   const { id } = useParams()
+  const { scopeState, setScopeState } = useListPageScope(EVENTS_LIST_CONTEXT_SCOPE)
+  const restoredState = useMemo(() => ({
+    ...scopeState,
+    ...readEventsListStateFromSearch(location.search),
+  }), [scopeState, location.search])
   const {
     events,
     loading,
@@ -262,9 +295,9 @@ const EventsPage = () => {
     updateEvent,
   } = useEventsResource()
 
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState(() => String(restoredState.search || ''))
+  const [statusFilter, setStatusFilter] = useState(() => String(restoredState.statusFilter || 'all'))
+  const [page, setPage] = useState(() => Math.max(1, Number(restoredState.page || 1)))
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [formError, setFormError] = useState('')
   const [editError, setEditError] = useState('')
@@ -322,9 +355,29 @@ const EventsPage = () => {
     setPage(1)
   }, [filteredEvents.length])
 
+  const listQuery = useMemo(() => toEventsListQuery({
+    search,
+    statusFilter,
+    page,
+  }), [search, statusFilter, page])
+
+  useEffect(() => {
+    setScopeState({
+      search,
+      statusFilter,
+      page,
+    })
+  }, [search, statusFilter, page, setScopeState])
+
+  useEffect(() => {
+    const currentQuery = String(location.search || '').replace(/^\?/, '')
+    if (currentQuery === listQuery) return
+    history.replace(`/events?${listQuery}`)
+  }, [history, location.search, listQuery])
+
   const listTitle = id ? (
     <BreadcrumbTitle items={[
-      { label: 'Events', to: '/events' },
+      { label: 'Events', to: `/events?${listQuery}` },
       { label: selectedEvent ? selectedEvent.title : 'Event Detail' },
     ]}
     />
@@ -470,7 +523,7 @@ const EventsPage = () => {
                 <ActionsCell>
                   <ActionButton
                     type="button"
-                    onClick={() => history.push(`/events/${item.id}`)}
+                    onClick={() => history.push(`/events/${item.id}?${listQuery}`)}
                   >
                     VIEW
                   </ActionButton>
@@ -492,6 +545,7 @@ const EventsPage = () => {
           {!loading && events.length > 0 && (
             <PaginationBar>
               <Meta>Page {safePage} / {totalPages}</Meta>
+              <PaginationButton type="button" onClick={() => setPage(1)} disabled={safePage <= 1}>FIRST</PaginationButton>
               <PaginationButton type="button" onClick={() => setPage((prev) => Math.max(1, prev - 1))} disabled={safePage <= 1}>Prev</PaginationButton>
               <PaginationButton type="button" onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))} disabled={safePage >= totalPages}>Next</PaginationButton>
             </PaginationBar>

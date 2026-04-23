@@ -42,6 +42,8 @@ from app.schemas.stock import (
     InventoryDispatchRead,
     InventoryGlobalAdjustCreate,
     InventoryGlobalAdjustRead,
+    InventorySiteWriteoffCreate,
+    InventorySiteWriteoffRead,
     InventoryReceiveCreate,
     InventoryReceiveRead,
     InventoryAdjustmentCreate,
@@ -126,6 +128,57 @@ def _normalize_fsn(value: str | None, fallback: str = 'normal') -> str:
     if normalized in VALID_FSN_VALUES:
         return normalized
     return fallback
+
+
+def _apply_price_tier_threshold_cap(threshold_per_site: float, list_price: float) -> float:
+    price = float(list_price or 0)
+    threshold = float(threshold_per_site or 0)
+    if price >= 300:
+        return min(threshold, 1.0)
+    if price >= 250:
+        return min(threshold, 2.0)
+    return threshold
+
+
+def _to_whole_units(value: float) -> float:
+    return float(max(0, int(round(value))))
+
+
+def _effective_variant_thresholds_for_product(
+    variants: list[StoredRecord[ProductVariantDocument]],
+    product_threshold_per_site: float,
+    product_list_price: float,
+) -> dict[str, float]:
+    if not variants:
+        return {}
+    explicit_sum = float(sum(
+        _to_whole_units(float(variant.payload.capacity_threshold_per_site or 0))
+        for variant in variants
+        if variant.payload.capacity_threshold_per_site is not None
+    ))
+    unresolved_count = max(0, len(variants) - sum(
+        1 for variant in variants if variant.payload.capacity_threshold_per_site is not None
+    ))
+    remaining = float(product_threshold_per_site - explicit_sum)
+    whole_remaining = int(round(max(0.0, remaining)))
+    base_share = int(whole_remaining / unresolved_count) if unresolved_count > 0 else 0
+    remainder = whole_remaining - (base_share * unresolved_count)
+    unresolved_ids = [
+        variant.object_id
+        for variant in sorted(variants, key=lambda item: item.object_id)
+        if variant.payload.capacity_threshold_per_site is None
+    ]
+    unresolved_rank = {variant_id: index for index, variant_id in enumerate(unresolved_ids)}
+    computed: dict[str, float] = {}
+    for variant in variants:
+        if variant.payload.capacity_threshold_per_site is not None:
+            raw = _to_whole_units(float(variant.payload.capacity_threshold_per_site))
+        else:
+            rank = unresolved_rank.get(variant.object_id, 0)
+            bonus = 1 if rank < remainder else 0
+            raw = float(base_share + bonus)
+        computed[variant.object_id] = _to_whole_units(_apply_price_tier_threshold_cap(raw, product_list_price))
+    return computed
 
 
 def _normalize_brand_display(value: str | None) -> str:
@@ -425,6 +478,12 @@ def list_product_stock(tenant_id: str = Query('tenant-admin')) -> ProductStockLi
 def list_inventory_global(tenant_id: str = Query('tenant-admin')) -> InventoryGlobalListResponse:
     stock_records = [map_record(record, ProductStockDocument) for record in product_stock_controller.list(tenant_id)]
     variant_by_id, product_by_id = _variant_maps(tenant_id)
+    variants_by_product: dict[str, list[StoredRecord[ProductVariantDocument]]] = {}
+    for variant in variant_by_id.values():
+        product_id = str(variant.payload.product_id or '')
+        if not product_id:
+            continue
+        variants_by_product.setdefault(product_id, []).append(variant)
     totals: dict[str, dict[str, float]] = {}
     for stock in stock_records:
         variant_id = stock.payload.product_variant_id
@@ -470,6 +529,16 @@ def list_inventory_global(tenant_id: str = Query('tenant-admin')) -> InventoryGl
         secondary_qty = float(summed['secondary'])
         tertiary_qty = float(summed['tertiary'])
         storage_qty = max(0.0, master_qty - primary_qty - secondary_qty - tertiary_qty)
+        product_threshold = _to_whole_units(float(product.payload.capacity_threshold_per_site or 8.0)) if product else 8.0
+        product_price = float(product.payload.list_price or 0) if product else 0.0
+        product_variants = variants_by_product.get(str(variant.payload.product_id or ''), [])
+        effective_thresholds = _effective_variant_thresholds_for_product(product_variants, product_threshold, product_price)
+        variant_threshold = float(
+            effective_thresholds.get(
+                variant_id,
+                variant.payload.capacity_threshold_per_site or product_threshold,
+            ),
+        )
         rows.append(InventoryGlobalItemRead(
             inventory_id=_inventory_id_for_variant(variant_id),
             product_variant_id=variant_id,
@@ -482,7 +551,8 @@ def list_inventory_global(tenant_id: str = Query('tenant-admin')) -> InventoryGl
                 variant.payload.fsn,
                 _normalize_fsn(product.payload.fsn if product else None, 'normal'),
             ),
-            capacity_threshold_per_site=float(product.payload.capacity_threshold_per_site or 8.0) if product else 8.0,
+            capacity_threshold_per_site=product_threshold,
+            variant_capacity_threshold_per_site=variant_threshold,
             main_qty_on_hand=main_qty,
             sites_qty_on_hand=sites_qty,
             master_qty_on_hand=master_qty,
@@ -838,6 +908,66 @@ def adjust_inventory_global(
         product_variant_id=payload.product_variant_id,
         qty_delta=qty_delta,
         site_qty_on_hand=float(updated_main.payload.qty_on_hand or 0),
+    )
+
+
+@router.post('/inventory/site-writeoff', response_model=InventorySiteWriteoffRead)
+def writeoff_inventory_from_site(
+    payload: InventorySiteWriteoffCreate,
+    tenant_id: str = Query('tenant-admin'),
+) -> InventorySiteWriteoffRead:
+    qty = float(payload.qty or 0)
+    if qty <= 0:
+        raise HTTPException(status_code=422, detail='Write-off qty must be greater than zero.')
+
+    site_id = str(payload.site_id or '').strip()
+    if not site_id:
+        raise HTTPException(status_code=422, detail='Site is required.')
+    if _is_main_site(site_id):
+        raise HTTPException(status_code=422, detail='Use global adjustment for storage write-offs.')
+
+    reason = str(payload.reason or '').strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail='Reason is required.')
+
+    disposition = str(payload.disposition or 'loss').strip().lower()
+    if disposition not in {'loss', 'manual_sale'}:
+        raise HTTPException(status_code=422, detail='Disposition must be loss or manual_sale.')
+
+    _ = map_record(variant_controller.get(payload.product_variant_id, tenant_id), ProductVariantDocument)
+    _validate_site_or_main(site_id, tenant_id)
+
+    source_stock = _find_product_stock_record(tenant_id, payload.product_variant_id, site_id)
+    if source_stock is None:
+        raise HTTPException(status_code=404, detail='Site stock was not found.')
+
+    available_qty = float(source_stock.payload.qty_on_hand or 0) - float(source_stock.payload.qty_reserved or 0)
+    if qty > available_qty:
+        raise HTTPException(status_code=409, detail='Insufficient site stock for write-off.')
+
+    updated_site = _upsert_product_stock_qty(
+        tenant_id,
+        payload.product_variant_id,
+        site_id,
+        -qty,
+    )
+    descriptor = 'Manual sale' if disposition == 'manual_sale' else 'Loss'
+    _record_inventory_adjustment(
+        tenant_id,
+        updated_site.object_id,
+        site_id,
+        InventoryAdjustmentType.DISPENSE,
+        -qty,
+        notes=f'Site write-off ({descriptor}): {reason}',
+    )
+    return InventorySiteWriteoffRead(
+        site_id=site_id,
+        product_variant_id=payload.product_variant_id,
+        qty=qty,
+        qty_delta=-qty,
+        site_qty_on_hand=float(updated_site.payload.qty_on_hand or 0),
+        reason=reason,
+        disposition='manual_sale' if disposition == 'manual_sale' else 'loss',
     )
 
 

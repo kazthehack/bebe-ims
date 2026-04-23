@@ -109,16 +109,17 @@ const FormModal = ({
   showCancel,
 }) => {
   if (!open) return null
+  const normalizedCloseControl = closeControl === 'x' ? 'glyph' : closeControl
 
   return (
     <Overlay onClick={onClose}>
       <Panel onClick={(event) => event.stopPropagation()} $width={width}>
         <Header>
           <Title>{title}</Title>
-          {showCloseControl && closeControl === 'dot' && (
+          {showCloseControl && normalizedCloseControl === 'dot' && (
             <CloseDotButton type="button" aria-label="Close modal" onClick={onClose} />
           )}
-          {showCloseControl && closeControl === 'glyph' && (
+          {showCloseControl && normalizedCloseControl === 'glyph' && (
             <CloseButton type="button" aria-label="Close modal" onClick={onClose}>&times;</CloseButton>
           )}
         </Header>
@@ -143,7 +144,7 @@ FormModal.propTypes = {
   width: PropTypes.string,
   confirmDisabled: PropTypes.bool,
   actionsAlign: PropTypes.oneOf(['left', 'right']),
-  closeControl: PropTypes.oneOf(['glyph', 'dot']),
+  closeControl: PropTypes.oneOf(['glyph', 'dot', 'x']),
   showCloseControl: PropTypes.bool,
   showCancel: PropTypes.bool,
 }
