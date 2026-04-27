@@ -1,7 +1,12 @@
 SHELL := /bin/zsh
 .DEFAULT_GOAL := build
 
-.PHONY: help install build clean migrate migrate-init reset snapshot restore-snapshot run dev run-backend run-app deploy deploy-backend deploy-app lint fmt test
+.PHONY: help install build clean migrate migrate-init reset snapshot restore-snapshot run dev run-backend run-app run-dynamodb-local deploy deploy-backend deploy-app lint fmt test
+
+DYNAMODB_LOCAL_DIR ?= dynamodb_local_latest
+DYNAMODB_LOCAL_JAR ?= $(DYNAMODB_LOCAL_DIR)/DynamoDBLocal.jar
+DYNAMODB_LOCAL_PORT ?= 8000
+DYNAMODB_LOCAL_FLAGS ?= -sharedDb -dbPath .
 
 help:
 	@echo "Root shortcuts:"
@@ -17,6 +22,7 @@ help:
 	@echo "  make dev           # run backend + app together (dev mode, with reload)"
 	@echo "  make run-backend   # run backend locally"
 	@echo "  make run-app       # run app locally"
+	@echo "  make run-dynamodb-local # run local DynamoDB jar"
 	@echo "  make deploy        # deploy backend + app with Docker"
 	@echo "  make deploy-backend"
 	@echo "  make deploy-app"
@@ -69,6 +75,9 @@ run-backend:
 
 run-app:
 	$(MAKE) -C app run
+
+run-dynamodb-local:
+	java -Djava.library.path=$(DYNAMODB_LOCAL_DIR)/DynamoDBLocal_lib -jar $(DYNAMODB_LOCAL_JAR) -port $(DYNAMODB_LOCAL_PORT) $(DYNAMODB_LOCAL_FLAGS)
 
 deploy: deploy-backend deploy-app
 
