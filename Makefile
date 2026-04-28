@@ -77,7 +77,7 @@ run-app:
 	$(MAKE) -C app run
 
 run-dynamodb-local:
-	java -Djava.library.path=$(DYNAMODB_LOCAL_DIR)/DynamoDBLocal_lib -jar $(DYNAMODB_LOCAL_JAR) -port $(DYNAMODB_LOCAL_PORT) $(DYNAMODB_LOCAL_FLAGS)
+	cd $(DYNAMODB_LOCAL_DIR) && java -Djava.library.path=./DynamoDBLocal_lib -jar ./DynamoDBLocal.jar -port $(DYNAMODB_LOCAL_PORT) $(DYNAMODB_LOCAL_FLAGS)
 
 deploy: deploy-backend deploy-app
 

@@ -1,0 +1,332 @@
+{
+  "version": 1,
+  "created_at": "2026-04-27T03:22:49.612739+00:00",
+  "table_name": "bebe_ims",
+  "endpoint_url": "http://localhost:8000",
+  "scope": {
+    "all_tenants": false,
+    "tenant_id": "tenant-admin"
+  },
+  "item_count": 16,
+  "items": [
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.723404+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.723404+00:00#ID#evt-001",
+      "object_type": "event",
+      "payload": {
+        "end_date": "2026-04-05",
+        "start_time": "09:00",
+        "code": "EVT-001",
+        "rent_cost_per_day": 0,
+        "organizer": "Bebe Inventory",
+        "end_time": "18:00",
+        "location": null,
+        "title": "Orchard Easter",
+        "start_date": "2026-04-04",
+        "status": "scheduled"
+      },
+      "gsi1pk": "TYPE#EVENT",
+      "sk": "EVENT#evt-001",
+      "created_at": "2026-04-27T03:22:40.723404+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "evt-001"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.727751+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.727751+00:00#ID#evt-002",
+      "object_type": "event",
+      "payload": {
+        "end_date": "2026-04-07",
+        "start_time": "09:00",
+        "code": "EVT-002",
+        "rent_cost_per_day": 0,
+        "organizer": "Bebe Inventory",
+        "end_time": "18:00",
+        "location": null,
+        "title": "SMP",
+        "start_date": "2026-04-04",
+        "status": "scheduled"
+      },
+      "gsi1pk": "TYPE#EVENT",
+      "sk": "EVENT#evt-002",
+      "created_at": "2026-04-27T03:22:40.727751+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "evt-002"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.732341+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.732341+00:00#ID#evt-003",
+      "object_type": "event",
+      "payload": {
+        "end_date": "2026-04-12",
+        "start_time": "09:00",
+        "code": "EVT-003",
+        "rent_cost_per_day": 0,
+        "organizer": "Bebe Inventory",
+        "end_time": "18:00",
+        "location": null,
+        "title": "Orchard",
+        "start_date": "2026-04-09",
+        "status": "scheduled"
+      },
+      "gsi1pk": "TYPE#EVENT",
+      "sk": "EVENT#evt-003",
+      "created_at": "2026-04-27T03:22:40.732341+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "evt-003"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.736473+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.736473+00:00#ID#evt-004",
+      "object_type": "event",
+      "payload": {
+        "end_date": "2026-04-19",
+        "start_time": "09:00",
+        "code": "EVT-004",
+        "rent_cost_per_day": 0,
+        "organizer": "Bebe Inventory",
+        "end_time": "18:00",
+        "location": null,
+        "title": "Newpoint",
+        "start_date": "2026-04-15",
+        "status": "scheduled"
+      },
+      "gsi1pk": "TYPE#EVENT",
+      "sk": "EVENT#evt-004",
+      "created_at": "2026-04-27T03:22:40.736473+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "evt-004"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.739847+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.739847+00:00#ID#evt-005",
+      "object_type": "event",
+      "payload": {
+        "end_date": "2026-04-19",
+        "start_time": "09:00",
+        "code": "EVT-005",
+        "rent_cost_per_day": 0,
+        "organizer": "Bebe Inventory",
+        "end_time": "18:00",
+        "location": null,
+        "title": "Orchard",
+        "start_date": "2026-04-16",
+        "status": "scheduled"
+      },
+      "gsi1pk": "TYPE#EVENT",
+      "sk": "EVENT#evt-005",
+      "created_at": "2026-04-27T03:22:40.739847+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "evt-005"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.743428+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.743428+00:00#ID#evt-006",
+      "object_type": "event",
+      "payload": {
+        "end_date": "2026-04-25",
+        "start_time": "09:00",
+        "code": "EVT-006",
+        "rent_cost_per_day": 0,
+        "organizer": "Bebe Inventory",
+        "end_time": "18:00",
+        "location": null,
+        "title": "Mabalacat City Colleges",
+        "start_date": "2026-04-21",
+        "status": "scheduled"
+      },
+      "gsi1pk": "TYPE#EVENT",
+      "sk": "EVENT#evt-006",
+      "created_at": "2026-04-27T03:22:40.743428+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "evt-006"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.746779+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.746779+00:00#ID#evt-007",
+      "object_type": "event",
+      "payload": {
+        "end_date": "2026-04-26",
+        "start_time": "09:00",
+        "code": "EVT-007",
+        "rent_cost_per_day": 0,
+        "organizer": "Bebe Inventory",
+        "end_time": "18:00",
+        "location": null,
+        "title": "Orchard",
+        "start_date": "2026-04-24",
+        "status": "scheduled"
+      },
+      "gsi1pk": "TYPE#EVENT",
+      "sk": "EVENT#evt-007",
+      "created_at": "2026-04-27T03:22:40.746779+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "evt-007"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.765411+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.765411+00:00#ID#site1",
+      "object_type": "site",
+      "payload": {
+        "name": "Primary (A)",
+        "active": true,
+        "location": "Primary (A)",
+        "id": "site1",
+        "code": "SITE-001"
+      },
+      "gsi1pk": "TYPE#SITE",
+      "sk": "SITE#site1",
+      "created_at": "2026-04-27T03:22:40.765411+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "site1"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.768554+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.768554+00:00#ID#site2",
+      "object_type": "site",
+      "payload": {
+        "name": "Secondary (B)",
+        "active": true,
+        "location": "Secondary (B)",
+        "id": "site2",
+        "code": "SITE-002"
+      },
+      "gsi1pk": "TYPE#SITE",
+      "sk": "SITE#site2",
+      "created_at": "2026-04-27T03:22:40.768554+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "site2"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.772717+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.772717+00:00#ID#site3",
+      "object_type": "site",
+      "payload": {
+        "name": "Tertiary (C)",
+        "active": true,
+        "location": "Tertiary (C)",
+        "id": "site3",
+        "code": "SITE-003"
+      },
+      "gsi1pk": "TYPE#SITE",
+      "sk": "SITE#site3",
+      "created_at": "2026-04-27T03:22:40.772717+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "site3"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.690478+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.690478+00:00#ID#store-admin",
+      "object_type": "store",
+      "payload": {
+        "name": "Admin Store",
+        "owner": {
+          "id": "user-admin",
+          "username": "admin"
+        },
+        "settings": {
+          "allowDashboardSelection": false,
+          "timezone": "Asia/Manila",
+          "enableNewDashboard": false
+        },
+        "id": "store-admin"
+      },
+      "gsi1pk": "TYPE#STORE",
+      "sk": "STORE#store-admin",
+      "created_at": "2026-04-27T03:22:40.690478+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "store-admin"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.750390+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.750390+00:00#ID#bambu",
+      "object_type": "supply_brand",
+      "payload": {
+        "display_name": "Bambu",
+        "id": "bambu"
+      },
+      "gsi1pk": "TYPE#SUPPLY_BRAND",
+      "sk": "SUPPLY_BRAND#bambu",
+      "created_at": "2026-04-27T03:22:40.750390+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "bambu"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.753780+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.753780+00:00#ID#esun",
+      "object_type": "supply_brand",
+      "payload": {
+        "display_name": "Esun",
+        "id": "esun"
+      },
+      "gsi1pk": "TYPE#SUPPLY_BRAND",
+      "sk": "SUPPLY_BRAND#esun",
+      "created_at": "2026-04-27T03:22:40.753780+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "esun"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.762232+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.762232+00:00#ID#overture",
+      "object_type": "supply_brand",
+      "payload": {
+        "display_name": "Overture",
+        "id": "overture"
+      },
+      "gsi1pk": "TYPE#SUPPLY_BRAND",
+      "sk": "SUPPLY_BRAND#overture",
+      "created_at": "2026-04-27T03:22:40.762232+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "overture"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.758868+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.758868+00:00#ID#sunlu",
+      "object_type": "supply_brand",
+      "payload": {
+        "display_name": "Sunlu",
+        "id": "sunlu"
+      },
+      "gsi1pk": "TYPE#SUPPLY_BRAND",
+      "sk": "SUPPLY_BRAND#sunlu",
+      "created_at": "2026-04-27T03:22:40.758868+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "sunlu"
+    },
+    {
+      "tenant_id": "tenant-admin",
+      "updated_at": "2026-04-27T03:22:40.668505+00:00",
+      "gsi1sk": "TENANT#tenant-admin#UPDATED#2026-04-27T03:22:40.668505+00:00#ID#user-admin",
+      "object_type": "users",
+      "payload": {
+        "store_id": "store-admin",
+        "password": "password",
+        "name": "Admin",
+        "active": true,
+        "short_name": "admin",
+        "email": "admin@local.bebe",
+        "global_active": true
+      },
+      "gsi1pk": "TYPE#USERS",
+      "sk": "USERS#user-admin",
+      "created_at": "2026-04-27T03:22:40.668505+00:00",
+      "pk": "TENANT#tenant-admin",
+      "object_id": "user-admin"
+    }
+  ]
+}
