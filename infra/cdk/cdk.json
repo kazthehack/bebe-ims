@@ -5,8 +5,8 @@
     "environmentName": "prod",
     "apiPrefix": "/api/v1",
     "tableName": "bebe_ims",
-    "backendCpu": 512,
-    "backendMemoryMiB": 1024,
+    "backendCpu": 256,
+    "backendMemoryMiB": 512,
     "backendDesiredCount": 1
   }
 }

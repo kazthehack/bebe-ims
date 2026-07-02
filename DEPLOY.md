@@ -83,8 +83,8 @@ Optional GitHub repository variables:
 - `AWS_REGION` defaults to `ap-southeast-1`
 - `PROJECT_NAME` defaults to `bebe-ims`
 - `TABLE_NAME` defaults to `bebe_ims`
-- `BACKEND_CPU` defaults to `512`
-- `BACKEND_MEMORY_MIB` defaults to `1024`
+- `BACKEND_CPU` defaults to `256`
+- `BACKEND_MEMORY_MIB` defaults to `512`
 - `BACKEND_DESIRED_COUNT` defaults to `1`
 - `HEALTHCHECK_TIMEOUT_SECONDS` defaults to `300`
 
@@ -178,6 +178,36 @@ Notes:
 - Do not run `migrate-init` unless you explicitly want inventory catalog sync.
 - Do not run `reset` unless you explicitly intend to zero stock quantities.
 
+## Stateful resource handling
+
+DynamoDB is treated as critical state.
+
+If `TABLE_NAME` already exists outside the CDK stack, `deploy.py` defaults to adopting it with:
+
+```bash
+ADOPT_EXISTING_DYNAMODB_TABLE=true
+```
+
+In this mode CDK imports the existing table by name and grants the backend access to it instead of attempting to create a duplicate table. Before deploy continues, the script verifies the existing table has:
+- primary key `pk/sk`
+- global secondary index `gsi1` using `gsi1pk/gsi1sk`
+
+Use `USE_EXISTING_DYNAMODB_TABLE=true` only when you want to force import behavior. Use `USE_EXISTING_DYNAMODB_TABLE=false` only when you intentionally want CDK to create/manage the table and you are certain no table with that name already exists.
+
+## Frontend S3 deploy behavior
+
+Frontend assets are deployed through CDK `BucketDeployment`, which uses a Lambda-backed CloudFormation custom resource.
+
+The deployment is tuned for larger frontend bundles and retry safety:
+- CDK's generated BucketDeployment Lambda timeout is 15 minutes in the installed CDK version.
+- `memoryLimit=1024` improves Lambda CPU/network throughput.
+- `ephemeralStorageSize=1024 MiB` gives the deployment Lambda more temp space.
+- `waitForDistributionInvalidation=false` avoids waiting for CloudFront edge propagation inside CloudFormation.
+- `prune=false` keeps old static files during retries instead of deleting files that are not present in the current build.
+- `retainOnDelete=true` avoids deleting uploaded frontend files during stack delete/recovery.
+
+CloudFront invalidation is still requested by the custom resource, but the stack does not wait for the invalidation to finish.
+
 ## Files added for CDK
 
 - `infra/cdk/package.json`
@@ -198,8 +228,8 @@ npx cdk deploy \
   -c environmentName=prod \
   -c apiPrefix=/api/v1 \
   -c tableName=bebe_ims \
-  -c backendCpu=512 \
-  -c backendMemoryMiB=1024 \
+  -c backendCpu=256 \
+  -c backendMemoryMiB=512 \
   -c backendDesiredCount=1
 ```
 
@@ -209,6 +239,7 @@ Configure these in `infra/cdk/deploy.env`:
 
 - `AUTO_BOOTSTRAP=true`: run CDK bootstrap before deploy.
 - `RUN_MIGRATE=true`: run backend migration after the deployed API passes health check.
+- `ADOPT_EXISTING_DYNAMODB_TABLE=true`: automatically import an existing stateful DynamoDB table instead of trying to create a duplicate.
 - `POST_DEPLOY_HEALTHCHECK=true`: wait for `/health` on the deployed API before migration.
 - `HEALTHCHECK_TIMEOUT_SECONDS=300`: maximum wait time for the health check.
 - `AUTO_ROLLBACK_ON_FAILURE=true`: attempt rollback/cleanup when an AWS-stage failure occurs.
@@ -217,5 +248,8 @@ Configure these in `infra/cdk/deploy.env`:
 
 - Current VPC config uses public subnets and no NAT Gateway (lower cost, simpler).
 - ALB is public.
+- Backend Fargate defaults to `256 CPU / 512 MiB`, the smallest Fargate size, to reduce always-on compute cost.
+- Backend CloudWatch logs are retained for 7 days to avoid unbounded log storage growth.
 - DynamoDB uses on-demand billing and PITR enabled.
 - S3/CloudFront resources are retained on stack delete by default safeguards.
+- The frontend S3 bucket expires noncurrent object versions after 30 days and aborts incomplete multipart uploads after 7 days.

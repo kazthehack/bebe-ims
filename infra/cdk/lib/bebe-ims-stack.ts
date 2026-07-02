@@ -8,6 +8,7 @@ import {
   aws_ec2 as ec2,
   aws_ecs as ecs,
   aws_ecs_patterns as ecsPatterns,
+  aws_logs as logs,
   aws_s3 as s3,
   aws_s3_deployment as s3deploy,
 } from "aws-cdk-lib";
@@ -21,27 +22,35 @@ export class BebeImsStack extends cdk.Stack {
     const environmentName = String(this.node.tryGetContext("environmentName") ?? "prod");
     const apiPrefix = String(this.node.tryGetContext("apiPrefix") ?? "/api/v1");
     const tableName = String(this.node.tryGetContext("tableName") ?? "bebe_ims");
-    const backendCpu = Number(this.node.tryGetContext("backendCpu") ?? 512);
-    const backendMemoryMiB = Number(this.node.tryGetContext("backendMemoryMiB") ?? 1024);
+    const useExistingDynamoTable = String(this.node.tryGetContext("useExistingDynamoTable") ?? "false")
+      .toLowerCase() === "true";
+    const backendCpu = Number(this.node.tryGetContext("backendCpu") ?? 256);
+    const backendMemoryMiB = Number(this.node.tryGetContext("backendMemoryMiB") ?? 512);
     const backendDesiredCount = Number(this.node.tryGetContext("backendDesiredCount") ?? 1);
 
-    const dynamoTable = new dynamodb.Table(this, "BebeImsTable", {
-      tableName,
-      partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
-      sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: true,
-      },
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-    });
+    let dynamoTable: dynamodb.ITable;
+    if (useExistingDynamoTable) {
+      dynamoTable = dynamodb.Table.fromTableName(this, "BebeImsTable", tableName);
+    } else {
+      const createdDynamoTable = new dynamodb.Table(this, "BebeImsTable", {
+        tableName,
+        partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
+        sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        pointInTimeRecoverySpecification: {
+          pointInTimeRecoveryEnabled: true,
+        },
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+      });
 
-    dynamoTable.addGlobalSecondaryIndex({
-      indexName: "gsi1",
-      partitionKey: { name: "gsi1pk", type: dynamodb.AttributeType.STRING },
-      sortKey: { name: "gsi1sk", type: dynamodb.AttributeType.STRING },
-      projectionType: dynamodb.ProjectionType.ALL,
-    });
+      createdDynamoTable.addGlobalSecondaryIndex({
+        indexName: "gsi1",
+        partitionKey: { name: "gsi1pk", type: dynamodb.AttributeType.STRING },
+        sortKey: { name: "gsi1sk", type: dynamodb.AttributeType.STRING },
+        projectionType: dynamodb.ProjectionType.ALL,
+      });
+      dynamoTable = createdDynamoTable;
+    }
 
     const vpc = new ec2.Vpc(this, "BebeImsVpc", {
       maxAzs: 2,
@@ -61,6 +70,11 @@ export class BebeImsStack extends cdk.Stack {
       },
     );
 
+    const backendLogGroup = new logs.LogGroup(this, "BebeImsApiLogGroup", {
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const backendService = new ecsPatterns.ApplicationLoadBalancedFargateService(this, "BebeImsApi", {
       cluster,
       publicLoadBalancer: true,
@@ -77,6 +91,10 @@ export class BebeImsStack extends cdk.Stack {
       taskImageOptions: {
         image: backendImage,
         containerPort: 8001,
+        logDriver: ecs.LogDrivers.awsLogs({
+          streamPrefix: `${projectName}-${environmentName}-api`,
+          logGroup: backendLogGroup,
+        }),
         environment: {
           BEBE_IMS_APP_ENV: "production",
           BEBE_IMS_API_PREFIX: apiPrefix,
@@ -103,6 +121,13 @@ export class BebeImsStack extends cdk.Stack {
       versioned: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       autoDeleteObjects: false,
+      lifecycleRules: [
+        {
+          id: "ExpireOldFrontendVersions",
+          noncurrentVersionExpiration: cdk.Duration.days(30),
+          abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
+        },
+      ],
     });
 
     const distribution = new cloudfront.Distribution(this, "BebeImsDistribution", {
@@ -143,10 +168,21 @@ export class BebeImsStack extends cdk.Stack {
       distribution,
       distributionPaths: ["/*"],
       sources: [s3deploy.Source.asset(frontendBuildPath)],
+      memoryLimit: 1024,
+      ephemeralStorageSize: cdk.Size.mebibytes(1024),
+      prune: false,
+      retainOnDelete: true,
+      waitForDistributionInvalidation: false,
     });
 
     new cdk.CfnOutput(this, "FrontendUrl", {
       value: `https://${distribution.domainName}`,
+    });
+    new cdk.CfnOutput(this, "FrontendBucketName", {
+      value: frontendBucket.bucketName,
+    });
+    new cdk.CfnOutput(this, "CloudFrontDistributionId", {
+      value: distribution.distributionId,
     });
     new cdk.CfnOutput(this, "ApiBaseUrl", {
       value: `https://${distribution.domainName}${apiPrefix}`,

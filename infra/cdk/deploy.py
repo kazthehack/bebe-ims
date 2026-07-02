@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import argparse
+import json
 import subprocess
 import sys
 import time
@@ -64,6 +65,15 @@ def aws_query(
         return default
 
 
+def aws_json(
+    env: dict[str, str],
+    repo_root: Path,
+    args: list[str],
+) -> dict[str, Any]:
+    output = run(["aws", *args, "--output", "json"], cwd=repo_root, env=env, capture=True)
+    return json.loads(output) if output else {}
+
+
 def stack_status(env: dict[str, str], repo_root: Path, stack_name: str) -> str:
     return aws_query(
         env,
@@ -79,6 +89,18 @@ def stack_status(env: dict[str, str], repo_root: Path, stack_name: str) -> str:
             "text",
         ],
     )
+
+
+def wait_for_stack_delete(env: dict[str, str], repo_root: Path, stack_name: str, timeout_seconds: int = 300) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        status = stack_status(env, repo_root, stack_name)
+        if not status:
+            print(f"==> Stack {stack_name} deleted")
+            return
+        print(f"==> Waiting for stack {stack_name} delete: {status}")
+        time.sleep(10)
+    raise RuntimeError(f"Timed out waiting for stack {stack_name} to delete")
 
 
 def stack_resource(
@@ -101,6 +123,37 @@ def stack_resource(
             "text",
         ],
     )
+
+
+def dynamodb_table_description(env: dict[str, str], repo_root: Path, table_name: str) -> dict[str, Any] | None:
+    try:
+        response = aws_json(
+            env,
+            repo_root,
+            ["dynamodb", "describe-table", "--table-name", table_name],
+        )
+    except subprocess.CalledProcessError:
+        return None
+    return response.get("Table")
+
+
+def validate_existing_dynamodb_table(table: dict[str, Any], table_name: str) -> None:
+    status = table.get("TableStatus")
+    if status in {"DELETING", "ARCHIVING", "INACCESSIBLE_ENCRYPTION_CREDENTIALS"}:
+        raise RuntimeError(f"DynamoDB table {table_name} is not deployable; status is {status}")
+
+    key_schema = {entry.get("KeyType"): entry.get("AttributeName") for entry in table.get("KeySchema", [])}
+    if key_schema.get("HASH") != "pk" or key_schema.get("RANGE") != "sk":
+        raise RuntimeError(f"DynamoDB table {table_name} must use pk/sk as its primary key")
+
+    indexes = {index.get("IndexName"): index for index in table.get("GlobalSecondaryIndexes", [])}
+    gsi1 = indexes.get("gsi1")
+    if not gsi1:
+        raise RuntimeError(f"DynamoDB table {table_name} must already have required GSI gsi1")
+
+    gsi_key_schema = {entry.get("KeyType"): entry.get("AttributeName") for entry in gsi1.get("KeySchema", [])}
+    if gsi_key_schema.get("HASH") != "gsi1pk" or gsi_key_schema.get("RANGE") != "gsi1sk":
+        raise RuntimeError(f"DynamoDB table {table_name} gsi1 must use gsi1pk/gsi1sk as its key")
 
 
 def current_ecs_state(env: dict[str, str], repo_root: Path, stack_name: str) -> dict[str, str]:
@@ -195,6 +248,7 @@ def rollback_deployment(
     if not stack_existed_before and status not in {"DELETE_IN_PROGRESS", "DELETE_COMPLETE"}:
         print("==> First-time deployment failed; deleting stack so the next deploy can recreate it")
         run(["aws", "cloudformation", "delete-stack", "--stack-name", stack_name], cwd=repo_root, env=env)
+        wait_for_stack_delete(env, repo_root, stack_name)
         return
 
     if status in {"UPDATE_IN_PROGRESS", "UPDATE_COMPLETE_CLEANUP_IN_PROGRESS"}:
@@ -341,12 +395,13 @@ def main() -> None:
     environment_name = config.get("ENVIRONMENT_NAME", "prod")
     api_prefix = config.get("API_PREFIX", "/api/v1")
     table_name = config.get("TABLE_NAME", "bebe_ims")
-    backend_cpu = config.get("BACKEND_CPU", "512")
-    backend_memory_mib = config.get("BACKEND_MEMORY_MIB", "1024")
+    backend_cpu = config.get("BACKEND_CPU", "256")
+    backend_memory_mib = config.get("BACKEND_MEMORY_MIB", "512")
     backend_desired_count = config.get("BACKEND_DESIRED_COUNT", "1")
     frontend_api_base = config.get("FRONTEND_API_BASE", "/api/v1")
     auto_bootstrap = bool_value(config.get("AUTO_BOOTSTRAP"), True)
     run_migrate = bool_value(config.get("RUN_MIGRATE"), True)
+    adopt_existing_dynamodb_table = bool_value(config.get("ADOPT_EXISTING_DYNAMODB_TABLE"), True)
     auto_rollback = bool_value(config.get("AUTO_ROLLBACK_ON_FAILURE"), True)
     post_deploy_healthcheck = bool_value(config.get("POST_DEPLOY_HEALTHCHECK"), True)
     healthcheck_timeout_seconds = int(config.get("HEALTHCHECK_TIMEOUT_SECONDS", "300"))
@@ -359,6 +414,8 @@ def main() -> None:
     if args.action == "audit":
         status = stack_status(env, repo_root, stack_name) or "NOT_FOUND"
         ecs_state = current_ecs_state(env, repo_root, stack_name)
+        table = dynamodb_table_description(env, repo_root, table_name)
+        stack_table = stack_resource(env, repo_root, stack_name, "AWS::DynamoDB::Table")
         print(f"Stack: {stack_name}")
         print(f"Region: {aws_region}")
         print(f"Status: {status}")
@@ -366,6 +423,9 @@ def main() -> None:
         print(f"ECS service: {ecs_state.get('service_name') or 'not found'}")
         print(f"ECS task definition: {ecs_state.get('task_definition') or 'not found'}")
         print(f"ECS desired count: {ecs_state.get('desired_count') or 'not found'}")
+        print(f"DynamoDB table: {table_name if table else 'not found'}")
+        print(f"DynamoDB table status: {table.get('TableStatus') if table else 'not found'}")
+        print(f"DynamoDB stack resource: {stack_table if stack_table and stack_table != 'None' else 'not found'}")
         return
 
     if args.action == "rollback":
@@ -387,6 +447,31 @@ def main() -> None:
         run(["npx", "cdk", "bootstrap", f"aws://{aws_account_id}/{aws_region}"], cwd=cdk_dir, env=env)
 
     previous_stack_status = stack_status(env, repo_root, stack_name)
+    if previous_stack_status in {"REVIEW_IN_PROGRESS", "ROLLBACK_COMPLETE", "CREATE_FAILED"}:
+        print(f"==> Removing stale first-create stack {stack_name}: {previous_stack_status}")
+        run(["aws", "cloudformation", "delete-stack", "--stack-name", stack_name], cwd=repo_root, env=env)
+        wait_for_stack_delete(env, repo_root, stack_name)
+        previous_stack_status = ""
+
+    table = dynamodb_table_description(env, repo_root, table_name)
+    stack_table = stack_resource(env, repo_root, stack_name, "AWS::DynamoDB::Table") if previous_stack_status else ""
+    config_use_existing = config.get("USE_EXISTING_DYNAMODB_TABLE")
+    use_existing_dynamodb_table = (
+        bool_value(config_use_existing, False)
+        if config_use_existing is not None
+        else bool(table and adopt_existing_dynamodb_table and (not stack_table or stack_table == "None"))
+    )
+    if use_existing_dynamodb_table:
+        if not table:
+            raise RuntimeError(f"USE_EXISTING_DYNAMODB_TABLE=true but DynamoDB table {table_name} was not found")
+        validate_existing_dynamodb_table(table, table_name)
+        print(f"==> Using existing DynamoDB table: {table_name}")
+    elif table and not previous_stack_status:
+        raise RuntimeError(
+            f"DynamoDB table {table_name} already exists outside stack {stack_name}. "
+            "Set ADOPT_EXISTING_DYNAMODB_TABLE=true or choose a different TABLE_NAME."
+        )
+
     previous_ecs_state = current_ecs_state(env, repo_root, stack_name) if previous_stack_status else {}
     previous_ecs_state["stack_existed_before"] = bool(previous_stack_status)
 
@@ -407,6 +492,8 @@ def main() -> None:
                 f"apiPrefix={api_prefix}",
                 "-c",
                 f"tableName={table_name}",
+                "-c",
+                f"useExistingDynamoTable={str(use_existing_dynamodb_table).lower()}",
                 "-c",
                 f"backendCpu={backend_cpu}",
                 "-c",
