@@ -522,6 +522,22 @@ const SitesPage = () => {
     }
   }
 
+  const handleToggleSiteActive = async () => {
+    if (!selectedSite) return
+    setSiteActionError('')
+    setSiteMessage('')
+    try {
+      await updateSite(selectedSite.id, {
+        name: selectedSite.name,
+        location: selectedSite.location || null,
+        active: !Boolean(selectedSite.active),
+      })
+      setSiteMessage(`Site ${!selectedSite.active ? 'activated' : 'deactivated'}.`)
+    } catch (err) {
+      setSiteActionError(err.message || 'Failed to update site status.')
+    }
+  }
+
   return (
     <PageContent title={title}>
       {!id && (
@@ -596,6 +612,11 @@ const SitesPage = () => {
         <>
           {!loading && selectedSite && (
             <PageActions>
+              {!isEditing && (
+                <PagePrimaryButton type="button" onClick={handleToggleSiteActive}>
+                  {selectedSite.active ? 'DEACTIVATE' : 'ACTIVATE'}
+                </PagePrimaryButton>
+              )}
               {!isEditing && <PagePrimaryButton type="button" onClick={() => setIsEditing(true)}>EDIT</PagePrimaryButton>}
               {isEditing && <PagePrimaryButton type="button" onClick={handleSaveEdit}>SAVE</PagePrimaryButton>}
               {isEditing && (

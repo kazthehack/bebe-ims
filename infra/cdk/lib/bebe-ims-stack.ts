@@ -4,6 +4,7 @@ import {
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
   aws_dynamodb as dynamodb,
+  aws_ecr_assets as ecrAssets,
   aws_ec2 as ec2,
   aws_ecs as ecs,
   aws_ecs_patterns as ecsPatterns,
@@ -56,6 +57,7 @@ export class BebeImsStack extends cdk.Stack {
       path.resolve(__dirname, "../../../backend"),
       {
         file: "Dockerfile",
+        platform: ecrAssets.Platform.LINUX_AMD64,
       },
     );
 
@@ -68,6 +70,10 @@ export class BebeImsStack extends cdk.Stack {
       cpu: backendCpu,
       memoryLimitMiB: backendMemoryMiB,
       listenerPort: 80,
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.X86_64,
+        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+      },
       taskImageOptions: {
         image: backendImage,
         containerPort: 8001,

@@ -67,6 +67,8 @@ export const buildInventoryRows = ({
   productLineFilter,
   variantFilter,
   availabilityFilter,
+  activeSiteRoles,
+  activeSiteCount,
 }) => {
   const query = String(search || '').trim().toLowerCase()
   const siteMap = (siteItems || []).reduce((acc, item) => {
@@ -177,8 +179,27 @@ export const buildInventoryRows = ({
         view_qty: Number((siteMap[item.product_variant_id] || {}).qty_available || 0),
       }))
 
+  const enabledSiteCount = Math.max(0, Number(activeSiteCount || 0))
+  const capacityUnits = Math.max(1, 1 + enabledSiteCount)
+  const roleEnabled = {
+    primary: Boolean(activeSiteRoles && activeSiteRoles.primary),
+    secondary: Boolean(activeSiteRoles && activeSiteRoles.secondary),
+    tertiary: Boolean(activeSiteRoles && activeSiteRoles.tertiary),
+  }
+
   const rowsWithStatus = baseRows.map((item) => {
-    const safeTarget = Math.max(1, Number(item.safe_target_qty || item.capacity_target || 1))
+    const perSiteThreshold = Math.max(
+      1,
+      Number(item.variant_capacity_threshold_per_site || item.capacity_threshold_per_site || 8),
+    )
+    const normalizedPrimaryQty = roleEnabled.primary ? Number(item.primary_qty || 0) : 0
+    const normalizedSecondaryQty = roleEnabled.secondary ? Number(item.secondary_qty || 0) : 0
+    const normalizedTertiaryQty = roleEnabled.tertiary ? Number(item.tertiary_qty || 0) : 0
+    const normalizedStorageQty = Math.max(
+      0,
+      Number(item.global_qty || 0) - normalizedPrimaryQty - normalizedSecondaryQty - normalizedTertiaryQty,
+    )
+    const safeTarget = Math.max(1, perSiteThreshold * capacityUnits)
     const thresholdPerSite = Math.max(
       1,
       Number(item.sustain_third_site_qty || item.variant_capacity_threshold_per_site || item.capacity_threshold_per_site || 1),
@@ -189,39 +210,20 @@ export const buildInventoryRows = ({
     const status = globalQty < thresholdPerSite ? 'critical' : (coverage < 0.6 ? 'warning' : 'stable')
     return {
       ...item,
+      primary_qty: normalizedPrimaryQty,
+      secondary_qty: normalizedSecondaryQty,
+      tertiary_qty: normalizedTertiaryQty,
+      storage_qty: normalizedStorageQty,
+      safe_target_qty: safeTarget,
+      capacity_target: safeTarget,
       is_needs_production: status !== 'stable',
       needs_production_gap: safeGap,
       needs_production_status: status,
     }
   })
 
-  const filteredRows = rowsWithStatus
-    .filter((item) => {
-      const selectedProductLines = parseMultiFilter(productLineFilter)
-      const selectedVariants = parseMultiFilter(variantFilter)
-      const selectedAvailability = parseMultiFilter(availabilityFilter)
-      if (query && ![
-        item.product_line_name,
-        item.sku,
-        item.variant_name,
-        item.product_name,
-        item.product_variant_id,
-      ].join(' ').toLowerCase().includes(query)) return false
-      if (selectedProductLines && !selectedProductLines.includes(String(item.product_line_name || ''))) return false
-      if (selectedVariants && !selectedVariants.includes(String(item.variant_name || ''))) return false
-      if (selectedAvailability) {
-        const hasStock = Number(item.view_qty || 0) > 0
-        const availabilityTag = hasStock ? 'with-stock' : 'zero-stock'
-        if (!selectedAvailability.includes(availabilityTag)) return false
-      }
-      if (activeTab === NEEDS_PRODUCTION_TAB) {
-        if (String(item.fsn || 'normal') === 'non_moving') return false
-        if (String(item.needs_production_status || 'stable') === 'stable') return false
-      }
-      return true
-    })
-
   if (activeTab === NEEDS_PRODUCTION_TAB) {
+    const selectedProductLines = parseMultiFilter(productLineFilter)
     const fsnRank = (value) => {
       const normalized = String(value || 'normal')
       if (normalized === 'fast') return 0
@@ -229,9 +231,18 @@ export const buildInventoryRows = ({
       if (normalized === 'slow') return 2
       return 3
     }
-    const groupedByProduct = filteredRows.reduce((acc, item) => {
+    const groupedByProduct = rowsWithStatus.reduce((acc, item) => {
       const productId = String(item.product_id || '')
       if (!productId) return acc
+      if (String(item.fsn || 'normal') === 'non_moving') return acc
+      if (selectedProductLines && !selectedProductLines.includes(String(item.product_line_name || ''))) return acc
+      if (query && ![
+        item.product_line_name,
+        item.sku,
+        item.variant_name,
+        item.product_name,
+        item.product_variant_id,
+      ].join(' ').toLowerCase().includes(query)) return acc
       if (!acc[productId]) {
         acc[productId] = {
           row_key: `product-${productId}`,
@@ -276,7 +287,7 @@ export const buildInventoryRows = ({
     }, {})
     const productRows = Object.values(groupedByProduct).map((item) => {
       const thresholdPerSite = Math.max(1, Number(item.product_capacity_threshold_per_site || 1))
-      const targetQty = Math.max(1, thresholdPerSite * 4)
+      const targetQty = Math.max(1, thresholdPerSite * capacityUnits)
       const globalQty = Math.max(0, Number(item.global_qty || 0))
       const coverage = globalQty / targetQty
       const status = globalQty < thresholdPerSite ? 'critical' : (coverage < 0.6 ? 'warning' : 'stable')
@@ -289,7 +300,9 @@ export const buildInventoryRows = ({
         needs_production_status: status,
       }
     })
-    return productRows.sort((a, b) => {
+    return productRows
+      .filter((item) => String(item.needs_production_status || 'stable') !== 'stable')
+      .sort((a, b) => {
       const severityRank = (value) => (value === 'critical' ? 0 : 1)
       const severityCompare = severityRank(a.needs_production_status) - severityRank(b.needs_production_status)
       if (severityCompare !== 0) return severityCompare
@@ -302,6 +315,28 @@ export const buildInventoryRows = ({
       return alpha(a.variant_name || a.sku).localeCompare(alpha(b.variant_name || b.sku))
     })
   }
+
+  const filteredRows = rowsWithStatus
+    .filter((item) => {
+      const selectedProductLines = parseMultiFilter(productLineFilter)
+      const selectedVariants = parseMultiFilter(variantFilter)
+      const selectedAvailability = parseMultiFilter(availabilityFilter)
+      if (query && ![
+        item.product_line_name,
+        item.sku,
+        item.variant_name,
+        item.product_name,
+        item.product_variant_id,
+      ].join(' ').toLowerCase().includes(query)) return false
+      if (selectedProductLines && !selectedProductLines.includes(String(item.product_line_name || ''))) return false
+      if (selectedVariants && !selectedVariants.includes(String(item.variant_name || ''))) return false
+      if (selectedAvailability) {
+        const hasStock = Number(item.view_qty || 0) > 0
+        const availabilityTag = hasStock ? 'with-stock' : 'zero-stock'
+        if (!selectedAvailability.includes(availabilityTag)) return false
+      }
+      return true
+    })
 
   return filteredRows.sort((a, b) => {
       const lineCompare = alpha(a.product_line_name).localeCompare(alpha(b.product_line_name))

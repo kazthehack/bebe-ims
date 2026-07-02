@@ -9,6 +9,7 @@ import GraphWithTableSection from 'components/reusable/analytics/GraphWithTableS
 import CapacityBar from 'components/reusable/analytics/CapacityBar'
 import QuantityAdjustControl from 'components/reusable/controls/QuantityAdjustControl'
 import { useProductDetail, useProductsList } from 'hooks/products/useProductsApi'
+import { useSitesResource } from 'hooks/bazaar/useBazaarApi'
 import { useListPageScope } from 'contexts/ListPageContext'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import AddProductVariantModal from './modals/AddProductVariantModal'
@@ -232,7 +233,7 @@ const FSN_OPTIONS = [
   { value: 'fast', label: 'Fast' },
   { value: 'normal', label: 'Normal' },
   { value: 'slow', label: 'Slow' },
-  { value: 'non_moving', label: 'Non-Moving' },
+  { value: 'non_moving', label: 'Phase Out' },
 ]
 const parseMultiFilter = (rawValue) => {
   if (rawValue == null || rawValue === 'all') return null
@@ -268,6 +269,7 @@ const ProductDetailPage = () => {
     variantsProductFilter: String(listContext.variantsProductFilter || 'all'),
   }), [listContext])
   const { allProducts } = useProductsList()
+  const { sites } = useSitesResource()
   const {
     productDetail,
     inventoryByVariantId,
@@ -307,7 +309,31 @@ const ProductDetailPage = () => {
   const [quickLossSubmitting, setQuickLossSubmitting] = useState(false)
   const product = productDetail ? productDetail.product : null
   const capacityThresholdPerSite = Math.max(1, Number((product && product.capacity_threshold_per_site) || DEFAULT_THRESHOLD_PER_SITE))
-  const capacityTarget = capacityThresholdPerSite * 4
+  const activeSites = useMemo(
+    () => (sites || []).filter((site) => site.active),
+    [sites],
+  )
+  const siteRoleMap = useMemo(() => {
+    const mapped = { primary: null, secondary: null, tertiary: null }
+    ;(activeSites || []).forEach((site) => {
+      const name = String(site.name || '').trim().toLowerCase()
+      const code = String(site.code || '').trim().toLowerCase()
+      const idValue = String(site.id || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (!mapped.primary && (name.includes('primary') || code === 'site1' || idValue === 'site1' || idValue === 'site001')) mapped.primary = site
+      if (!mapped.secondary && (name.includes('secondary') || code === 'site2' || idValue === 'site2' || idValue === 'site002')) mapped.secondary = site
+      if (!mapped.tertiary && (name.includes('tertiary') || code === 'site3' || idValue === 'site3' || idValue === 'site003')) mapped.tertiary = site
+    })
+    return mapped
+  }, [activeSites])
+  const enabledSiteColumns = useMemo(
+    () => ([
+      siteRoleMap.primary ? { key: 'primary', label: siteRoleMap.primary.name || 'Site 1' } : null,
+      siteRoleMap.secondary ? { key: 'secondary', label: siteRoleMap.secondary.name || 'Site 2' } : null,
+      siteRoleMap.tertiary ? { key: 'tertiary', label: siteRoleMap.tertiary.name || 'Site 3' } : null,
+    ].filter(Boolean)),
+    [siteRoleMap],
+  )
+  const capacityTarget = capacityThresholdPerSite * Math.max(1, 1 + activeSites.length)
 
   const breadcrumbTitle = (
     <BreadcrumbTitle items={[
@@ -502,36 +528,18 @@ const ProductDetailPage = () => {
                 />
                 <MiniMetricValue>{Number((inventoryMetricsByVariantId[variant.id] || {}).storage_qty || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
               </MiniMetricRow>
-              <MiniMetricRow>
-                <MiniMetricLabel>Site 1</MiniMetricLabel>
-                <CapacityBar
-                  value={Number((inventoryMetricsByVariantId[variant.id] || {}).primary_qty || 0)}
-                  target={capacityThresholdPerSite}
-                  height={6}
-                  textPosition="none"
-                />
-                <MiniMetricValue>{Number((inventoryMetricsByVariantId[variant.id] || {}).primary_qty || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
-              </MiniMetricRow>
-              <MiniMetricRow>
-                <MiniMetricLabel>Site 2</MiniMetricLabel>
-                <CapacityBar
-                  value={Number((inventoryMetricsByVariantId[variant.id] || {}).secondary_qty || 0)}
-                  target={capacityThresholdPerSite}
-                  height={6}
-                  textPosition="none"
-                />
-                <MiniMetricValue>{Number((inventoryMetricsByVariantId[variant.id] || {}).secondary_qty || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
-              </MiniMetricRow>
-              <MiniMetricRow>
-                <MiniMetricLabel>Site 3</MiniMetricLabel>
-                <CapacityBar
-                  value={Number((inventoryMetricsByVariantId[variant.id] || {}).tertiary_qty || 0)}
-                  target={capacityThresholdPerSite}
-                  height={6}
-                  textPosition="none"
-                />
-                <MiniMetricValue>{Number((inventoryMetricsByVariantId[variant.id] || {}).tertiary_qty || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
-              </MiniMetricRow>
+              {enabledSiteColumns.map((siteColumn) => (
+                <MiniMetricRow key={`${variant.id}-${siteColumn.key}`}>
+                  <MiniMetricLabel>{siteColumn.label}</MiniMetricLabel>
+                  <CapacityBar
+                    value={Number((inventoryMetricsByVariantId[variant.id] || {})[`${siteColumn.key}_qty`] || 0)}
+                    target={capacityThresholdPerSite}
+                    height={6}
+                    textPosition="none"
+                  />
+                  <MiniMetricValue>{Number((inventoryMetricsByVariantId[variant.id] || {})[`${siteColumn.key}_qty`] || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
+                </MiniMetricRow>
+              ))}
             </CapacityText>
           </CapacityCellWrap>
         ),
@@ -559,7 +567,7 @@ const ProductDetailPage = () => {
         ),
       }
     }),
-    [variants, quickQtyByVariant, quickBusyByVariant, inventoryByVariantId, inventoryMetricsByVariantId, history, capacityTarget, capacityThresholdPerSite],
+    [variants, quickQtyByVariant, quickBusyByVariant, inventoryByVariantId, inventoryMetricsByVariantId, history, capacityTarget, capacityThresholdPerSite, enabledSiteColumns],
   )
 
   const handleCreateVariant = async () => {

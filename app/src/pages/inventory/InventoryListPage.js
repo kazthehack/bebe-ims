@@ -43,11 +43,7 @@ const PaginationButton = styled.button`
 
 const Header = styled.div`
   display: grid;
-  grid-template-columns: ${({ $needsProduction }) => (
-    $needsProduction
-      ? '1.1fr 1.1fr 1.1fr 0.7fr 0.7fr 0.8fr 0.8fr 0.8fr 0.7fr 0.9fr 0.7fr'
-      : '1.1fr 1.1fr 1.1fr 0.7fr 0.7fr 0.8fr 0.8fr 0.8fr 1.1fr 0.7fr'
-  )};
+  grid-template-columns: ${({ $columns }) => $columns || '1.1fr 1.1fr 1.1fr 0.7fr 0.7fr 0.8fr 0.8fr 0.8fr 1.1fr 0.7fr'};
   font-size: 12px;
   color: #4f6278;
   font-weight: 700;
@@ -56,11 +52,7 @@ const Header = styled.div`
 
 const Row = styled.div`
   display: grid;
-  grid-template-columns: ${({ $needsProduction }) => (
-    $needsProduction
-      ? '1.1fr 1.1fr 1.1fr 0.7fr 0.7fr 0.8fr 0.8fr 0.8fr 0.7fr 0.9fr 0.7fr'
-      : '1.1fr 1.1fr 1.1fr 0.7fr 0.7fr 0.8fr 0.8fr 0.8fr 1.1fr 0.7fr'
-  )};
+  grid-template-columns: ${({ $columns }) => $columns || '1.1fr 1.1fr 1.1fr 0.7fr 0.7fr 0.8fr 0.8fr 0.8fr 1.1fr 0.7fr'};
   border: 1px solid #d9e0e8;
   border-radius: 4px;
   background: #e6eaef;
@@ -318,7 +310,7 @@ const FSN_OPTIONS = [
   { value: 'fast', label: 'Fast' },
   { value: 'normal', label: 'Normal' },
   { value: 'slow', label: 'Slow' },
-  { value: 'non_moving', label: 'Non-Moving' },
+  { value: 'non_moving', label: 'Phase Out' },
 ]
 
 const parseMultiFilter = (rawValue, allowedValues) => {
@@ -385,15 +377,41 @@ const InventoryListPage = () => {
   const {
     sites,
   } = useSitesResource()
+  const activeSites = useMemo(
+    () => (sites || []).filter((site) => site.active),
+    [sites],
+  )
+
+  const siteRoleMap = useMemo(() => {
+    const mapped = { primary: null, secondary: null, tertiary: null }
+    ;(activeSites || []).forEach((site) => {
+      const name = String(site.name || '').trim().toLowerCase()
+      const code = String(site.code || '').trim().toLowerCase()
+      const id = String(site.id || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (!mapped.primary && (name.includes('primary') || code === 'site1' || id === 'site1' || id === 'site001')) mapped.primary = site
+      if (!mapped.secondary && (name.includes('secondary') || code === 'site2' || id === 'site2' || id === 'site002')) mapped.secondary = site
+      if (!mapped.tertiary && (name.includes('tertiary') || code === 'site3' || id === 'site3' || id === 'site003')) mapped.tertiary = site
+    })
+    return mapped
+  }, [activeSites])
+
+  const enabledSiteColumns = useMemo(
+    () => ([
+      siteRoleMap.primary ? { key: 'primary', label: siteRoleMap.primary.name || 'Site 1' } : null,
+      siteRoleMap.secondary ? { key: 'secondary', label: siteRoleMap.secondary.name || 'Site 2' } : null,
+      siteRoleMap.tertiary ? { key: 'tertiary', label: siteRoleMap.tertiary.name || 'Site 3' } : null,
+    ].filter(Boolean)),
+    [siteRoleMap],
+  )
 
   const tabs = useMemo(
     () => ([
       { key: GLOBAL_TAB, label: 'Global' },
       { key: STORAGE_TAB, label: 'Storage' },
-      ...(sites || []).map((site) => ({ key: site.id, label: site.name || site.code || site.id })),
+      ...activeSites.map((site) => ({ key: site.id, label: site.name || site.code || site.id })),
       { key: NEEDS_PRODUCTION_TAB, label: 'Pipeline' },
     ]),
-    [sites],
+    [activeSites],
   )
 
   useEffect(() => {
@@ -459,7 +477,13 @@ const InventoryListPage = () => {
     productLineFilter,
     variantFilter,
     availabilityFilter,
-  }), [activeTab, globalItems, siteItems, search, productLineFilter, variantFilter, availabilityFilter])
+    activeSiteRoles: {
+      primary: Boolean(siteRoleMap.primary),
+      secondary: Boolean(siteRoleMap.secondary),
+      tertiary: Boolean(siteRoleMap.tertiary),
+    },
+    activeSiteCount: activeSites.length,
+  }), [activeTab, globalItems, siteItems, search, productLineFilter, variantFilter, availabilityFilter, siteRoleMap, activeSites.length])
 
   const isGlobalTab = activeTab === GLOBAL_TAB
   const isStorageTab = activeTab === STORAGE_TAB
@@ -700,15 +724,15 @@ const InventoryListPage = () => {
         <Table>
           {isGlobalTab && (
             <>
-              <Header>
+              <Header $columns={`1.1fr 1.1fr 1.1fr 0.7fr 0.7fr ${enabledSiteColumns.map(() => '0.8fr').join(' ')} 1.1fr 0.7fr`}>
                 <div>Product Line</div>
                 <div>Product</div>
                 <div>Variant</div>
                 <div>Global</div>
                 <div>Storage</div>
-                <div>Primary (A)</div>
-                <div>Secondary (B)</div>
-                <div>Tertiary (C)</div>
+                {enabledSiteColumns.map((siteColumn) => (
+                  <div key={siteColumn.key}>{siteColumn.label}</div>
+                ))}
                 <div>
                   <CapacityHeaderButton type="button" onClick={cycleCapacitySort}>
                     Capacity
@@ -717,42 +741,28 @@ const InventoryListPage = () => {
                 <div>Action</div>
               </Header>
               {pagedRows.map((item) => (
-                <Row key={item.product_variant_id}>
+                <Row key={item.product_variant_id} $columns={`1.1fr 1.1fr 1.1fr 0.7fr 0.7fr ${enabledSiteColumns.map(() => '0.8fr').join(' ')} 1.1fr 0.7fr`}>
                   <Cell>{item.product_line_name || '-'}</Cell>
                   <Cell>{item.product_name}</Cell>
                   <Cell>{item.variant_name || item.sku || '-'}</Cell>
                   <Cell>{item.global_qty}</Cell>
                   <Cell>{item.storage_qty}</Cell>
-                  <Cell>
-                    <SiteQtyWrap>
-                      <SiteQtyBadge $tone={siteTone(
-                        Number(item.primary_qty || 0),
-                        Number(item.variant_capacity_threshold_per_site || item.capacity_threshold_per_site || 8),
-                      )}>
-                        {item.primary_qty}
-                      </SiteQtyBadge>
-                    </SiteQtyWrap>
-                  </Cell>
-                  <Cell>
-                    <SiteQtyWrap>
-                      <SiteQtyBadge $tone={siteTone(
-                        Number(item.secondary_qty || 0),
-                        Number(item.variant_capacity_threshold_per_site || item.capacity_threshold_per_site || 8),
-                      )}>
-                        {item.secondary_qty}
-                      </SiteQtyBadge>
-                    </SiteQtyWrap>
-                  </Cell>
-                  <Cell>
-                    <SiteQtyWrap>
-                      <SiteQtyBadge $tone={siteTone(
-                        Number(item.tertiary_qty || 0),
-                        Number(item.variant_capacity_threshold_per_site || item.capacity_threshold_per_site || 8),
-                      )}>
-                        {item.tertiary_qty}
-                      </SiteQtyBadge>
-                    </SiteQtyWrap>
-                  </Cell>
+                  {enabledSiteColumns.map((siteColumn) => {
+                    const qty = Number(item[`${siteColumn.key}_qty`] || 0)
+                    return (
+                      <Cell key={`${item.product_variant_id}-${siteColumn.key}`}>
+                        <SiteQtyWrap>
+                          <SiteQtyBadge $tone={siteTone(
+                            qty,
+                            Number(item.variant_capacity_threshold_per_site || item.capacity_threshold_per_site || 8),
+                          )}
+                          >
+                            {qty}
+                          </SiteQtyBadge>
+                        </SiteQtyWrap>
+                      </Cell>
+                    )
+                  })}
                   <Cell>
                     <CapacityCellWrap>
                       <CapacityBar
@@ -819,42 +829,23 @@ const InventoryListPage = () => {
                             {Number(item.storage_qty || 0)} / {Math.max(1, Number(item.capacity_threshold_per_site || 1))}
                           </ProductionMetricValue>
                         </ProductionMetricRow>
-                        <ProductionMetricRow>
-                          <ProductionMetricLabel>Site A</ProductionMetricLabel>
-                          <CapacityBar
-                            value={Number(item.primary_qty || 0)}
-                            target={Math.max(1, Number(item.capacity_threshold_per_site || 1))}
-                            height={6}
-                            textPosition="none"
-                          />
-                          <ProductionMetricValue>
-                            {Number(item.primary_qty || 0)} / {Math.max(1, Number(item.capacity_threshold_per_site || 1))}
-                          </ProductionMetricValue>
-                        </ProductionMetricRow>
-                        <ProductionMetricRow>
-                          <ProductionMetricLabel>Site B</ProductionMetricLabel>
-                          <CapacityBar
-                            value={Number(item.secondary_qty || 0)}
-                            target={Math.max(1, Number(item.capacity_threshold_per_site || 1))}
-                            height={6}
-                            textPosition="none"
-                          />
-                          <ProductionMetricValue>
-                            {Number(item.secondary_qty || 0)} / {Math.max(1, Number(item.capacity_threshold_per_site || 1))}
-                          </ProductionMetricValue>
-                        </ProductionMetricRow>
-                        <ProductionMetricRow>
-                          <ProductionMetricLabel>Site C</ProductionMetricLabel>
-                          <CapacityBar
-                            value={Number(item.tertiary_qty || 0)}
-                            target={Math.max(1, Number(item.capacity_threshold_per_site || 1))}
-                            height={6}
-                            textPosition="none"
-                          />
-                          <ProductionMetricValue>
-                            {Number(item.tertiary_qty || 0)} / {Math.max(1, Number(item.capacity_threshold_per_site || 1))}
-                          </ProductionMetricValue>
-                        </ProductionMetricRow>
+                        {enabledSiteColumns.map((siteColumn) => {
+                          const qty = Number(item[`${siteColumn.key}_qty`] || 0)
+                          return (
+                            <ProductionMetricRow key={`${item.row_key || item.product_id}-${siteColumn.key}`}>
+                              <ProductionMetricLabel>{siteColumn.label}</ProductionMetricLabel>
+                              <CapacityBar
+                                value={qty}
+                                target={Math.max(1, Number(item.capacity_threshold_per_site || 1))}
+                                height={6}
+                                textPosition="none"
+                              />
+                              <ProductionMetricValue>
+                                {qty} / {Math.max(1, Number(item.capacity_threshold_per_site || 1))}
+                              </ProductionMetricValue>
+                            </ProductionMetricRow>
+                          )
+                        })}
                       </ProductionCapacityText>
                     </ProductionCapacityWrap>
                   </Cell>

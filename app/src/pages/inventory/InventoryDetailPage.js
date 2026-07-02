@@ -99,7 +99,7 @@ const Table = styled.div`
 
 const StockSummaryGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(${({ $columns }) => $columns || 2}, 1fr);
   border: 1px solid #d7e0ec;
   border-radius: 4px;
   background: #f7fafc;
@@ -622,7 +622,7 @@ const InventoryDetailPage = () => {
     (item) => String(item.product_variant_id) === String(detail && detail.product_variant_id),
   )
   const capacityThresholdPerSite = Math.max(1, Number((globalItemForVariant && globalItemForVariant.capacity_threshold_per_site) || 8))
-  const globalCapacityTarget = capacityThresholdPerSite * 4
+  const globalCapacityTarget = capacityThresholdPerSite * Math.max(1, 1 + activeSites.length)
   const renderCapacityCell = (qty, target) => (
     <CapacityBar value={Number(qty || 0)} target={Math.max(1, Number(target || 1))} />
   )
@@ -696,7 +696,7 @@ const InventoryDetailPage = () => {
             <SectionHeader>
               <SectionTitle style={{ margin: 0 }}>Inventory</SectionTitle>
             </SectionHeader>
-            <StockSummaryGrid>
+            <StockSummaryGrid $columns={Math.max(2, 2 + activeSites.length)}>
               <StockSummaryCell>
                 <StockSummaryValue>{globalQty}</StockSummaryValue>
                 <StockSummaryLabel>GLOBAL</StockSummaryLabel>
@@ -705,18 +705,24 @@ const InventoryDetailPage = () => {
                 <StockSummaryValue>{storageQty}</StockSummaryValue>
                 <StockSummaryLabel>STORAGE</StockSummaryLabel>
               </StockSummaryCell>
-              <StockSummaryCell>
-                <StockSummaryValue>{primaryQty}</StockSummaryValue>
-                <StockSummaryLabel>PRIMARY (A)</StockSummaryLabel>
-              </StockSummaryCell>
-              <StockSummaryCell>
-                <StockSummaryValue>{secondaryQty}</StockSummaryValue>
-                <StockSummaryLabel>SECONDARY (B)</StockSummaryLabel>
-              </StockSummaryCell>
-              <StockSummaryCell>
-                <StockSummaryValue>{tertiaryQty}</StockSummaryValue>
-                <StockSummaryLabel>TERTIARY (C)</StockSummaryLabel>
-              </StockSummaryCell>
+              {siteIdByRole.primary && (
+                <StockSummaryCell>
+                  <StockSummaryValue>{primaryQty}</StockSummaryValue>
+                  <StockSummaryLabel>{siteNameById[siteIdByRole.primary] || 'Site 1'}</StockSummaryLabel>
+                </StockSummaryCell>
+              )}
+              {siteIdByRole.secondary && (
+                <StockSummaryCell>
+                  <StockSummaryValue>{secondaryQty}</StockSummaryValue>
+                  <StockSummaryLabel>{siteNameById[siteIdByRole.secondary] || 'Site 2'}</StockSummaryLabel>
+                </StockSummaryCell>
+              )}
+              {siteIdByRole.tertiary && (
+                <StockSummaryCell>
+                  <StockSummaryValue>{tertiaryQty}</StockSummaryValue>
+                  <StockSummaryLabel>{siteNameById[siteIdByRole.tertiary] || 'Site 3'}</StockSummaryLabel>
+                </StockSummaryCell>
+              )}
             </StockSummaryGrid>
             <Table>
               <Header>

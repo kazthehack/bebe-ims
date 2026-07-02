@@ -203,7 +203,7 @@ const FSN_OPTIONS = [
   { value: 'fast', label: 'Fast' },
   { value: 'normal', label: 'Normal' },
   { value: 'slow', label: 'Slow' },
-  { value: 'non_moving', label: 'Non-Moving' },
+  { value: 'non_moving', label: 'Phase Out' },
 ]
 
 const money = (value) => new Intl.NumberFormat('en-PH', {
