@@ -4,7 +4,12 @@ from __future__ import annotations
 import os
 import argparse
 import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
+from typing import Any
 
 
 def load_env_file(path: Path) -> dict[str, str]:
@@ -16,7 +21,7 @@ def load_env_file(path: Path) -> dict[str, str]:
         if "=" not in line:
             continue
         key, value = line.split("=", 1)
-        values[key.strip()] = value.strip()
+        values[key.strip()] = value.strip().strip("'\"")
     return values
 
 
@@ -26,9 +31,18 @@ def bool_value(value: str | None, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def run(cmd: list[str], cwd: Path, env: dict[str, str]) -> None:
-    print(f"==> {' '.join(cmd)}")
-    subprocess.run(cmd, cwd=str(cwd), env=env, check=True)
+def run(cmd: list[str], cwd: Path, env: dict[str, str], capture: bool = False) -> str:
+    print(f"==> {' '.join(cmd)}", flush=True)
+    result = subprocess.run(
+        cmd,
+        cwd=str(cwd),
+        env=env,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE if capture else None,
+        stderr=subprocess.PIPE if capture else None,
+    )
+    return result.stdout.strip() if capture and result.stdout else ""
 
 
 def require(config: dict[str, str], name: str) -> str:
@@ -38,8 +52,270 @@ def require(config: dict[str, str], name: str) -> str:
     return value
 
 
+def aws_query(
+    env: dict[str, str],
+    repo_root: Path,
+    args: list[str],
+    default: str = "",
+) -> str:
+    try:
+        return run(["aws", *args], cwd=repo_root, env=env, capture=True)
+    except subprocess.CalledProcessError:
+        return default
+
+
+def stack_status(env: dict[str, str], repo_root: Path, stack_name: str) -> str:
+    return aws_query(
+        env,
+        repo_root,
+        [
+            "cloudformation",
+            "describe-stacks",
+            "--stack-name",
+            stack_name,
+            "--query",
+            "Stacks[0].StackStatus",
+            "--output",
+            "text",
+        ],
+    )
+
+
+def stack_resource(
+    env: dict[str, str],
+    repo_root: Path,
+    stack_name: str,
+    resource_type: str,
+) -> str:
+    return aws_query(
+        env,
+        repo_root,
+        [
+            "cloudformation",
+            "describe-stack-resources",
+            "--stack-name",
+            stack_name,
+            "--query",
+            f"StackResources[?ResourceType=='{resource_type}']|[0].PhysicalResourceId",
+            "--output",
+            "text",
+        ],
+    )
+
+
+def current_ecs_state(env: dict[str, str], repo_root: Path, stack_name: str) -> dict[str, str]:
+    cluster_name = stack_resource(env, repo_root, stack_name, "AWS::ECS::Cluster")
+    service_name = stack_resource(env, repo_root, stack_name, "AWS::ECS::Service")
+    state = {
+        "cluster_name": cluster_name if cluster_name != "None" else "",
+        "service_name": service_name if service_name != "None" else "",
+        "task_definition": "",
+        "desired_count": "",
+    }
+    if not state["cluster_name"] or not state["service_name"]:
+        return state
+
+    service_data = aws_query(
+        env,
+        repo_root,
+        [
+            "ecs",
+            "describe-services",
+            "--cluster",
+            state["cluster_name"],
+            "--services",
+            state["service_name"],
+            "--query",
+            "services[0].[taskDefinition,desiredCount]",
+            "--output",
+            "text",
+        ],
+    )
+    if service_data and service_data != "None":
+        parts = service_data.split()
+        state["task_definition"] = parts[0] if parts else ""
+        state["desired_count"] = parts[1] if len(parts) > 1 else ""
+    return state
+
+
+def stop_running_tasks(env: dict[str, str], repo_root: Path, cluster_name: str, service_name: str) -> None:
+    tasks = aws_query(
+        env,
+        repo_root,
+        [
+            "ecs",
+            "list-tasks",
+            "--cluster",
+            cluster_name,
+            "--service-name",
+            service_name,
+            "--desired-status",
+            "RUNNING",
+            "--query",
+            "taskArns",
+            "--output",
+            "text",
+        ],
+    )
+    if not tasks or tasks == "None":
+        return
+    for task_arn in tasks.split():
+        run(
+            [
+                "aws",
+                "ecs",
+                "stop-task",
+                "--cluster",
+                cluster_name,
+                "--task",
+                task_arn,
+                "--reason",
+                "Deployment rollback from infra/cdk/deploy.py",
+            ],
+            cwd=repo_root,
+            env=env,
+        )
+
+
+def rollback_deployment(
+    env: dict[str, str],
+    repo_root: Path,
+    stack_name: str,
+    previous_state: dict[str, Any] | None = None,
+    reason: str = "deployment failed",
+) -> None:
+    print(f"==> Rollback requested: {reason}")
+    status = stack_status(env, repo_root, stack_name)
+    if not status:
+        print(f"==> Stack {stack_name} does not exist; nothing to roll back")
+        return
+
+    print(f"==> Stack {stack_name} status: {status}")
+    stack_existed_before = (previous_state or {}).get("stack_existed_before", True)
+    if not stack_existed_before and status not in {"DELETE_IN_PROGRESS", "DELETE_COMPLETE"}:
+        print("==> First-time deployment failed; deleting stack so the next deploy can recreate it")
+        run(["aws", "cloudformation", "delete-stack", "--stack-name", stack_name], cwd=repo_root, env=env)
+        return
+
+    if status in {"UPDATE_IN_PROGRESS", "UPDATE_COMPLETE_CLEANUP_IN_PROGRESS"}:
+        run(["aws", "cloudformation", "cancel-update-stack", "--stack-name", stack_name], cwd=repo_root, env=env)
+    elif status in {"CREATE_IN_PROGRESS", "ROLLBACK_FAILED", "CREATE_FAILED"}:
+        run(["aws", "cloudformation", "delete-stack", "--stack-name", stack_name], cwd=repo_root, env=env)
+        return
+
+    ecs_state = current_ecs_state(env, repo_root, stack_name)
+    cluster_name = ecs_state.get("cluster_name", "")
+    service_name = ecs_state.get("service_name", "")
+    if not cluster_name or not service_name:
+        print("==> ECS service not found from stack resources; rollback stops here")
+        return
+
+    previous_task = (previous_state or {}).get("task_definition", "")
+    previous_desired = (previous_state or {}).get("desired_count", "")
+    if previous_task:
+        command = [
+            "aws",
+            "ecs",
+            "update-service",
+            "--cluster",
+            cluster_name,
+            "--service",
+            service_name,
+            "--task-definition",
+            previous_task,
+            "--force-new-deployment",
+        ]
+        if previous_desired:
+            command.extend(["--desired-count", str(previous_desired)])
+        run(command, cwd=repo_root, env=env)
+        print(f"==> ECS service restored to previous task definition: {previous_task}")
+    else:
+        run(
+            [
+                "aws",
+                "ecs",
+                "update-service",
+                "--cluster",
+                cluster_name,
+                "--service",
+                service_name,
+                "--desired-count",
+                "0",
+            ],
+            cwd=repo_root,
+            env=env,
+        )
+        stop_running_tasks(env, repo_root, cluster_name, service_name)
+        print("==> No previous task definition found; ECS service scaled to 0")
+
+
+def stack_outputs(env: dict[str, str], repo_root: Path, stack_name: str) -> dict[str, str]:
+    output = aws_query(
+        env,
+        repo_root,
+        [
+            "cloudformation",
+            "describe-stacks",
+            "--stack-name",
+            stack_name,
+            "--query",
+            "Stacks[0].Outputs[*].[OutputKey,OutputValue]",
+            "--output",
+            "text",
+        ],
+    )
+    values: dict[str, str] = {}
+    for line in output.splitlines():
+        parts = line.split(maxsplit=1)
+        if len(parts) == 2:
+            values[parts[0]] = parts[1]
+    return values
+
+
+def wait_for_health(url: str, timeout_seconds: int) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_error = ""
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=10) as response:
+                if 200 <= response.status < 300:
+                    print(f"==> Health check passed: {url}")
+                    return
+                last_error = f"HTTP {response.status}"
+        except (urllib.error.URLError, TimeoutError) as exc:
+            last_error = str(exc)
+        print(f"==> Waiting for health check: {url} ({last_error})")
+        time.sleep(15)
+    raise RuntimeError(f"Health check failed after {timeout_seconds}s: {url} ({last_error})")
+
+
+def build_env(config: dict[str, str], aws_account_id: str, aws_region: str) -> dict[str, str]:
+    env = os.environ.copy()
+    env["AWS_REGION"] = aws_region
+    env["AWS_DEFAULT_REGION"] = aws_region
+    env["CDK_DEFAULT_ACCOUNT"] = aws_account_id
+    env["CDK_DEFAULT_REGION"] = aws_region
+
+    for key in ("AWS_PROFILE", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
+        if key not in config:
+            continue
+        value = config[key].strip()
+        if value:
+            env[key] = value
+        else:
+            env.pop(key, None)
+    return env
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Deploy bebe-ims infrastructure and app to AWS using CDK.")
+    parser = argparse.ArgumentParser(description="Deploy or roll back bebe-ims infrastructure and app on AWS using CDK.")
+    parser.add_argument(
+        "action",
+        choices=("deploy", "rollback", "audit"),
+        nargs="?",
+        default="deploy",
+        help="Action to run (default: deploy).",
+    )
     parser.add_argument(
         "--config",
         default=str(Path(__file__).resolve().parent / "deploy.env"),
@@ -71,20 +347,30 @@ def main() -> None:
     frontend_api_base = config.get("FRONTEND_API_BASE", "/api/v1")
     auto_bootstrap = bool_value(config.get("AUTO_BOOTSTRAP"), True)
     run_migrate = bool_value(config.get("RUN_MIGRATE"), True)
+    auto_rollback = bool_value(config.get("AUTO_ROLLBACK_ON_FAILURE"), True)
+    post_deploy_healthcheck = bool_value(config.get("POST_DEPLOY_HEALTHCHECK"), True)
+    healthcheck_timeout_seconds = int(config.get("HEALTHCHECK_TIMEOUT_SECONDS", "300"))
     stack_name = config.get("STACK_NAME", f"{project_name}-{environment_name}")
 
-    env = os.environ.copy()
-    env["AWS_REGION"] = aws_region
-    env["AWS_DEFAULT_REGION"] = aws_region
-    env["CDK_DEFAULT_ACCOUNT"] = aws_account_id
-    env["CDK_DEFAULT_REGION"] = aws_region
-
-    for key in ("AWS_PROFILE", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
-        value = config.get(key, "").strip()
-        if value:
-            env[key] = value
+    env = build_env(config, aws_account_id, aws_region)
 
     run(["aws", "sts", "get-caller-identity"], cwd=repo_root, env=env)
+
+    if args.action == "audit":
+        status = stack_status(env, repo_root, stack_name) or "NOT_FOUND"
+        ecs_state = current_ecs_state(env, repo_root, stack_name)
+        print(f"Stack: {stack_name}")
+        print(f"Region: {aws_region}")
+        print(f"Status: {status}")
+        print(f"ECS cluster: {ecs_state.get('cluster_name') or 'not found'}")
+        print(f"ECS service: {ecs_state.get('service_name') or 'not found'}")
+        print(f"ECS task definition: {ecs_state.get('task_definition') or 'not found'}")
+        print(f"ECS desired count: {ecs_state.get('desired_count') or 'not found'}")
+        return
+
+    if args.action == "rollback":
+        rollback_deployment(env, repo_root, stack_name, reason="manual rollback")
+        return
 
     app_dir = repo_root / "app"
     if not (app_dir / "node_modules").exists():
@@ -100,32 +386,69 @@ def main() -> None:
     if auto_bootstrap:
         run(["npx", "cdk", "bootstrap", f"aws://{aws_account_id}/{aws_region}"], cwd=cdk_dir, env=env)
 
-    run(
-        [
-            "npx",
-            "cdk",
-            "deploy",
-            stack_name,
-            "--require-approval",
-            "never",
-            "-c",
-            f"projectName={project_name}",
-            "-c",
-            f"environmentName={environment_name}",
-            "-c",
-            f"apiPrefix={api_prefix}",
-            "-c",
-            f"tableName={table_name}",
-            "-c",
-            f"backendCpu={backend_cpu}",
-            "-c",
-            f"backendMemoryMiB={backend_memory_mib}",
-            "-c",
-            f"backendDesiredCount={backend_desired_count}",
-        ],
-        cwd=cdk_dir,
-        env=env,
-    )
+    previous_stack_status = stack_status(env, repo_root, stack_name)
+    previous_ecs_state = current_ecs_state(env, repo_root, stack_name) if previous_stack_status else {}
+    previous_ecs_state["stack_existed_before"] = bool(previous_stack_status)
+
+    try:
+        run(
+            [
+                "npx",
+                "cdk",
+                "deploy",
+                stack_name,
+                "--require-approval",
+                "never",
+                "-c",
+                f"projectName={project_name}",
+                "-c",
+                f"environmentName={environment_name}",
+                "-c",
+                f"apiPrefix={api_prefix}",
+                "-c",
+                f"tableName={table_name}",
+                "-c",
+                f"backendCpu={backend_cpu}",
+                "-c",
+                f"backendMemoryMiB={backend_memory_mib}",
+                "-c",
+                f"backendDesiredCount={backend_desired_count}",
+            ],
+            cwd=cdk_dir,
+            env=env,
+        )
+
+        outputs = stack_outputs(env, repo_root, stack_name)
+        if post_deploy_healthcheck:
+            health_base = outputs.get("AlbApiUrl") or outputs.get("ApiBaseUrl")
+            if not health_base:
+                raise RuntimeError("Missing AlbApiUrl/ApiBaseUrl stack output for health check")
+            wait_for_health(f"{health_base.rstrip('/')}/health", healthcheck_timeout_seconds)
+
+        if run_migrate:
+            backend_dir = repo_root / "backend"
+            if not (backend_dir / ".venv").exists():
+                run(["make", "install"], cwd=backend_dir, env=env)
+
+            backend_python = backend_dir / ".venv" / "bin" / "python"
+            migrate_env = env.copy()
+            migrate_env["BEBE_IMS_APP_ENV"] = "production"
+            migrate_env["BEBE_IMS_AWS_REGION"] = aws_region
+            migrate_env["BEBE_IMS_DYNAMODB_TABLE_NAME"] = table_name
+            migrate_env["BEBE_IMS_DYNAMODB_ENDPOINT_URL"] = f"https://dynamodb.{aws_region}.amazonaws.com"
+            migrate_env["PYTHONPATH"] = "."
+            run([str(backend_python), "scripts/migrate.py"], cwd=backend_dir, env=migrate_env)
+    except Exception as exc:
+        print(f"==> Deployment failed: {exc}", file=sys.stderr)
+        if auto_rollback:
+            rollback_deployment(
+                env,
+                repo_root,
+                stack_name,
+                previous_state=previous_ecs_state,
+                reason=str(exc),
+            )
+        raise
 
     run(
         [
@@ -142,20 +465,6 @@ def main() -> None:
         cwd=repo_root,
         env=env,
     )
-
-    if run_migrate:
-        backend_dir = repo_root / "backend"
-        if not (backend_dir / ".venv").exists():
-            run(["make", "install"], cwd=backend_dir, env=env)
-
-        backend_python = backend_dir / ".venv" / "bin" / "python"
-        migrate_env = env.copy()
-        migrate_env["BEBE_IMS_APP_ENV"] = "production"
-        migrate_env["BEBE_IMS_AWS_REGION"] = aws_region
-        migrate_env["BEBE_IMS_DYNAMODB_TABLE_NAME"] = table_name
-        migrate_env["BEBE_IMS_DYNAMODB_ENDPOINT_URL"] = f"https://dynamodb.{aws_region}.amazonaws.com"
-        migrate_env["PYTHONPATH"] = "."
-        run([str(backend_python), "scripts/migrate.py"], cwd=backend_dir, env=migrate_env)
 
     print("==> Deployment complete")
 

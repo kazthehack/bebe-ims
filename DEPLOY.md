@@ -55,8 +55,38 @@ What `deploy.py` does:
 - builds frontend with `REACT_APP_REST_API_ENDPOINT=/api/v1`
 - runs `cdk bootstrap` (optional via config)
 - deploys stack with your context values
+- validates the deployed backend through the stack `AlbApiUrl`/`ApiBaseUrl` health endpoint
 - prints stack outputs
 - runs safe `scripts/migrate.py` against AWS DynamoDB (optional via config)
+- automatically rolls back the deployment path on failure when `AUTO_ROLLBACK_ON_FAILURE=true`
+
+## GitHub Actions production deploy
+
+Production deploys are wired to the `prod` branch:
+
+```bash
+git push origin prod
+```
+
+The workflow runs:
+- `make`
+- `make deploy`
+
+It also supports manual runs from the GitHub Actions `Deploy Production` workflow.
+
+Required GitHub repository secrets:
+- `AWS_ACCOUNT_ID`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+Optional GitHub repository variables:
+- `AWS_REGION` defaults to `ap-southeast-1`
+- `PROJECT_NAME` defaults to `bebe-ims`
+- `TABLE_NAME` defaults to `bebe_ims`
+- `BACKEND_CPU` defaults to `512`
+- `BACKEND_MEMORY_MIB` defaults to `1024`
+- `BACKEND_DESIRED_COUNT` defaults to `1`
+- `HEALTHCHECK_TIMEOUT_SECONDS` defaults to `300`
 
 ## Prerequisites
 
@@ -105,6 +135,28 @@ npx cdk deploy
 - `AlbApiUrl`
 - `DynamoTableName`
 
+## Audit and rollback
+
+Before or after an attempted deployment, inspect the live AWS stack/ECS state:
+
+```bash
+make deploy-audit
+```
+
+If a deployment fails or needs to be taken down for the next iteration:
+
+```bash
+make deploy-rollback
+```
+
+Rollback behavior:
+- cancels in-progress CloudFormation updates when possible
+- deletes failed/in-progress first-time stack creates
+- restores the previous ECS task definition when `deploy.py` captured one before an update
+- otherwise scales the ECS service to `0` and stops running tasks
+
+The normal deploy path runs this rollback automatically when `AUTO_ROLLBACK_ON_FAILURE=true`.
+
 ## Run migration safely in AWS
 
 `make migrate` is intended to ensure structure/defaults without inventory overwrite.
@@ -150,6 +202,16 @@ npx cdk deploy \
   -c backendMemoryMiB=1024 \
   -c backendDesiredCount=1
 ```
+
+## Deployment behavior flags
+
+Configure these in `infra/cdk/deploy.env`:
+
+- `AUTO_BOOTSTRAP=true`: run CDK bootstrap before deploy.
+- `RUN_MIGRATE=true`: run backend migration after the deployed API passes health check.
+- `POST_DEPLOY_HEALTHCHECK=true`: wait for `/health` on the deployed API before migration.
+- `HEALTHCHECK_TIMEOUT_SECONDS=300`: maximum wait time for the health check.
+- `AUTO_ROLLBACK_ON_FAILURE=true`: attempt rollback/cleanup when an AWS-stage failure occurs.
 
 ## Cost and operations notes
 
