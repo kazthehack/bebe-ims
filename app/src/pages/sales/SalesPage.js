@@ -227,16 +227,6 @@ const formatDateTime = (value) => {
   return date.toLocaleString()
 }
 
-const paginate = (rows, page) => {
-  const totalPages = Math.max(1, Math.ceil((rows || []).length / PAGE_SIZE))
-  const safePage = Math.min(Math.max(1, page), totalPages)
-  return {
-    rows: (rows || []).slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    totalPages,
-    safePage,
-  }
-}
-
 const SalesPage = () => {
   const location = useLocation()
   const history = useHistory()
@@ -254,8 +244,15 @@ const SalesPage = () => {
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
 
-  const receiptsResource = useReceiptsResource()
-  const { receipts, loading, error, getReceipt } = receiptsResource
+  const eventId = activeTab.startsWith('event:') ? activeTab.replace('event:', '') : ''
+  const receiptsResource = useReceiptsResource('tenant-admin', {
+    page,
+    pageSize: PAGE_SIZE,
+    search,
+    status: statusFilter === 'all' ? '' : statusFilter,
+    eventId,
+  })
+  const { receipts, total: receiptsTotal, loading, error, getReceipt } = receiptsResource
   const { events } = useEventsResource()
   const { sites } = useSitesResource()
 
@@ -340,38 +337,18 @@ const SalesPage = () => {
     return () => { cancelled = true }
   }, [id, getReceipt])
 
-  const filteredReceipts = useMemo(() => {
-    const query = String(search || '').trim().toLowerCase()
-    const eventId = activeTab.startsWith('event:') ? activeTab.replace('event:', '') : ''
-    const selectedStatuses = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
-    return (receipts || [])
-      .filter((receipt) => {
-        if (eventId && receipt.event_id !== eventId) return false
-        if (!selectedStatuses.includes(String(receipt.status || '').toLowerCase())) return false
-        if (!query) return true
-        const eventName = eventNameById[receipt.event_id] || receipt.event_id || ''
-        const siteName = siteNameById[receipt.site_id] || receipt.site_id || ''
-        return [
-          receipt.id,
-          receipt.receipt_number,
-          receipt.status,
-          eventName,
-          siteName,
-        ].join(' ').toLowerCase().includes(query)
-      })
-      .sort((left, right) => String(right.created_at || '').localeCompare(String(left.created_at || '')))
-  }, [receipts, activeTab, statusFilter, search, eventNameById, siteNameById])
-
-  const paged = paginate(filteredReceipts, page)
+  const totalPages = Math.max(1, Math.ceil(Number(receiptsTotal || 0) / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const paged = { rows: receipts || [], totalPages, safePage }
   const totalAmount = useMemo(
-    () => (filteredReceipts || []).reduce((sum, row) => sum + Number(row.total_amount || 0), 0),
-    [filteredReceipts],
+    () => (receipts || []).reduce((sum, row) => sum + Number(row.total_amount || 0), 0),
+    [receipts],
   )
   const totalUnits = useMemo(
-    () => (filteredReceipts || []).reduce((sum, row) => (
+    () => (receipts || []).reduce((sum, row) => (
       sum + (row.items || []).reduce((s, item) => s + Number(item.qty || 0), 0)
     ), 0),
-    [filteredReceipts],
+    [receipts],
   )
 
   const title = id
@@ -505,7 +482,7 @@ const SalesPage = () => {
           </Toolbar>
 
           <StatsGrid>
-            <StatsCell><StatsValue>{filteredReceipts.length}</StatsValue><StatsLabel>Receipts</StatsLabel></StatsCell>
+            <StatsCell><StatsValue>{receiptsTotal}</StatsValue><StatsLabel>Receipts</StatsLabel></StatsCell>
             <StatsCell><StatsValue>{totalUnits}</StatsValue><StatsLabel>Units Sold</StatsLabel></StatsCell>
             <StatsCell><StatsValue>{peso(totalAmount)}</StatsValue><StatsLabel>Total Sales</StatsLabel></StatsCell>
           </StatsGrid>

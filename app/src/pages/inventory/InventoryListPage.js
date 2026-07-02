@@ -346,6 +346,7 @@ const InventoryListPage = () => {
   const [search, setSearch] = useState(() => String(restoredState.search || ''))
   const [page, setPage] = useState(() => Math.max(1, Number(restoredState.page || 1)))
   const [siteItems, setSiteItems] = useState([])
+  const [siteItemsTotal, setSiteItemsTotal] = useState(0)
   const [siteLoading, setSiteLoading] = useState(false)
   const [siteError, setSiteError] = useState('')
   const [productLineFilter, setProductLineFilter] = useState(() => String(restoredState.productLineFilter || 'all'))
@@ -365,15 +366,12 @@ const InventoryListPage = () => {
   const [fsnModalValue, setFsnModalValue] = useState('non_moving')
   const [fsnModalSubmitting, setFsnModalSubmitting] = useState(false)
   const [fsnModalError, setFsnModalError] = useState('')
-  const {
-    globalItems,
-    loading,
-    error,
-    loadSite,
-    exportInventoryWorkbook,
-    updateProductCapacityThreshold,
-    updateVariantsFsnBulk,
-  } = useInventoryResource()
+  const isGlobalTab = activeTab === GLOBAL_TAB
+  const isStorageTab = activeTab === STORAGE_TAB
+  const isNeedsProductionTab = activeTab === NEEDS_PRODUCTION_TAB
+  const isInventoryServerPaged = (
+    (isGlobalTab || isStorageTab) && capacitySort === 'none'
+  ) || isNeedsProductionTab
   const {
     sites,
   } = useSitesResource()
@@ -381,6 +379,29 @@ const InventoryListPage = () => {
     () => (sites || []).filter((site) => site.active),
     [sites],
   )
+  const {
+    globalItems,
+    globalTotal,
+    productLineOptions: serverProductLineOptions,
+    variantOptions: serverVariantOptions,
+    loading,
+    error,
+    loadSite,
+    exportInventoryWorkbook,
+    updateProductCapacityThreshold,
+    updateVariantsFsnBulk,
+  } = useInventoryResource('tenant-admin', {
+    enabled: isGlobalTab || isStorageTab || isNeedsProductionTab,
+    page: isInventoryServerPaged ? page : undefined,
+    pageSize: isInventoryServerPaged ? PAGE_SIZE : undefined,
+    search: isInventoryServerPaged ? search : '',
+    productLineFilter: isInventoryServerPaged && productLineFilter !== 'all' ? productLineFilter : '',
+    variantFilter: isInventoryServerPaged && variantFilter !== 'all' ? variantFilter : '',
+    availabilityFilter: isInventoryServerPaged && availabilityFilter !== 'all' ? availabilityFilter : '',
+    pipeline: isNeedsProductionTab,
+    activeSiteCount: activeSites.length,
+    neededSort: neededQtySort,
+  })
 
   const siteRoleMap = useMemo(() => {
     const mapped = { primary: null, secondary: null, tertiary: null }
@@ -426,8 +447,16 @@ const InventoryListPage = () => {
       setSiteLoading(true)
       setSiteError('')
       try {
-        const data = await loadSite(activeTab)
+        const data = await loadSite(activeTab, {
+          page,
+          pageSize: PAGE_SIZE,
+          search,
+          productLineFilter: productLineFilter !== 'all' ? productLineFilter : '',
+          variantFilter: variantFilter !== 'all' ? variantFilter : '',
+          availabilityFilter: availabilityFilter !== 'all' ? availabilityFilter : '',
+        })
         if (!cancelled) setSiteItems(data.items || [])
+        if (!cancelled) setSiteItemsTotal(Number(data.total || (data.items || []).length))
       } catch (err) {
         if (!cancelled) setSiteError(err.message || 'Failed to load site inventory.')
       } finally {
@@ -438,7 +467,7 @@ const InventoryListPage = () => {
     return () => {
       cancelled = true
     }
-  }, [activeTab, loadSite])
+  }, [activeTab, loadSite, page, search, productLineFilter, variantFilter, availabilityFilter])
 
   const hasMountedRef = React.useRef(false)
   useEffect(() => {
@@ -461,33 +490,56 @@ const InventoryListPage = () => {
   }, [activeTab, search, page, productLineFilter, variantFilter, availabilityFilter, setScopeState])
 
   const productLineOptions = useMemo(
-    () => ['all', ...Array.from(new Set((globalItems || []).map((item) => String(item.product_line_name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
-    [globalItems],
+    () => ['all', ...(serverProductLineOptions || []).filter(Boolean).sort((a, b) => a.localeCompare(b))],
+    [serverProductLineOptions],
   )
   const variantOptions = useMemo(
-    () => ['all', ...Array.from(new Set((globalItems || []).map((item) => String(item.variant_name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
-    [globalItems],
+    () => ['all', ...(serverVariantOptions || []).filter(Boolean).sort((a, b) => a.localeCompare(b))],
+    [serverVariantOptions],
   )
 
-  const rows = useMemo(() => buildInventoryRows({
-    activeTab,
-    globalItems,
-    siteItems,
-    search,
-    productLineFilter,
-    variantFilter,
-    availabilityFilter,
-    activeSiteRoles: {
-      primary: Boolean(siteRoleMap.primary),
-      secondary: Boolean(siteRoleMap.secondary),
-      tertiary: Boolean(siteRoleMap.tertiary),
-    },
-    activeSiteCount: activeSites.length,
-  }), [activeTab, globalItems, siteItems, search, productLineFilter, variantFilter, availabilityFilter, siteRoleMap, activeSites.length])
+  const rows = useMemo(() => {
+    if (isNeedsProductionTab && isInventoryServerPaged) {
+      return (globalItems || []).map((item) => ({
+        row_key: item.row_key || `product-${item.product_id}`,
+        inventory_id: item.inventory_id,
+        product_id: item.product_id,
+        product_variant_id: item.product_variant_id,
+        sku: item.sku,
+        product_line_name: item.product_line_name,
+        product_name: item.product_name,
+        variant_name: item.variant_name,
+        fsn: String(item.fsn || 'normal'),
+        capacity_threshold_per_site: Number(item.capacity_threshold_per_site || 0),
+        capacity_target: Number(item.capacity_target || 0),
+        global_qty: Number(item.global_qty || item.master_qty_on_hand || 0),
+        storage_qty: Number(item.storage_qty || item.storage_qty_on_hand || 0),
+        primary_qty: Number(item.primary_qty || item.primary_qty_on_hand || 0),
+        secondary_qty: Number(item.secondary_qty || item.secondary_qty_on_hand || 0),
+        tertiary_qty: Number(item.tertiary_qty || item.tertiary_qty_on_hand || 0),
+        view_qty: Number(item.view_qty || item.master_qty_on_hand || 0),
+        needs_production_gap: Number(item.needs_production_gap || 0),
+        needs_production_status: String(item.needs_production_status || 'warning'),
+        needed_variant_count: Number(item.needed_variant_count || 0),
+      }))
+    }
+    return buildInventoryRows({
+      activeTab,
+      globalItems,
+      siteItems,
+      search,
+      productLineFilter,
+      variantFilter,
+      availabilityFilter,
+      activeSiteRoles: {
+        primary: Boolean(siteRoleMap.primary),
+        secondary: Boolean(siteRoleMap.secondary),
+        tertiary: Boolean(siteRoleMap.tertiary),
+      },
+      activeSiteCount: activeSites.length,
+    })
+  }, [activeTab, globalItems, siteItems, search, productLineFilter, variantFilter, availabilityFilter, siteRoleMap, activeSites.length, isNeedsProductionTab, isInventoryServerPaged])
 
-  const isGlobalTab = activeTab === GLOBAL_TAB
-  const isStorageTab = activeTab === STORAGE_TAB
-  const isNeedsProductionTab = activeTab === NEEDS_PRODUCTION_TAB
   const listQuery = useMemo(() => toInventoryListQuery({
     activeTab,
     search,
@@ -528,9 +580,16 @@ const InventoryListPage = () => {
       return leftName.localeCompare(rightName)
     })
   }, [rows, isGlobalTab, capacitySort, isNeedsProductionTab, neededQtySort])
-  const totalPages = Math.max(1, Math.ceil(displayRows.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(Number((
+    isInventoryServerPaged
+      ? globalTotal
+      : (!isGlobalTab && !isStorageTab && !isNeedsProductionTab ? siteItemsTotal : displayRows.length)
+  ) || 0) / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const pagedRows = displayRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const isSiteServerPaged = !isGlobalTab && !isStorageTab && !isNeedsProductionTab
+  const pagedRows = (isInventoryServerPaged || isSiteServerPaged)
+    ? displayRows
+    : displayRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   const filterDefinitions = useMemo(
     () => {

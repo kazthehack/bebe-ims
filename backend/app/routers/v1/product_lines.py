@@ -15,6 +15,14 @@ product_line_controller = ProductLine()
 product_controller = Product()
 
 
+def _paginate(items: list, page: int | None, page_size: int | None) -> tuple[list, int]:
+    total = len(items)
+    if page is None or page_size is None:
+        return items, total
+    start = (page - 1) * page_size
+    return items[start:start + page_size], total
+
+
 def _to_product_line(
     record: StoredRecord[ProductLineDocument],
     products_count: int = 0,
@@ -32,7 +40,12 @@ def _to_product_line(
 
 
 @router.get('', response_model=ProductLineListResponse)
-def list_product_lines(tenant_id: str = Query('tenant-admin')) -> ProductLineListResponse:
+def list_product_lines(
+    tenant_id: str = Query('tenant-admin'),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    search: str | None = Query(default=None),
+) -> ProductLineListResponse:
     line_records = [map_record(record, ProductLineDocument) for record in product_line_controller.list(tenant_id)]
     product_records = [map_record(record, ProductDocument) for record in product_controller.list(tenant_id)]
     line_counts: dict[str, int] = {}
@@ -43,9 +56,17 @@ def list_product_lines(tenant_id: str = Query('tenant-admin')) -> ProductLineLis
             continue
         line_counts[line_id] = line_counts.get(line_id, 0) + 1
 
-    return ProductLineListResponse(
-        product_lines=[_to_product_line(record, line_counts.get(record.object_id, 0)) for record in line_records],
-    )
+    product_lines = [_to_product_line(record, line_counts.get(record.object_id, 0)) for record in line_records]
+    query = str(search or '').strip().casefold()
+    if query:
+        product_lines = [
+            line for line in product_lines
+            if query in ' '.join([line.code, line.name, line.description or '']).casefold()
+        ]
+    product_lines.sort(key=lambda line: (line.name.casefold(), line.code.casefold(), line.id.casefold()))
+    paged, total = _paginate(product_lines, page, page_size)
+
+    return ProductLineListResponse(product_lines=paged, total=total, page=page, page_size=page_size)
 
 
 @router.post('', response_model=ProductLineRead)

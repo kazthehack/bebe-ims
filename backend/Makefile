@@ -6,7 +6,7 @@ HOST ?= 0.0.0.0
 
 export PATH := $(CURDIR)/.tools/bin:$(PATH)
 
-.PHONY: help install build migrate migrate-init reset snapshot restore-snapshot run run-dev deploy stop logs clean lint fmt test ensure-slicer-cli
+.PHONY: help install build migrate prod migrate-prod migrate-init port-inventory-cloud reset snapshot restore-snapshot run run-dev deploy stop logs clean lint fmt test ensure-slicer-cli
 
 help:
 	@echo "Targets:"
@@ -14,7 +14,9 @@ help:
 	@echo "  make ensure-slicer-cli # install/link slicer cli for 3MF parsing"
 	@echo "  make build     # install deps + compile backend modules"
 	@echo "  make migrate   # create table + seed defaults (no inventory overwrite)"
+	@echo "  make migrate prod # clone local DynamoDB table to production"
 	@echo "  make migrate-init # migrate + catalog-sync inventory from backend/data/inventory_seed.xlsm (preserves stock numbers)"
+	@echo "  make port-inventory-cloud # dry-run local inventory port to AWS DynamoDB"
 	@echo "  make reset     # zero out product inventory quantities"
 	@echo "  make snapshot  # save DynamoDB snapshot JSON (tenant-admin by default)"
 	@echo "  make restore-snapshot SNAPSHOT_FILE=... # restore snapshot JSON into DynamoDB"
@@ -40,12 +42,27 @@ build:
 	. .venv/bin/activate && python -m compileall app
 
 migrate:
+ifneq ($(filter prod,$(MAKECMDGOALS)),)
+	$(MAKE) migrate-prod
+else
 	test -d .venv || $(MAKE) install
 	. .venv/bin/activate && PYTHONPATH=. python scripts/migrate.py
+endif
+
+prod:
+	@:
+
+migrate-prod:
+	test -d .venv || $(MAKE) install
+	. .venv/bin/activate && PYTHONPATH=. python scripts/port_inventory_to_cloud.py --full-clone --confirm-prod-clone clone-local-to-prod
 
 migrate-init:
 	test -d .venv || $(MAKE) install
 	. .venv/bin/activate && PYTHONPATH=. python scripts/migrate.py --include-inventory-seed
+
+port-inventory-cloud:
+	test -d .venv || $(MAKE) install
+	. .venv/bin/activate && PYTHONPATH=. python scripts/port_inventory_to_cloud.py --dry-run
 
 reset:
 	test -d .venv || $(MAKE) install

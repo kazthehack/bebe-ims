@@ -9,6 +9,8 @@ import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import { useEventsResource } from 'hooks/bazaar/useBazaarApi'
 import { useListPageScope } from 'contexts/ListPageContext'
 
+const PAGE_SIZE = 20
+
 const Surface = styled.div`
   background: #f3f5f7;
   border: 1px solid #e1e6ec;
@@ -287,14 +289,6 @@ const EventsPage = () => {
     ...scopeState,
     ...readEventsListStateFromSearch(location.search),
   }), [scopeState, location.search])
-  const {
-    events,
-    loading,
-    error,
-    createEvent,
-    updateEvent,
-  } = useEventsResource()
-
   const [search, setSearch] = useState(() => String(restoredState.search || ''))
   const [statusFilter, setStatusFilter] = useState(() => String(restoredState.statusFilter || 'all'))
   const [page, setPage] = useState(() => Math.max(1, Number(restoredState.page || 1)))
@@ -312,6 +306,19 @@ const EventsPage = () => {
   const [endTimeInput, setEndTimeInput] = useState('18:00')
   const [locationInput, setLocationInput] = useState('')
   const [statusInput, setStatusInput] = useState('scheduled')
+  const {
+    events,
+    loading,
+    error,
+    createEvent,
+    updateEvent,
+    total: eventsTotal,
+  } = useEventsResource('tenant-admin', id ? {} : {
+    page,
+    pageSize: PAGE_SIZE,
+    search,
+    status: statusFilter === 'all' ? '' : statusFilter,
+  })
 
   const selectedEvent = useMemo(() => (events || []).find((item) => item.id === id) || null, [events, id])
 
@@ -330,6 +337,7 @@ const EventsPage = () => {
   }, [selectedEvent])
 
   const filteredEvents = useMemo(() => {
+    if (!id) return events || []
     const query = String(search || '').trim().toLowerCase()
     const selectedStatuses = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
     return (events || []).filter((item) => {
@@ -344,16 +352,15 @@ const EventsPage = () => {
         item.end_date,
       ].join(' ').toLowerCase().includes(query)
     })
-  }, [events, search, statusFilter])
+  }, [events, search, statusFilter, id])
 
-  const PAGE_SIZE = 20
-  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(Number((id ? filteredEvents.length : eventsTotal) || 0) / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const pagedEvents = filteredEvents.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const pagedEvents = id ? filteredEvents.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE) : filteredEvents
 
   useEffect(() => {
     setPage(1)
-  }, [filteredEvents.length])
+  }, [search, statusFilter])
 
   const listQuery = useMemo(() => toEventsListQuery({
     search,

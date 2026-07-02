@@ -34,6 +34,9 @@ class SiteRead(BaseModel):
 
 class SiteListResponse(BaseModel):
     sites: list[SiteRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None
 
 
 class SiteEventAssignCreate(BaseModel):

@@ -33,6 +33,14 @@ adjustment_controller = InventoryAdjustment()
 MAIN_SITE_ID = 'main'
 
 
+def _paginate(items: list, page: int | None, page_size: int | None) -> tuple[list, int]:
+    total = len(items)
+    if page is None or page_size is None:
+        return items, total
+    start = (page - 1) * page_size
+    return items[start:start + page_size], total
+
+
 def _to_site(record: StoredRecord[SiteDocument]) -> SiteRead:
     return SiteRead(
         id=record.object_id,
@@ -98,11 +106,31 @@ def _create_adjustment(
 
 
 @router.get('', response_model=SiteListResponse)
-def list_sites(tenant_id: str = Query('tenant-admin')) -> SiteListResponse:
+def list_sites(
+    tenant_id: str = Query('tenant-admin'),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    search: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+) -> SiteListResponse:
     records = [map_record(record, SiteDocument) for record in site_controller.list(tenant_id)]
     sites = [_to_site(record) for record in records]
     sites.sort(key=lambda site: ((site.name or '').strip().casefold(), (site.code or '').strip().casefold(), site.id.casefold()))
-    return SiteListResponse(sites=sites)
+    selected_statuses = {value for value in str(status or '').split(',') if value}
+    if selected_statuses:
+        sites = [
+            site for site in sites
+            if ('active' in selected_statuses and site.active)
+            or ('inactive' in selected_statuses and not site.active)
+        ]
+    query = str(search or '').strip().casefold()
+    if query:
+        sites = [
+            site for site in sites
+            if query in ' '.join([site.id, site.code, site.name, site.location or '']).casefold()
+        ]
+    paged, total = _paginate(sites, page, page_size)
+    return SiteListResponse(sites=paged, total=total, page=page, page_size=page_size)
 
 
 @router.get('/{id}', response_model=SiteRead)

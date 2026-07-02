@@ -9,6 +9,8 @@ import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import { useEventsResource, useInventoryResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
 import { useListPageScope } from 'contexts/ListPageContext'
 
+const PAGE_SIZE = 20
+
 const Surface = styled.div`
   background: #f3f5f7;
   border: 1px solid #e1e6ec;
@@ -295,11 +297,18 @@ const SitesPage = () => {
     assignEventToSite,
     returnAllInventoryToGlobal,
     closeSiteEvent,
-  } = useSitesResource()
+    total: sitesTotal,
+  } = useSitesResource('tenant-admin', id ? {} : {
+    page,
+    pageSize: PAGE_SIZE,
+    search,
+    status: statusFilter === 'all' ? '' : statusFilter,
+  })
   const { events } = useEventsResource()
   const { loadSite } = useInventoryResource()
 
   const filteredSites = useMemo(() => {
+    if (!id) return sites || []
     const query = String(search || '').trim().toLowerCase()
     const selectedStatuses = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
     return (sites || []).filter((site) => {
@@ -313,24 +322,23 @@ const SitesPage = () => {
         site.id,
       ].join(' ').toLowerCase().includes(query)
     })
-  }, [sites, search, statusFilter])
+  }, [sites, search, statusFilter, id])
 
   const selectedSite = useMemo(
     () => (sites || []).find((site) => site.id === id) || null,
     [sites, id],
   )
   const selectedSiteId = selectedSite ? selectedSite.id : ''
-  const PAGE_SIZE = 20
-  const totalPages = Math.max(1, Math.ceil((filteredSites || []).length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(Number((id ? filteredSites.length : sitesTotal) || 0) / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
   const pagedSites = useMemo(
-    () => (filteredSites || []).slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filteredSites, safePage],
+    () => (id ? (filteredSites || []).slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE) : (filteredSites || [])),
+    [filteredSites, safePage, id],
   )
 
   useEffect(() => {
     setPage(1)
-  }, [filteredSites.length])
+  }, [search, statusFilter])
 
   const listQuery = useMemo(() => toSitesListQuery({
     search,

@@ -17,8 +17,42 @@ const byProductLineNameThenCode = (a, b) => {
   return alpha(a.code || a.id).localeCompare(alpha(b.code || b.id))
 }
 
-export const useProductsList = (tenantId = 'tenant-admin') => {
+const appendQueryParam = (params, key, value) => {
+  if (value == null || value === '') return
+  params.set(key, value)
+}
+
+export const useProductsList = (tenantId = 'tenant-admin', options = {}) => {
+  const {
+    productsPage,
+    productsPageSize,
+    productsSearch,
+    productsLineFilter,
+    productsLineIdFilter,
+    productsIpFilter,
+    productsFsnFilter,
+    productLinesPage,
+    productLinesPageSize,
+    productLinesSearch,
+    variantsPage,
+    variantsPageSize,
+    variantsSearch,
+    variantsLineFilter,
+    variantsProductFilter,
+    includeProducts = true,
+    includeVariants = true,
+    includeProductLines = true,
+    includeInventory = true,
+    inventoryForLoadedProducts = false,
+  } = options
   const [products, setProducts] = useState([])
+  const [productsTotal, setProductsTotal] = useState(0)
+  const [variantsTotal, setVariantsTotal] = useState(0)
+  const [productLinesTotal, setProductLinesTotal] = useState(0)
+  const [productLineFilterOptions, setProductLineFilterOptions] = useState([])
+  const [productIpFilterOptions, setProductIpFilterOptions] = useState([])
+  const [variantProductLineFilterOptions, setVariantProductLineFilterOptions] = useState([])
+  const [variantProductNameFilterOptions, setVariantProductNameFilterOptions] = useState([])
   const [variants, setVariants] = useState([])
   const [productLines, setProductLines] = useState([])
   const [inventoryItems, setInventoryItems] = useState([])
@@ -30,16 +64,49 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
     setLoading(true)
     setError('')
     try {
+      const params = new URLSearchParams(tenantQuery(tenantId))
+      appendQueryParam(params, 'page', productsPage)
+      appendQueryParam(params, 'page_size', productsPageSize)
+      appendQueryParam(params, 'search', productsSearch)
+      appendQueryParam(params, 'product_line', productsLineFilter)
+      appendQueryParam(params, 'product_line_id', productsLineIdFilter)
+      appendQueryParam(params, 'ip', productsIpFilter)
+      appendQueryParam(params, 'fsn', productsFsnFilter)
       const query = tenantQuery(tenantId)
-      const [productData, variantData, productLineData, inventoryData] = await Promise.all([
-        getJson(`/products?${query}`),
-        getJson(`/products/variants?${query}`),
-        getJson(`/product-lines?${query}`),
-        getJson(`/stock/inventory/global?${query}`),
+      const productLineParams = new URLSearchParams(query)
+      appendQueryParam(productLineParams, 'page', productLinesPage)
+      appendQueryParam(productLineParams, 'page_size', productLinesPageSize)
+      appendQueryParam(productLineParams, 'search', productLinesSearch)
+      const variantParams = new URLSearchParams(query)
+      appendQueryParam(variantParams, 'page', variantsPage)
+      appendQueryParam(variantParams, 'page_size', variantsPageSize)
+      appendQueryParam(variantParams, 'search', variantsSearch)
+      appendQueryParam(variantParams, 'product_line', variantsLineFilter)
+      appendQueryParam(variantParams, 'product_name', variantsProductFilter)
+      const [productData, variantData, productLineData] = await Promise.all([
+        includeProducts ? getJson(`/products?${params.toString()}`) : Promise.resolve({ products: [] }),
+        includeVariants ? getJson(`/products/variants?${variantParams.toString()}`) : Promise.resolve({ variants: [] }),
+        includeProductLines ? getJson(`/product-lines?${productLineParams.toString()}`) : Promise.resolve({ product_lines: [] }),
       ])
+      let inventoryData = { items: [] }
+      if (includeInventory) {
+        const inventoryParams = new URLSearchParams(query)
+        if (inventoryForLoadedProducts) {
+          const productIds = (productData.products || []).map((item) => item.id).filter(Boolean).join(',')
+          appendQueryParam(inventoryParams, 'product_ids', productIds)
+        }
+        inventoryData = await getJson(`/stock/inventory/global?${inventoryParams.toString()}`)
+      }
       setProducts([...(productData.products || [])].sort(byProductLineThenProduct))
+      setProductsTotal(Number(productData.total || (productData.products || []).length))
+      setProductLineFilterOptions([...(productData.product_line_options || [])])
+      setProductIpFilterOptions([...(productData.ip_options || [])])
       setVariants([...(variantData.variants || [])])
+      setVariantsTotal(Number(variantData.total || (variantData.variants || []).length))
+      setVariantProductLineFilterOptions([...(variantData.product_line_options || [])])
+      setVariantProductNameFilterOptions([...(variantData.product_name_options || [])])
       setProductLines([...(productLineData.product_lines || [])].sort(byProductLineNameThenCode))
+      setProductLinesTotal(Number(productLineData.total || (productLineData.product_lines || []).length))
       setInventoryItems([...(inventoryData.items || [])])
     } catch (err) {
       setError(err.message || 'Failed to load products.')
@@ -50,7 +117,29 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
 
   useEffect(() => {
     load()
-  }, [])
+  }, [
+    tenantId,
+    productsPage,
+    productsPageSize,
+    productsSearch,
+    productsLineFilter,
+    productsLineIdFilter,
+    productsIpFilter,
+    productsFsnFilter,
+    productLinesPage,
+    productLinesPageSize,
+    productLinesSearch,
+    variantsPage,
+    variantsPageSize,
+    variantsSearch,
+    variantsLineFilter,
+    variantsProductFilter,
+    includeProducts,
+    includeVariants,
+    includeProductLines,
+    includeInventory,
+    inventoryForLoadedProducts,
+  ])
 
   const createProduct = async ({
     name,
@@ -183,11 +272,18 @@ export const useProductsList = (tenantId = 'tenant-admin') => {
     apiBase,
     allProducts: products,
     products: filtered,
+    productsTotal,
+    productLineFilterOptions,
+    productIpFilterOptions,
+    variantProductLineFilterOptions,
+    variantProductNameFilterOptions,
     variants,
+    variantsTotal,
     variantsByProductId,
     storageCapacityByVariantId,
     storageCapacityByProductId,
     productLines,
+    productLinesTotal,
     loading,
     error,
     search,

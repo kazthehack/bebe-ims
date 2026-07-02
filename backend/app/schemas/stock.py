@@ -26,10 +26,14 @@ class ProductStockRead(BaseModel):
 
 class ProductStockListResponse(BaseModel):
     items: list[ProductStockRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None
 
 
 class InventoryGlobalItemRead(BaseModel):
     inventory_id: str
+    row_key: str | None = None
     product_variant_id: str
     sku: str
     variant_name: str | None = None
@@ -46,10 +50,25 @@ class InventoryGlobalItemRead(BaseModel):
     primary_qty_on_hand: float = 0.0
     secondary_qty_on_hand: float = 0.0
     tertiary_qty_on_hand: float = 0.0
+    capacity_target: float | None = None
+    global_qty: float | None = None
+    storage_qty: float | None = None
+    primary_qty: float | None = None
+    secondary_qty: float | None = None
+    tertiary_qty: float | None = None
+    view_qty: float | None = None
+    needs_production_gap: float | None = None
+    needs_production_status: str | None = None
+    needed_variant_count: int | None = None
 
 
 class InventoryGlobalListResponse(BaseModel):
     items: list[InventoryGlobalItemRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None
+    product_line_options: list[str] = []
+    variant_options: list[str] = []
 
 
 class InventorySiteStockRead(BaseModel):
@@ -90,6 +109,9 @@ class InventorySiteItemRead(BaseModel):
 class InventorySiteListResponse(BaseModel):
     site_id: str
     items: list[InventorySiteItemRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None
 
 
 class InventoryDispatchCreate(BaseModel):
@@ -237,10 +259,14 @@ class SupplyRead(BaseModel):
     grams_on_hand: float
     grams_reserved: float
     grams_available: float
+    last_order_date: datetime | None = None
 
 
 class SupplyListResponse(BaseModel):
     supplies: list[SupplyRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None
 
 
 class SupplyBrandRead(BaseModel):
@@ -274,6 +300,9 @@ class FilamentRead(BaseModel):
 
 class FilamentListResponse(BaseModel):
     filaments: list[FilamentRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None
 
 
 class FilamentVariantAssociationRead(BaseModel):
@@ -335,3 +364,6 @@ class InventoryAdjustmentRead(BaseModel):
 
 class InventoryAdjustmentListResponse(BaseModel):
     adjustments: list[InventoryAdjustmentRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None

@@ -1,7 +1,7 @@
 SHELL := /bin/zsh
 .DEFAULT_GOAL := build
 
-.PHONY: help install build clean migrate migrate-init reset snapshot restore-snapshot run run-local dev run-backend run-app run-dynamodb-local deploy deploy-cdk deploy-audit deploy-rollback deploy-version-rollback deploy-backend deploy-app deploy-docker lint fmt test
+.PHONY: help install build clean migrate prod migrate-prod migrate-init port-inventory-cloud reset snapshot restore-snapshot run run-local dev run-backend run-app run-dynamodb-local deploy deploy-cdk deploy-audit deploy-rollback deploy-version-rollback deploy-backend deploy-app deploy-docker lint fmt test
 
 DYNAMODB_LOCAL_DIR ?= dynamodb_local_latest
 DYNAMODB_LOCAL_JAR ?= $(DYNAMODB_LOCAL_DIR)/DynamoDBLocal.jar
@@ -15,7 +15,9 @@ help:
 	@echo "  make build         # build backend + app"
 	@echo "  make clean         # clean backend + app build artifacts"
 	@echo "  make migrate       # run backend db migrate/seed (no inventory overwrite)"
+	@echo "  make migrate prod  # clone local DynamoDB table to production"
 	@echo "  make migrate-init  # run migrate + catalog-sync inventory seed from workbook (preserves stock numbers)"
+	@echo "  make port-inventory-cloud # dry-run local inventory port to AWS DynamoDB"
 	@echo "  make reset         # zero out inventory quantities"
 	@echo "  make snapshot      # save backend DynamoDB snapshot JSON"
 	@echo "  make restore-snapshot SNAPSHOT_FILE=... # restore a snapshot JSON"
@@ -51,10 +53,23 @@ clean:
 	$(MAKE) -C app clean
 
 migrate:
+ifneq ($(filter prod,$(MAKECMDGOALS)),)
+	$(MAKE) -C backend migrate-prod
+else
 	$(MAKE) -C backend migrate
+endif
+
+prod:
+	@:
+
+migrate-prod:
+	$(MAKE) -C backend migrate-prod
 
 migrate-init:
 	$(MAKE) -C backend migrate-init
+
+port-inventory-cloud:
+	$(MAKE) -C backend port-inventory-cloud
 
 reset:
 	$(MAKE) -C backend reset

@@ -32,6 +32,14 @@ adjustment_controller = InventoryAdjustment()
 session_controller = WebPosSession()
 
 
+def _paginate(items: list, page: int | None, page_size: int | None) -> tuple[list, int]:
+    total = len(items)
+    if page is None or page_size is None:
+        return items, total
+    start = (page - 1) * page_size
+    return items[start:start + page_size], total
+
+
 def _line_total(qty: int, unit_price: float) -> float:
     return float(qty) * float(unit_price)
 
@@ -142,7 +150,14 @@ def _site_available_qty(tenant_id: str, site_id: str, product_variant_id: str) -
 
 
 @router.get('', response_model=SaleReceiptListResponse)
-def list_receipts(tenant_id: str = Query('tenant-admin')) -> SaleReceiptListResponse:
+def list_receipts(
+    tenant_id: str = Query('tenant-admin'),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    search: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    event_id: str | None = Query(default=None),
+) -> SaleReceiptListResponse:
     receipts = [map_record(record, SaleReceiptDocument) for record in receipt_controller.list(tenant_id)]
     item_records = [map_record(record, SaleReceiptItemDocument) for record in item_controller.list(tenant_id)]
 
@@ -154,7 +169,28 @@ def list_receipts(tenant_id: str = Query('tenant-admin')) -> SaleReceiptListResp
             if item_record.payload.sale_receipt_id == receipt.object_id
         ]
         models.append(_build_receipt(receipt, receipt_items))
-    return SaleReceiptListResponse(receipts=models)
+    if event_id:
+        models = [receipt for receipt in models if receipt.event_id == event_id]
+    selected_statuses = {value for value in str(status or '').split(',') if value}
+    if selected_statuses:
+        models = [receipt for receipt in models if str(receipt.status or '').lower() in selected_statuses]
+    query = str(search or '').strip().casefold()
+    if query:
+        models = [
+            receipt for receipt in models
+            if query in ' '.join([
+                receipt.id,
+                receipt.receipt_number,
+                receipt.site_id,
+                receipt.event_id or '',
+                receipt.status,
+                receipt.payment_method or '',
+                receipt.notes or '',
+            ]).casefold()
+        ]
+    models.sort(key=lambda receipt: receipt.created_at, reverse=True)
+    paged, total = _paginate(models, page, page_size)
+    return SaleReceiptListResponse(receipts=paged, total=total, page=page, page_size=page_size)
 
 
 @router.post('', response_model=SaleReceiptRead)

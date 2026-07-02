@@ -178,6 +178,31 @@ Notes:
 - Do not run `migrate-init` unless you explicitly want inventory catalog sync.
 - Do not run `reset` unless you explicitly intend to zero stock quantities.
 
+## Clone local DynamoDB to production
+
+After the cloud table exists, clone the local DynamoDB table into production:
+
+```bash
+make migrate prod
+```
+
+The production clone:
+- reads local DynamoDB from `backend/config/dynamodb.local.json`
+- reads AWS credentials, region, and table name from `infra/cdk/deploy.env`
+- copies all tenants and all object types
+- overwrites matching production records with local records
+- deletes production records that do not exist locally
+- writes rollback metadata under `backend/backups/`
+- rolls back cloud writes automatically if the script fails mid-run
+
+The legacy partial port is still available as a dry run:
+
+```bash
+make port-inventory-cloud
+```
+
+That dry run scans local DynamoDB and reports how many inventory-related records would be copied. It does not write cloud data.
+
 ## Stateful resource handling
 
 DynamoDB is treated as critical state.

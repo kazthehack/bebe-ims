@@ -16,6 +16,14 @@ event_controller = Event()
 site_controller = Site()
 
 
+def _paginate(items: list, page: int | None, page_size: int | None) -> tuple[list, int]:
+    total = len(items)
+    if page is None or page_size is None:
+        return items, total
+    start = (page - 1) * page_size
+    return items[start:start + page_size], total
+
+
 def _derive_days(start_date: str, end_date: str) -> int:
     try:
         start = datetime.strptime(start_date, '%Y-%m-%d').date()
@@ -72,11 +80,35 @@ def _dedupe_event_codes(events: list[EventRead]) -> list[EventRead]:
 
 
 @router.get('', response_model=EventListResponse)
-def list_events(tenant_id: str = Query('tenant-admin')) -> EventListResponse:
+def list_events(
+    tenant_id: str = Query('tenant-admin'),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    search: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+) -> EventListResponse:
     records = [map_record(record, EventDocument) for record in event_controller.list(tenant_id)]
     events = [_to_event(record) for record in records]
     events.sort(key=lambda event: ((event.start_date or '').strip(), (event.title or '').strip().casefold(), event.id.casefold()))
-    return EventListResponse(events=_dedupe_event_codes(events))
+    events = _dedupe_event_codes(events)
+    selected_statuses = {value for value in str(status or '').split(',') if value}
+    if selected_statuses:
+        events = [event for event in events if str(event.status or '').lower() in selected_statuses]
+    query = str(search or '').strip().casefold()
+    if query:
+        events = [
+            event for event in events
+            if query in ' '.join([
+                event.code,
+                event.title,
+                event.organizer or '',
+                event.location or '',
+                event.start_date,
+                event.end_date,
+            ]).casefold()
+        ]
+    paged, total = _paginate(events, page, page_size)
+    return EventListResponse(events=paged, total=total, page=page, page_size=page_size)
 
 
 @router.get('/sites')

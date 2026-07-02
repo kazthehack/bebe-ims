@@ -51,3 +51,6 @@ class EventRead(BaseModel):
 
 class EventListResponse(BaseModel):
     events: list[EventRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None

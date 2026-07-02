@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiBase, deleteJson, getBlob, getJson, postJson, putJson, tenantQuery } from 'hooks/http/httpClient'
 
+const appendQueryParam = (params, key, value) => {
+  if (value == null || value === '') return
+  params.set(key, value)
+}
+
 export const useStockResource = (tenantId = 'tenant-admin') => {
   const [productStock, setProductStock] = useState([])
   const [supplies, setSupplies] = useState([])
@@ -71,8 +76,10 @@ export const useStockResource = (tenantId = 'tenant-admin') => {
   }
 }
 
-export const useReceiptsResource = (tenantId = 'tenant-admin') => {
+export const useReceiptsResource = (tenantId = 'tenant-admin', options = {}) => {
+  const { page, pageSize, search, status, eventId } = options
   const [receipts, setReceipts] = useState([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -80,14 +87,21 @@ export const useReceiptsResource = (tenantId = 'tenant-admin') => {
     setLoading(true)
     setError('')
     try {
-      const data = await getJson(`/receipts?${tenantQuery(tenantId)}`)
+      const params = new URLSearchParams(tenantQuery(tenantId))
+      appendQueryParam(params, 'page', page)
+      appendQueryParam(params, 'page_size', pageSize)
+      appendQueryParam(params, 'search', search)
+      appendQueryParam(params, 'status', status)
+      appendQueryParam(params, 'event_id', eventId)
+      const data = await getJson(`/receipts?${params.toString()}`)
       setReceipts(data.receipts || [])
+      setTotal(Number(data.total || (data.receipts || []).length))
     } catch (err) {
       setError(err.message || 'Failed to load receipts.')
     } finally {
       setLoading(false)
     }
-  }, [tenantId])
+  }, [tenantId, page, pageSize, search, status, eventId])
 
   useEffect(() => {
     load()
@@ -108,6 +122,7 @@ export const useReceiptsResource = (tenantId = 'tenant-admin') => {
 
   return {
     receipts,
+    total,
     loading,
     error,
     createReceipt,
@@ -161,8 +176,10 @@ export const useSessionsResource = (tenantId = 'tenant-admin') => {
   }
 }
 
-export const useSitesResource = (tenantId = 'tenant-admin') => {
+export const useSitesResource = (tenantId = 'tenant-admin', options = {}) => {
+  const { page, pageSize, search, status } = options
   const [sites, setSites] = useState([])
+  const [total, setTotal] = useState(0)
   const [siteEventsById, setSiteEventsById] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -180,14 +197,20 @@ export const useSitesResource = (tenantId = 'tenant-admin') => {
     setLoading(true)
     setError('')
     try {
-      const data = await getJson(`/sites?${tenantQuery(tenantId)}`)
+      const params = new URLSearchParams(tenantQuery(tenantId))
+      appendQueryParam(params, 'page', page)
+      appendQueryParam(params, 'page_size', pageSize)
+      appendQueryParam(params, 'search', search)
+      appendQueryParam(params, 'status', status)
+      const data = await getJson(`/sites?${params.toString()}`)
       setSites(sortSites(data.sites || []))
+      setTotal(Number(data.total || (data.sites || []).length))
     } catch (err) {
       setError(err.message || 'Failed to load sites.')
     } finally {
       setLoading(false)
     }
-  }, [tenantId])
+  }, [tenantId, page, pageSize, search, status])
 
   useEffect(() => {
     load()
@@ -235,6 +258,7 @@ export const useSitesResource = (tenantId = 'tenant-admin') => {
   return {
     apiBase,
     sites,
+    total,
     siteEventsById,
     loading,
     error,
@@ -248,8 +272,10 @@ export const useSitesResource = (tenantId = 'tenant-admin') => {
   }
 }
 
-export const useEventsResource = (tenantId = 'tenant-admin') => {
+export const useEventsResource = (tenantId = 'tenant-admin', options = {}) => {
+  const { page, pageSize, search, status } = options
   const [events, setEvents] = useState([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -257,14 +283,20 @@ export const useEventsResource = (tenantId = 'tenant-admin') => {
     setLoading(true)
     setError('')
     try {
-      const data = await getJson(`/events?${tenantQuery(tenantId)}`)
+      const params = new URLSearchParams(tenantQuery(tenantId))
+      appendQueryParam(params, 'page', page)
+      appendQueryParam(params, 'page_size', pageSize)
+      appendQueryParam(params, 'search', search)
+      appendQueryParam(params, 'status', status)
+      const data = await getJson(`/events?${params.toString()}`)
       setEvents(data.events || [])
+      setTotal(Number(data.total || (data.events || []).length))
     } catch (err) {
       setError(err.message || 'Failed to load events.')
     } finally {
       setLoading(false)
     }
-  }, [tenantId])
+  }, [tenantId, page, pageSize, search, status])
 
   useEffect(() => {
     load()
@@ -288,6 +320,7 @@ export const useEventsResource = (tenantId = 'tenant-admin') => {
   return {
     apiBase,
     events,
+    total,
     loading,
     error,
     createEvent,
@@ -297,30 +330,72 @@ export const useEventsResource = (tenantId = 'tenant-admin') => {
   }
 }
 
-export const useInventoryResource = (tenantId = 'tenant-admin') => {
+export const useInventoryResource = (tenantId = 'tenant-admin', options = {}) => {
+  const {
+    page,
+    pageSize,
+    search,
+    productLineFilter,
+    variantFilter,
+    availabilityFilter,
+    enabled = true,
+    pipeline = false,
+    activeSiteCount,
+    neededSort,
+  } = options
   const [globalItems, setGlobalItems] = useState([])
+  const [globalTotal, setGlobalTotal] = useState(0)
+  const [productLineOptions, setProductLineOptions] = useState([])
+  const [variantOptions, setVariantOptions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   const loadGlobal = useCallback(async () => {
+    if (!enabled) {
+      setGlobalItems([])
+      setGlobalTotal(0)
+      setLoading(false)
+      setError('')
+      return
+    }
     setLoading(true)
     setError('')
     try {
-      const data = await getJson(`/stock/inventory/global?${tenantQuery(tenantId)}`)
+      const params = new URLSearchParams(tenantQuery(tenantId))
+      appendQueryParam(params, 'page', page)
+      appendQueryParam(params, 'page_size', pageSize)
+      appendQueryParam(params, 'search', search)
+      appendQueryParam(params, 'product_line', productLineFilter)
+      appendQueryParam(params, 'variant', variantFilter)
+      appendQueryParam(params, 'availability', availabilityFilter)
+      if (pipeline) params.set('pipeline', 'true')
+      appendQueryParam(params, 'active_site_count', activeSiteCount)
+      appendQueryParam(params, 'needed_sort', neededSort)
+      const data = await getJson(`/stock/inventory/global?${params.toString()}`)
       setGlobalItems(data.items || [])
+      setGlobalTotal(Number(data.total || (data.items || []).length))
+      setProductLineOptions(data.product_line_options || [])
+      setVariantOptions(data.variant_options || [])
     } catch (err) {
       setError(err.message || 'Failed to load inventory.')
     } finally {
       setLoading(false)
     }
-  }, [tenantId])
+  }, [tenantId, page, pageSize, search, productLineFilter, variantFilter, availabilityFilter, enabled, pipeline, activeSiteCount, neededSort])
 
   useEffect(() => {
     loadGlobal()
   }, [loadGlobal])
 
-  const loadSite = useCallback(async (siteId) => {
-    return getJson(`/stock/inventory/sites/${encodeURIComponent(siteId)}?${tenantQuery(tenantId)}`)
+  const loadSite = useCallback(async (siteId, siteOptions = {}) => {
+    const params = new URLSearchParams(tenantQuery(tenantId))
+    appendQueryParam(params, 'page', siteOptions.page)
+    appendQueryParam(params, 'page_size', siteOptions.pageSize)
+    appendQueryParam(params, 'search', siteOptions.search)
+    appendQueryParam(params, 'product_line', siteOptions.productLineFilter)
+    appendQueryParam(params, 'variant', siteOptions.variantFilter)
+    appendQueryParam(params, 'availability', siteOptions.availabilityFilter)
+    return getJson(`/stock/inventory/sites/${encodeURIComponent(siteId)}?${params.toString()}`)
   }, [tenantId])
 
   const loadVariantDetail = useCallback(async (variantId) => {
@@ -459,6 +534,9 @@ export const useInventoryResource = (tenantId = 'tenant-admin') => {
   return {
     apiBase,
     globalItems,
+    globalTotal,
+    productLineOptions,
+    variantOptions,
     loading,
     error,
     loadSite,
@@ -478,9 +556,22 @@ export const useInventoryResource = (tenantId = 'tenant-admin') => {
   }
 }
 
-export const usePartnersResource = (tenantId = 'tenant-admin') => {
+export const usePartnersResource = (tenantId = 'tenant-admin', options = {}) => {
+  const {
+    partnershipsPage,
+    requestsPage,
+    pageSize,
+    search,
+    status,
+    paginatePartnerships = false,
+    paginateRequests = false,
+    includePartnerships = true,
+    includeRequests = true,
+  } = options
   const [partnerships, setPartnerships] = useState([])
   const [requests, setRequests] = useState([])
+  const [partnershipsTotal, setPartnershipsTotal] = useState(0)
+  const [requestsTotal, setRequestsTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -489,18 +580,34 @@ export const usePartnersResource = (tenantId = 'tenant-admin') => {
     setError('')
     try {
       const query = tenantQuery(tenantId)
+      const partnershipParams = new URLSearchParams(query)
+      if (paginatePartnerships) {
+        appendQueryParam(partnershipParams, 'page', partnershipsPage)
+        appendQueryParam(partnershipParams, 'page_size', pageSize)
+        appendQueryParam(partnershipParams, 'search', search)
+        appendQueryParam(partnershipParams, 'status', status)
+      }
+      const requestParams = new URLSearchParams(query)
+      if (paginateRequests) {
+        appendQueryParam(requestParams, 'page', requestsPage)
+        appendQueryParam(requestParams, 'page_size', pageSize)
+        appendQueryParam(requestParams, 'search', search)
+        appendQueryParam(requestParams, 'status', status)
+      }
       const [partnershipData, requestData] = await Promise.all([
-        getJson(`/partners/partnerships?${query}`),
-        getJson(`/partners/requests?${query}`),
+        includePartnerships ? getJson(`/partners/partnerships?${partnershipParams.toString()}`) : Promise.resolve({ partnerships: [] }),
+        includeRequests ? getJson(`/partners/requests?${requestParams.toString()}`) : Promise.resolve({ requests: [] }),
       ])
       setPartnerships(partnershipData.partnerships || [])
       setRequests(requestData.requests || [])
+      setPartnershipsTotal(Number(partnershipData.total || (partnershipData.partnerships || []).length))
+      setRequestsTotal(Number(requestData.total || (requestData.requests || []).length))
     } catch (err) {
       setError(err.message || 'Failed to load partners resources.')
     } finally {
       setLoading(false)
     }
-  }, [tenantId])
+  }, [tenantId, partnershipsPage, requestsPage, pageSize, search, status, paginatePartnerships, paginateRequests, includePartnerships, includeRequests])
 
   useEffect(() => {
     load()
@@ -561,6 +668,8 @@ export const usePartnersResource = (tenantId = 'tenant-admin') => {
     apiBase,
     partnerships,
     requests,
+    partnershipsTotal,
+    requestsTotal,
     loading,
     error,
     createPartnership,

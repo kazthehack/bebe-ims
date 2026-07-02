@@ -272,7 +272,7 @@ const SuppliesPage = () => {
   const [costPerPackMax, setCostPerPackMax] = useState('0')
   const [associatedVariants, setAssociatedVariants] = useState([])
   const [loadingAssociations, setLoadingAssociations] = useState(false)
-  const [allAdjustments, setAllAdjustments] = useState([])
+  const [suppliesTotal, setSuppliesTotal] = useState(0)
   const [brandOptions, setBrandOptions] = useState([])
   const [deltas, setDeltas] = useState([])
   const [deltaMode, setDeltaMode] = useState('add')
@@ -314,20 +314,24 @@ const SuppliesPage = () => {
     setLoading(true)
     setError('')
     try {
-      const [suppliesData, adjustmentsData, brandsData] = await Promise.all([
-        getJson(`/stock/supplies?${tenantQuery(tenantId)}`),
-        getJson(`/stock/adjustments?${tenantQuery(tenantId)}`),
+      const params = new URLSearchParams(tenantQuery(tenantId))
+      params.set('page', String(listPage))
+      params.set('page_size', String(PAGE_SIZE))
+      if (search.trim()) params.set('search', search.trim())
+      params.set('supply_type', tab === 'filaments' ? 'filament' : 'consumable')
+      const [suppliesData, brandsData] = await Promise.all([
+        getJson(`/stock/supplies?${params.toString()}`),
         getJson(`/stock/brands?${tenantQuery(tenantId)}`),
       ])
       setSupplies(suppliesData.supplies || [])
-      setAllAdjustments(adjustmentsData.adjustments || [])
+      setSuppliesTotal(Number(suppliesData.total || (suppliesData.supplies || []).length))
       setBrandOptions(brandsData.brands || [])
     } catch (err) {
       setError(err.message || 'Failed to load supplies.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [tab, search, listPage])
 
   useEffect(() => {
     load()
@@ -352,36 +356,8 @@ const SuppliesPage = () => {
     setCostPerPackMax(String(record.cost_per_pack_max || record.cost_per_pack || 0))
   }
 
-  const lastOrderDateBySupplyId = useMemo(() => {
-    const index = {}
-    ;(allAdjustments || []).forEach((item) => {
-      if (String(item.target_type || '').toLowerCase() !== 'supply') return
-      if (Number(item.qty_delta || 0) <= 0) return
-      const current = index[item.target_id]
-      const when = String(item.created_at || '')
-      if (!current || when > current) index[item.target_id] = when
-    })
-    return index
-  }, [allAdjustments])
-
   const rowsByTab = useMemo(() => {
-    const filteredByType = (supplies || []).filter((item) => (
-      tab === 'filaments'
-        ? String(item.supply_type || '').toLowerCase() === 'filament'
-        : String(item.supply_type || '').toLowerCase() === 'consumable'
-    ))
-    const q = search.trim().toLowerCase()
-    const filtered = !q
-      ? filteredByType
-      : filteredByType.filter((item) => (
-        (item.name || '').toLowerCase().includes(q)
-        || (item.brand || '').toLowerCase().includes(q)
-        || (item.material_type || '').toLowerCase().includes(q)
-        || (item.sub_type || '').toLowerCase().includes(q)
-        || (item.color || '').toLowerCase().includes(q)
-      ))
-
-    return filtered.map((item) => ({
+    return (supplies || []).map((item) => ({
       key: item.id,
       brand: item.brand || 'N/A',
       type: item.material_type || 'N/A',
@@ -398,8 +374,8 @@ const SuppliesPage = () => {
       packs_left: Number(item.qty_available || 0).toFixed(2),
       approx_pcs_left: (Number(item.qty_available || 0) * Number(item.pieces_per_pack || 0)).toFixed(0),
       pieces_per_pack: Number(item.pieces_per_pack || 0),
-      last_order_date: lastOrderDateBySupplyId[item.id]
-        ? new Date(lastOrderDateBySupplyId[item.id]).toLocaleDateString()
+      last_order_date: item.last_order_date
+        ? new Date(item.last_order_date).toLocaleDateString()
         : 'N/A',
       cost_range: formatCostRange(item.cost_per_pack_min, item.cost_per_pack_max),
       subtotal_cost: money(item.cost_per_pack || 0),
@@ -413,7 +389,7 @@ const SuppliesPage = () => {
         </div>
       ),
     }))
-  }, [supplies, tab, search, lastOrderDateBySupplyId])
+  }, [supplies])
 
   const listColumns = useMemo(
     () => (tab === 'filaments'
@@ -443,9 +419,9 @@ const SuppliesPage = () => {
     [listColumns],
   )
 
-  const listTotalPages = Math.max(1, Math.ceil((rowsByTab || []).length / PAGE_SIZE))
+  const listTotalPages = Math.max(1, Math.ceil(Number(suppliesTotal || 0) / PAGE_SIZE))
   const safeListPage = Math.min(listPage, listTotalPages)
-  const pagedRowsByTab = (rowsByTab || []).slice((safeListPage - 1) * PAGE_SIZE, safeListPage * PAGE_SIZE)
+  const pagedRowsByTab = rowsByTab || []
 
   useEffect(() => {
     setListPage(1)
@@ -486,9 +462,11 @@ const SuppliesPage = () => {
         }
       }
       try {
-        const data = await getJson(`/stock/adjustments?${tenantQuery(tenantId)}`)
+        const params = new URLSearchParams(tenantQuery(tenantId))
+        params.set('target_type', 'supply')
+        params.set('target_id', selected.id)
+        const data = await getJson(`/stock/adjustments?${params.toString()}`)
         const filtered = (data.adjustments || [])
-          .filter((item) => item.target_type === 'supply' && item.target_id === selected.id)
           .sort((left, right) => String(right.created_at || '').localeCompare(String(left.created_at || '')))
         setDeltas(filtered)
       } catch {
@@ -739,9 +717,11 @@ const SuppliesPage = () => {
       setDeltaAmount('')
       setDeltaNote('')
       await load()
-      const data = await getJson(`/stock/adjustments?${tenantQuery(tenantId)}`)
+      const params = new URLSearchParams(tenantQuery(tenantId))
+      params.set('target_type', 'supply')
+      params.set('target_id', selected.id)
+      const data = await getJson(`/stock/adjustments?${params.toString()}`)
       const filtered = (data.adjustments || [])
-        .filter((item) => item.target_type === 'supply' && item.target_id === selected.id)
         .sort((left, right) => String(right.created_at || '').localeCompare(String(left.created_at || '')))
       setDeltas(filtered)
       setShowDeltaModal(false)

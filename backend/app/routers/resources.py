@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.db.repository import ObjectRepository
@@ -12,6 +12,14 @@ router = APIRouter(tags=["resources"])
 
 def _next_id(prefix: str, existing: list[BaseModel]) -> str:
     return f"{prefix}-{len(existing) + 1:03d}"
+
+
+def _paginate(items: list, page: int | None, page_size: int | None) -> tuple[list, int]:
+    total = len(items)
+    if page is None or page_size is None:
+        return items, total
+    start = (page - 1) * page_size
+    return items[start:start + page_size], total
 
 
 class SiteItem(BaseModel):
@@ -183,6 +191,7 @@ class PartnershipItem(BaseModel):
     start_date: str | None = None
     end_date: str | None = None
     notes: str | None = None
+    request_count: int = 0
 
 
 class PartnershipCreate(BaseModel):
@@ -354,6 +363,9 @@ class CrmRemediationListResponse(BaseModel):
 
 class PartnershipListResponse(BaseModel):
     partnerships: list[PartnershipItem]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None
 
 
 class PartnershipRemittanceListResponse(BaseModel):
@@ -362,6 +374,9 @@ class PartnershipRemittanceListResponse(BaseModel):
 
 class PartnershipRequestListResponse(BaseModel):
     requests: list[PartnershipRequestItem]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None
 
 
 class EmployeeListResponse(BaseModel):
@@ -779,9 +794,34 @@ def _to_partner_request(item: PartnershipRequestItem) -> PartnershipRequestItem:
 
 
 @router.get("/partners/partnerships", response_model=PartnershipListResponse)
-def list_partnerships() -> PartnershipListResponse:
-    items = sorted(_PARTNERSHIPS, key=lambda item: item.name.casefold())
-    return PartnershipListResponse(partnerships=items)
+def list_partnerships(
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    search: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+) -> PartnershipListResponse:
+    request_counts: dict[str, int] = {}
+    for request in _PARTNERSHIP_REQUESTS:
+        if request.partnership_id:
+            request_counts[request.partnership_id] = request_counts.get(request.partnership_id, 0) + 1
+    items = sorted(
+        [
+            item.model_copy(update={"request_count": request_counts.get(item.id, 0)})
+            for item in _PARTNERSHIPS
+        ],
+        key=lambda item: item.name.casefold(),
+    )
+    selected_statuses = {value for value in str(status or '').split(',') if value}
+    if selected_statuses:
+        items = [item for item in items if str(item.status or '').lower() in selected_statuses]
+    query = str(search or '').strip().casefold()
+    if query:
+        items = [
+            item for item in items
+            if query in f"{item.code} {item.name} {item.contact_person or ''} {item.contact_number or ''}".casefold()
+        ]
+    paged, total = _paginate(items, page, page_size)
+    return PartnershipListResponse(partnerships=paged, total=total, page=page, page_size=page_size)
 
 
 @router.post("/partners/partnerships", response_model=PartnershipItem)
@@ -858,9 +898,25 @@ def create_partnership_remittance(partnership_id: str, payload: PartnershipRemit
 
 
 @router.get("/partners/requests", response_model=PartnershipRequestListResponse)
-def list_partnership_requests() -> PartnershipRequestListResponse:
+def list_partnership_requests(
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    search: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+) -> PartnershipRequestListResponse:
     items = sorted(_PARTNERSHIP_REQUESTS, key=lambda item: item.created_at, reverse=True)
-    return PartnershipRequestListResponse(requests=[_to_partner_request(item) for item in items])
+    mapped = [_to_partner_request(item) for item in items]
+    selected_statuses = {value for value in str(status or '').split(',') if value}
+    if selected_statuses:
+        mapped = [item for item in mapped if str(item.status or '').lower() in selected_statuses]
+    query = str(search or '').strip().casefold()
+    if query:
+        mapped = [
+            item for item in mapped
+            if query in f"{item.code} {item.title} {item.partnership_name or ''} {item.notes or ''}".casefold()
+        ]
+    paged, total = _paginate(mapped, page, page_size)
+    return PartnershipRequestListResponse(requests=paged, total=total, page=page, page_size=page_size)
 
 
 @router.post("/partners/requests", response_model=PartnershipRequestItem)

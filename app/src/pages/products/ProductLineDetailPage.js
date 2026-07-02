@@ -138,7 +138,11 @@ const ProductLineDetailPage = () => {
     createProduct,
     updateProductLine,
     deleteProductLine,
-  } = useProductsList()
+  } = useProductsList('tenant-admin', {
+    productsLineIdFilter: id,
+    includeVariants: false,
+    includeInventory: false,
+  })
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')

@@ -269,6 +269,7 @@ const ProductListPage = ({ title }) => {
   const [thirdPartySourceUrl, setThirdPartySourceUrl] = useState('')
   const [localWorkingFiles, setLocalWorkingFiles] = useState('')
   const [imageUrl, setImageUrl] = useState('')
+  const [productsSearch, setProductsSearch] = useState(() => String(restoredState.productsSearch || ''))
   const [productLineSearch, setProductLineSearch] = useState(() => String(restoredState.productLineSearch || ''))
   const [variantSearch, setVariantSearch] = useState(() => String(restoredState.variantSearch || ''))
   const [productsPage, setProductsPage] = useState(() => Math.max(1, Number(restoredState.productsPage || 1)))
@@ -280,36 +281,62 @@ const ProductListPage = ({ title }) => {
   const [variantsLineFilter, setVariantsLineFilter] = useState(() => String(restoredState.variantsLineFilter || 'all'))
   const [variantsProductFilter, setVariantsProductFilter] = useState(() => String(restoredState.variantsProductFilter || 'all'))
   const [capacitySort, setCapacitySort] = useState('none')
+  const isProductsServerPaged = activeTab === 'products' && capacitySort === 'none'
+  const isProductLinesServerPaged = activeTab === 'product-lines'
+  const isVariantsServerPaged = activeTab === 'variants'
 
   const {
     allProducts,
     products,
+    productsTotal,
+    productLineFilterOptions: serverProductLineFilterOptions,
+    productIpFilterOptions: serverProductIpFilterOptions,
+    variantProductLineFilterOptions: serverVariantProductLineFilterOptions,
+    variantProductNameFilterOptions: serverVariantProductNameFilterOptions,
     variants,
+    variantsTotal,
     loading,
     error,
-    search,
-    setSearch,
     storageCapacityByProductId,
     createProduct,
     deleteProduct,
     productLines,
+    productLinesTotal,
     createProductLine,
     deleteProductLine,
-  } = useProductsList()
+  } = useProductsList('tenant-admin', {
+    productsPage: isProductsServerPaged ? productsPage : undefined,
+    productsPageSize: isProductsServerPaged ? PAGE_SIZE : undefined,
+    productsSearch: activeTab === 'products' ? productsSearch : '',
+    productsLineFilter: activeTab === 'products' && productsLineFilter !== 'all' ? productsLineFilter : '',
+    productsIpFilter: activeTab === 'products' && productsIpFilter !== 'all' ? productsIpFilter : '',
+    productsFsnFilter: activeTab === 'products'
+      ? (productsFsnFilter.length ? productsFsnFilter.join(',') : '__none__')
+      : '',
+    productLinesPage: isProductLinesServerPaged ? productLinesPage : undefined,
+    productLinesPageSize: isProductLinesServerPaged ? PAGE_SIZE : undefined,
+    productLinesSearch: isProductLinesServerPaged ? productLineSearch : '',
+    variantsPage: isVariantsServerPaged ? variantsPage : undefined,
+    variantsPageSize: isVariantsServerPaged ? PAGE_SIZE : undefined,
+    variantsSearch: isVariantsServerPaged ? variantSearch : '',
+    variantsLineFilter: isVariantsServerPaged && variantsLineFilter !== 'all' ? variantsLineFilter : '',
+    variantsProductFilter: isVariantsServerPaged && variantsProductFilter !== 'all' ? variantsProductFilter : '',
+    includeProducts: activeTab === 'products',
+    includeVariants: activeTab === 'variants',
+    includeProductLines: activeTab === 'product-lines' || showProductModal,
+    includeInventory: activeTab === 'products',
+    inventoryForLoadedProducts: isProductsServerPaged,
+  })
 
   const initializedRef = React.useRef(false)
-  React.useEffect(() => {
-    if (initializedRef.current) return
-    setSearch(String(restoredState.productsSearch || ''))
-    initializedRef.current = true
-  }, [restoredState.productsSearch, setSearch])
 
   const productNameById = useMemo(
-    () => (allProducts || []).reduce((acc, item) => {
+    () => [...(allProducts || []), ...(variants || [])].reduce((acc, item) => {
       acc[item.id] = item.name || item.product_code || item.id
+      if (item.product_id) acc[item.product_id] = item.product_name || item.product_id
       return acc
     }, {}),
-    [allProducts],
+    [allProducts, variants],
   )
 
   const productById = useMemo(
@@ -321,63 +348,63 @@ const ProductListPage = ({ title }) => {
   )
 
   const productLineFilterOptions = useMemo(
-    () => ['all', ...Array.from(new Set((allProducts || []).map((item) => String(item.product_line || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
-    [allProducts],
+    () => [
+      'all',
+      ...((isVariantsServerPaged ? serverVariantProductLineFilterOptions : serverProductLineFilterOptions) || [])
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b)),
+    ],
+    [isVariantsServerPaged, serverProductLineFilterOptions, serverVariantProductLineFilterOptions],
   )
 
   const productIpOptions = useMemo(
     () => {
-      const uniqueIps = Array.from(new Set((allProducts || []).map((item) => String(item.ip || '').trim()).filter(Boolean)))
+      const uniqueIps = Array.from(new Set((serverProductIpFilterOptions || []).map((item) => String(item || '').trim()).filter(Boolean)))
         .sort((a, b) => a.localeCompare(b))
-      const hasNoIp = (allProducts || []).some((item) => !String(item.ip || '').trim())
-      return ['all', ...(hasNoIp ? [NO_IP_VALUE] : []), ...uniqueIps]
+      return ['all', NO_IP_VALUE, ...uniqueIps]
     },
-    [allProducts],
+    [serverProductIpFilterOptions],
   )
 
   const productNameOptions = useMemo(
-    () => ['all', ...Array.from(new Set((allProducts || []).map((item) => String(item.name || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
-    [allProducts],
+    () => [
+      'all',
+      ...Array.from(new Set(
+        (isVariantsServerPaged ? serverVariantProductNameFilterOptions : (allProducts || []).map((item) => item.name))
+          .map((item) => String(item || '').trim())
+          .filter(Boolean),
+      )).sort((a, b) => a.localeCompare(b)),
+    ],
+    [allProducts, isVariantsServerPaged, serverVariantProductNameFilterOptions],
   )
 
-  const filteredProducts = useMemo(
-    () => (products || [])
-      .filter((item) => {
-        const selectedProductLines = parseMultiFilter(productsLineFilter, productLineFilterOptions.filter((value) => value !== 'all'))
-        const selectedIps = parseMultiFilter(productsIpFilter, productIpOptions.filter((value) => value !== 'all'))
-        if (!selectedProductLines.includes(String(item.product_line || ''))) return false
-        const normalizedIp = String(item.ip || '').trim() || NO_IP_VALUE
-        if (!selectedIps.includes(normalizedIp)) return false
-        if (!productsFsnFilter.includes(String(item.fsn || 'normal'))) return false
-        return true
+  const sortedProducts = useMemo(() => {
+    if (capacitySort !== 'none') {
+      const direction = capacitySort === 'asc' ? 1 : -1
+      return (products || []).slice().sort((left, right) => {
+        const leftThreshold = Math.max(1, Number(left.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))
+        const rightThreshold = Math.max(1, Number(right.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))
+        const leftTarget = leftThreshold * 4
+        const rightTarget = rightThreshold * 4
+        const leftGlobal = Number(storageCapacityByProductId[left.id] || 0)
+        const rightGlobal = Number(storageCapacityByProductId[right.id] || 0)
+        const leftRatio = leftGlobal / leftTarget
+        const rightRatio = rightGlobal / rightTarget
+        if (leftRatio !== rightRatio) return (leftRatio - rightRatio) * direction
+        return alpha(left.name || left.product_code || left.id).localeCompare(alpha(right.name || right.product_code || right.id))
       })
-      .sort((a, b) => {
+    }
+    return (products || []).slice().sort((a, b) => {
         const lineCompare = alpha(a.product_line).localeCompare(alpha(b.product_line))
         if (lineCompare !== 0) return lineCompare
         const productCompare = alpha(a.name).localeCompare(alpha(b.name))
         if (productCompare !== 0) return productCompare
         return alpha(a.product_code || a.id).localeCompare(alpha(b.product_code || b.id))
-      }),
-    [products, productsLineFilter, productsIpFilter, productsFsnFilter],
-  )
-  const sortedProducts = useMemo(() => {
-    if (capacitySort === 'none') return filteredProducts
-    const direction = capacitySort === 'asc' ? 1 : -1
-    return filteredProducts.slice().sort((left, right) => {
-      const leftThreshold = Math.max(1, Number(left.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))
-      const rightThreshold = Math.max(1, Number(right.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))
-      const leftTarget = leftThreshold * 4
-      const rightTarget = rightThreshold * 4
-      const leftGlobal = Number(storageCapacityByProductId[left.id] || 0)
-      const rightGlobal = Number(storageCapacityByProductId[right.id] || 0)
-      const leftRatio = leftGlobal / leftTarget
-      const rightRatio = rightGlobal / rightTarget
-      if (leftRatio !== rightRatio) return (leftRatio - rightRatio) * direction
-      return alpha(left.name || left.product_code || left.id).localeCompare(alpha(right.name || right.product_code || right.id))
     })
-  }, [filteredProducts, capacitySort, storageCapacityByProductId])
+  }, [products, capacitySort, storageCapacityByProductId])
 
   const filteredVariants = useMemo(() => {
+    if (isVariantsServerPaged) return variants || []
     const query = String(variantSearch || '').trim().toLowerCase()
     const searched = !query ? (variants || []) : (variants || []).filter((item) => (
       String(item.sku || '').toLowerCase().includes(query)
@@ -402,7 +429,7 @@ const ProductListPage = ({ title }) => {
         if (aTime !== bTime) return aTime - bTime
         return alpha(a.sku || a.id).localeCompare(alpha(b.sku || b.id))
       })
-  }, [variants, variantSearch, productNameById, productById, variantsLineFilter, variantsProductFilter])
+  }, [isVariantsServerPaged, variants, variantSearch, productNameById, productById, variantsLineFilter, variantsProductFilter])
 
   const productLineOptions = useMemo(
     () => productLines.map(line => ({ value: line.id, label: `${line.name} (${line.code})` })),
@@ -430,6 +457,7 @@ const ProductListPage = ({ title }) => {
   }, [products])
 
   const filteredProductLines = useMemo(() => {
+    if (isProductLinesServerPaged) return productLines
     const query = String(productLineSearch || '').trim().toLowerCase()
     if (!query) return productLines
     return productLines.filter(line => (
@@ -437,12 +465,12 @@ const ProductListPage = ({ title }) => {
       || String(line.name || '').toLowerCase().includes(query)
       || String(line.description || '').toLowerCase().includes(query)
     ))
-  }, [productLines, productLineSearch])
+  }, [isProductLinesServerPaged, productLines, productLineSearch])
 
   React.useEffect(() => {
     if (!initializedRef.current) return
     setProductsPage(1)
-  }, [search])
+  }, [productsSearch])
 
   React.useEffect(() => {
     if (!initializedRef.current) return
@@ -471,9 +499,13 @@ const ProductListPage = ({ title }) => {
     if (activeTab === 'variants') setVariantsPage(1)
   }, [activeTab])
 
+  React.useEffect(() => {
+    initializedRef.current = true
+  }, [])
+
   const listStateForQuery = useMemo(() => ({
     activeTab,
-    productsSearch: search,
+    productsSearch,
     productLineSearch,
     variantSearch,
     productsPage,
@@ -486,7 +518,7 @@ const ProductListPage = ({ title }) => {
     variantsProductFilter,
   }), [
     activeTab,
-    search,
+    productsSearch,
     productLineSearch,
     variantSearch,
     productsPage,
@@ -515,17 +547,29 @@ const ProductListPage = ({ title }) => {
     setScopeState(listStateForQuery)
   }, [listStateForQuery, setScopeState])
 
-  const productsTotalPages = Math.max(1, Math.ceil((sortedProducts || []).length / PAGE_SIZE))
+  const productsTotalPages = Math.max(1, Math.ceil(
+    Number((isProductsServerPaged ? productsTotal : sortedProducts.length) || 0) / PAGE_SIZE,
+  ))
   const safeProductsPage = Math.min(productsPage, productsTotalPages)
-  const pagedProducts = (sortedProducts || []).slice((safeProductsPage - 1) * PAGE_SIZE, safeProductsPage * PAGE_SIZE)
+  const pagedProducts = isProductsServerPaged
+    ? (sortedProducts || [])
+    : (sortedProducts || []).slice((safeProductsPage - 1) * PAGE_SIZE, safeProductsPage * PAGE_SIZE)
 
-  const productLinesTotalPages = Math.max(1, Math.ceil((filteredProductLines || []).length / PAGE_SIZE))
+  const productLinesTotalPages = Math.max(1, Math.ceil(
+    Number((isProductLinesServerPaged ? productLinesTotal : (filteredProductLines || []).length) || 0) / PAGE_SIZE,
+  ))
   const safeProductLinesPage = Math.min(productLinesPage, productLinesTotalPages)
-  const pagedProductLines = (filteredProductLines || []).slice((safeProductLinesPage - 1) * PAGE_SIZE, safeProductLinesPage * PAGE_SIZE)
+  const pagedProductLines = isProductLinesServerPaged
+    ? (filteredProductLines || [])
+    : (filteredProductLines || []).slice((safeProductLinesPage - 1) * PAGE_SIZE, safeProductLinesPage * PAGE_SIZE)
 
-  const variantsTotalPages = Math.max(1, Math.ceil((filteredVariants || []).length / PAGE_SIZE))
+  const variantsTotalPages = Math.max(1, Math.ceil(
+    Number((isVariantsServerPaged ? variantsTotal : (filteredVariants || []).length) || 0) / PAGE_SIZE,
+  ))
   const safeVariantsPage = Math.min(variantsPage, variantsTotalPages)
-  const pagedVariants = (filteredVariants || []).slice((safeVariantsPage - 1) * PAGE_SIZE, safeVariantsPage * PAGE_SIZE)
+  const pagedVariants = isVariantsServerPaged
+    ? (filteredVariants || [])
+    : (filteredVariants || []).slice((safeVariantsPage - 1) * PAGE_SIZE, safeVariantsPage * PAGE_SIZE)
 
   const skuPreview = useMemo(() => {
     const lineCodeOrName = (
@@ -676,8 +720,8 @@ const ProductListPage = ({ title }) => {
             <Toolbar>
               <ToolbarFilters>
                 <ListFiltersRow
-                  searchValue={search}
-                  onSearchChange={setSearch}
+                  searchValue={productsSearch}
+                  onSearchChange={setProductsSearch}
                   searchPlaceholder="Search products"
                   filters={[
                     {
@@ -779,7 +823,7 @@ const ProductListPage = ({ title }) => {
                 )
               })}
             </Table>
-            {!loading && filteredProducts.length > 0 && (
+            {!loading && productsTotal > 0 && (
               <PaginationBar>
                 <Meta>Page {safeProductsPage} / {productsTotalPages}</Meta>
                 <PaginationButton type="button" onClick={() => setProductsPage(1)} disabled={safeProductsPage <= 1}>
@@ -837,7 +881,7 @@ const ProductListPage = ({ title }) => {
                 </ProductLineRow>
               ))}
             </Table>
-            {!loading && filteredProductLines.length > 0 && (
+            {!loading && Number((isProductLinesServerPaged ? productLinesTotal : filteredProductLines.length) || 0) > 0 && (
               <PaginationBar>
                 <Meta>Page {safeProductLinesPage} / {productLinesTotalPages}</Meta>
                 <PaginationButton type="button" onClick={() => setProductLinesPage(1)} disabled={safeProductLinesPage <= 1}>
@@ -912,7 +956,7 @@ const ProductListPage = ({ title }) => {
                 <ProductVariantRow key={item.id}>
                   <Cell>{item.sku || item.id}</Cell>
                   <Cell>{item.qr_code || 'N/A'}</Cell>
-                  <Cell>{productNameById[item.product_id] || item.product_id}</Cell>
+                  <Cell>{item.product_name || productNameById[item.product_id] || item.product_id}</Cell>
                   <Cell>{item.name || 'N/A'}</Cell>
                   <Cell>{Number(item.yield_units || 1)}</Cell>
                   <Cell>
@@ -923,7 +967,7 @@ const ProductListPage = ({ title }) => {
                 </ProductVariantRow>
               ))}
             </Table>
-            {!loading && filteredVariants.length > 0 && (
+            {!loading && Number((isVariantsServerPaged ? variantsTotal : filteredVariants.length) || 0) > 0 && (
               <PaginationBar>
                 <Meta>Page {safeVariantsPage} / {variantsTotalPages}</Meta>
                 <PaginationButton type="button" onClick={() => setVariantsPage(1)} disabled={safeVariantsPage <= 1}>

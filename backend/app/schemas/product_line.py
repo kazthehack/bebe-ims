@@ -29,3 +29,6 @@ class ProductLineRead(BaseModel):
 
 class ProductLineListResponse(BaseModel):
     product_lines: list[ProductLineRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None

@@ -389,7 +389,19 @@ const CrmListPage = () => {
     getRequest,
     getPartnershipRemittances,
     getPartnershipRequests,
-  } = usePartnersResource()
+    partnershipsTotal,
+    requestsTotal,
+  } = usePartnersResource('tenant-admin', inDetail ? {} : {
+    partnershipsPage,
+    requestsPage,
+    pageSize: PAGE_SIZE,
+    search,
+    status: statusFilter === 'all' ? '' : statusFilter,
+    paginatePartnerships: activeTab === 'partnerships',
+    paginateRequests: activeTab === 'requests',
+    includePartnerships: activeTab === 'partnerships' || activeTab === 'requests',
+    includeRequests: activeTab === 'requests',
+  })
 
   useEffect(() => {
     if (requestId) setActiveTab('requests')
@@ -499,6 +511,7 @@ const CrmListPage = () => {
   }, [requestId, getRequest])
 
   const filteredPartnerships = useMemo(() => {
+    if (!inDetail && activeTab === 'partnerships') return partnerships || []
     const query = String(search || '').trim().toLowerCase()
     const selectedStatuses = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
     return (partnerships || []).filter((item) => {
@@ -506,9 +519,10 @@ const CrmListPage = () => {
       if (!query) return true
       return `${item.code} ${item.name} ${item.contact_person || ''} ${item.contact_number || ''}`.toLowerCase().includes(query)
     })
-  }, [partnerships, search, statusFilter])
+  }, [partnerships, search, statusFilter, inDetail, activeTab])
 
   const filteredRequests = useMemo(() => {
+    if (!inDetail && activeTab === 'requests') return requests || []
     const query = String(search || '').trim().toLowerCase()
     const selectedStatuses = parseMultiFilter(statusFilter, STATUS_FILTER_OPTIONS)
     return (requests || []).filter((item) => {
@@ -516,14 +530,14 @@ const CrmListPage = () => {
       if (!query) return true
       return `${item.code} ${item.title} ${item.partnership_name || ''} ${item.notes || ''}`.toLowerCase().includes(query)
     })
-  }, [requests, search, statusFilter])
+  }, [requests, search, statusFilter, inDetail, activeTab])
 
   const requestCountByPartnership = useMemo(() => (
-    (requests || []).reduce((index, item) => {
-      if (item.partnership_id) index[item.partnership_id] = (index[item.partnership_id] || 0) + 1
+    (partnerships || []).reduce((index, item) => {
+      index[item.id] = Number(item.request_count || 0)
       return index
     }, {})
-  ), [requests])
+  ), [partnerships])
   const partnerOptions = useMemo(() => (
     (partnerships || [])
       .filter((item) => item && typeof item === 'object')
@@ -534,8 +548,20 @@ const CrmListPage = () => {
       .filter((item) => item.id)
   ), [partnerships])
 
-  const pagedPartnerships = paginate(filteredPartnerships, partnershipsPage)
-  const pagedRequests = paginate(filteredRequests, requestsPage)
+  const pagedPartnerships = (!inDetail && activeTab === 'partnerships')
+    ? {
+      rows: filteredPartnerships,
+      totalPages: Math.max(1, Math.ceil(Number(partnershipsTotal || 0) / PAGE_SIZE)),
+      safePage: Math.min(partnershipsPage, Math.max(1, Math.ceil(Number(partnershipsTotal || 0) / PAGE_SIZE))),
+    }
+    : paginate(filteredPartnerships, partnershipsPage)
+  const pagedRequests = (!inDetail && activeTab === 'requests')
+    ? {
+      rows: filteredRequests,
+      totalPages: Math.max(1, Math.ceil(Number(requestsTotal || 0) / PAGE_SIZE)),
+      safePage: Math.min(requestsPage, Math.max(1, Math.ceil(Number(requestsTotal || 0) / PAGE_SIZE))),
+    }
+    : paginate(filteredRequests, requestsPage)
   const pagedRemittances = paginate(remittances, remittancesPage)
   const pagedRequestHistory = paginate(requestHistory, requestHistoryPage)
   const totalRemitted = useMemo(

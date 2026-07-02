@@ -63,6 +63,11 @@ class ProductCapacityThresholdUpdate(BaseModel):
 
 class ProductListResponse(BaseModel):
     products: list[ProductRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None
+    product_line_options: list[str] = Field(default_factory=list)
+    ip_options: list[str] = Field(default_factory=list)
 
 
 class ProductVariantCreate(BaseModel):
@@ -79,6 +84,8 @@ class ProductVariantCreate(BaseModel):
 class ProductVariantRead(BaseModel):
     id: str
     product_id: str
+    product_name: str | None = None
+    product_line: str | None = None
     sku: str
     name: str | None = None
     fsn: FsnValue = 'normal'
@@ -93,6 +100,11 @@ class ProductVariantRead(BaseModel):
 
 class ProductVariantListResponse(BaseModel):
     variants: list[ProductVariantRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None
+    product_line_options: list[str] = Field(default_factory=list)
+    product_name_options: list[str] = Field(default_factory=list)
 
 
 class ProductVariantUpdate(BaseModel):

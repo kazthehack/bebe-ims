@@ -86,6 +86,21 @@ MAIN_SITE_ID = 'main'
 VALID_FSN_VALUES = {'fast', 'normal', 'slow', 'non_moving'}
 
 
+def _paginate(items: list, page: int | None, page_size: int | None) -> tuple[list, int]:
+    total = len(items)
+    if page is None or page_size is None:
+        return items, total
+    start = (page - 1) * page_size
+    return items[start:start + page_size], total
+
+
+def _contains_query(values: list[object], query: str | None) -> bool:
+    normalized = str(query or '').strip().casefold()
+    if not normalized:
+        return True
+    return normalized in ' '.join(str(value or '') for value in values).casefold()
+
+
 def _available(qty_on_hand: float, qty_reserved: float) -> float:
     return float(qty_on_hand or 0) - float(qty_reserved or 0)
 
@@ -469,13 +484,37 @@ def _apply_adjustment(tenant_id: str, payload: InventoryAdjustmentCreate) -> Non
 
 
 @router.get('/products', response_model=ProductStockListResponse)
-def list_product_stock(tenant_id: str = Query('tenant-admin')) -> ProductStockListResponse:
+def list_product_stock(
+    tenant_id: str = Query('tenant-admin'),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    product_variant_id: str | None = Query(default=None),
+    site_id: str | None = Query(default=None),
+) -> ProductStockListResponse:
     records = [map_record(record, ProductStockDocument) for record in product_stock_controller.list(tenant_id)]
-    return ProductStockListResponse(items=[_to_stock(record) for record in records])
+    items = [_to_stock(record) for record in records]
+    if product_variant_id:
+        items = [item for item in items if item.product_variant_id == product_variant_id]
+    if site_id:
+        items = [item for item in items if item.site_id == site_id]
+    paged, total = _paginate(items, page, page_size)
+    return ProductStockListResponse(items=paged, total=total, page=page, page_size=page_size)
 
 
 @router.get('/inventory/global', response_model=InventoryGlobalListResponse)
-def list_inventory_global(tenant_id: str = Query('tenant-admin')) -> InventoryGlobalListResponse:
+def list_inventory_global(
+    tenant_id: str = Query('tenant-admin'),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    search: str | None = Query(default=None),
+    product_line: str | None = Query(default=None),
+    product_ids: str | None = Query(default=None),
+    variant: str | None = Query(default=None),
+    availability: str | None = Query(default=None),
+    pipeline: bool = Query(default=False),
+    active_site_count: int = Query(default=3, ge=0, le=50),
+    needed_sort: str = Query(default='desc'),
+) -> InventoryGlobalListResponse:
     stock_records = [map_record(record, ProductStockDocument) for record in product_stock_controller.list(tenant_id)]
     variant_by_id, product_by_id = _variant_maps(tenant_id)
     variants_by_product: dict[str, list[StoredRecord[ProductVariantDocument]]] = {}
@@ -561,7 +600,138 @@ def list_inventory_global(tenant_id: str = Query('tenant-admin')) -> InventoryGl
             secondary_qty_on_hand=secondary_qty,
             tertiary_qty_on_hand=tertiary_qty,
         ))
-    return InventoryGlobalListResponse(items=rows)
+    rows.sort(key=lambda item: (
+        str(item.product_line_name or '').casefold(),
+        str(item.product_name or '').casefold(),
+        str(item.variant_name or item.sku or '').casefold(),
+    ))
+    product_line_options = sorted({item.product_line_name for item in rows if item.product_line_name})
+    variant_options = sorted({item.variant_name for item in rows if item.variant_name})
+    if search:
+        rows = [
+            item for item in rows
+            if _contains_query([
+                item.sku,
+                item.variant_name,
+                item.product_name,
+                item.product_line_name,
+                item.product_variant_id,
+            ], search)
+        ]
+    selected_lines = {value for value in str(product_line or '').split(',') if value}
+    if selected_lines:
+        rows = [item for item in rows if str(item.product_line_name or '') in selected_lines]
+    selected_product_ids = {value for value in str(product_ids or '').split(',') if value}
+    if selected_product_ids:
+        rows = [item for item in rows if str(item.product_id or '') in selected_product_ids]
+    selected_variants = {value for value in str(variant or '').split(',') if value}
+    if selected_variants:
+        rows = [item for item in rows if str(item.variant_name or '') in selected_variants]
+    selected_availability = {value for value in str(availability or '').split(',') if value}
+    if selected_availability and selected_availability != {'with-stock', 'zero-stock'}:
+        rows = [
+            item for item in rows
+            if ('with-stock' in selected_availability and float(item.master_qty_on_hand or 0) > 0)
+            or ('zero-stock' in selected_availability and float(item.master_qty_on_hand or 0) <= 0)
+        ]
+    if pipeline:
+        capacity_units = max(1, 1 + int(active_site_count or 0))
+        grouped: dict[str, dict[str, object]] = {}
+        fsn_rank = {'fast': 0, 'normal': 1, 'slow': 2, 'non_moving': 3}
+        for item in rows:
+            if str(item.fsn or 'normal') == 'non_moving':
+                continue
+            product_id = str(item.product_id or '')
+            if not product_id:
+                continue
+            per_site_threshold = max(1.0, float(item.variant_capacity_threshold_per_site or item.capacity_threshold_per_site or 8.0))
+            global_qty = max(0.0, float(item.master_qty_on_hand or 0))
+            primary_qty = max(0.0, float(item.primary_qty_on_hand or 0))
+            secondary_qty = max(0.0, float(item.secondary_qty_on_hand or 0))
+            tertiary_qty = max(0.0, float(item.tertiary_qty_on_hand or 0))
+            storage_qty = max(0.0, global_qty - primary_qty - secondary_qty - tertiary_qty)
+            entry = grouped.setdefault(product_id, {
+                'row_key': f'product-{product_id}',
+                'inventory_id': item.inventory_id,
+                'product_id': product_id,
+                'product_line_name': item.product_line_name,
+                'product_name': item.product_name,
+                'fsn': str(item.fsn or 'normal'),
+                'capacity_threshold_per_site': 0.0,
+                'global_qty': 0.0,
+                'storage_qty': 0.0,
+                'primary_qty': 0.0,
+                'secondary_qty': 0.0,
+                'tertiary_qty': 0.0,
+                'view_qty': 0.0,
+                'needed_variant_count': 0,
+            })
+            entry['capacity_threshold_per_site'] = float(entry['capacity_threshold_per_site']) + per_site_threshold
+            entry['global_qty'] = float(entry['global_qty']) + global_qty
+            entry['storage_qty'] = float(entry['storage_qty']) + storage_qty
+            entry['primary_qty'] = float(entry['primary_qty']) + primary_qty
+            entry['secondary_qty'] = float(entry['secondary_qty']) + secondary_qty
+            entry['tertiary_qty'] = float(entry['tertiary_qty']) + tertiary_qty
+            entry['view_qty'] = float(entry['view_qty']) + global_qty
+            entry['needed_variant_count'] = int(entry['needed_variant_count']) + 1
+            if fsn_rank.get(str(item.fsn or 'normal'), 1) < fsn_rank.get(str(entry['fsn'] or 'normal'), 1):
+                entry['fsn'] = str(item.fsn or 'normal')
+        pipeline_rows: list[InventoryGlobalItemRead] = []
+        for entry in grouped.values():
+            threshold_per_site = max(1.0, float(entry['capacity_threshold_per_site'] or 1.0))
+            target_qty = max(1.0, threshold_per_site * capacity_units)
+            global_qty = max(0.0, float(entry['global_qty'] or 0.0))
+            coverage = global_qty / target_qty
+            status = 'critical' if global_qty < threshold_per_site else ('warning' if coverage < 0.6 else 'stable')
+            if status == 'stable':
+                continue
+            pipeline_rows.append(InventoryGlobalItemRead(
+                row_key=str(entry['row_key']),
+                inventory_id=str(entry['inventory_id']),
+                product_variant_id=str(entry['product_id']),
+                sku=str(entry['product_id']),
+                variant_name=f"{int(entry['needed_variant_count'])} variant{'s' if int(entry['needed_variant_count']) != 1 else ''}",
+                product_id=str(entry['product_id']),
+                product_line_name=str(entry['product_line_name'] or ''),
+                product_name=str(entry['product_name'] or entry['product_id']),
+                fsn=_normalize_fsn(str(entry['fsn'] or 'normal'), 'normal'),
+                capacity_threshold_per_site=threshold_per_site,
+                variant_capacity_threshold_per_site=threshold_per_site,
+                main_qty_on_hand=global_qty,
+                sites_qty_on_hand=0.0,
+                master_qty_on_hand=global_qty,
+                storage_qty_on_hand=float(entry['storage_qty'] or 0.0),
+                primary_qty_on_hand=float(entry['primary_qty'] or 0.0),
+                secondary_qty_on_hand=float(entry['secondary_qty'] or 0.0),
+                tertiary_qty_on_hand=float(entry['tertiary_qty'] or 0.0),
+                capacity_target=target_qty,
+                global_qty=global_qty,
+                storage_qty=float(entry['storage_qty'] or 0.0),
+                primary_qty=float(entry['primary_qty'] or 0.0),
+                secondary_qty=float(entry['secondary_qty'] or 0.0),
+                tertiary_qty=float(entry['tertiary_qty'] or 0.0),
+                view_qty=float(entry['view_qty'] or 0.0),
+                needs_production_gap=max(0.0, target_qty - global_qty),
+                needs_production_status=status,
+                needed_variant_count=int(entry['needed_variant_count'] or 0),
+            ))
+        direction = 1 if needed_sort == 'asc' else -1
+        pipeline_rows.sort(key=lambda item: (
+            0 if item.needs_production_status == 'critical' else 1,
+            direction * float(item.needs_production_gap or 0),
+            str(item.product_line_name or '').casefold(),
+            str(item.product_name or '').casefold(),
+        ))
+        rows = pipeline_rows
+    paged, total = _paginate(rows, page, page_size)
+    return InventoryGlobalListResponse(
+        items=paged,
+        total=total,
+        page=page,
+        page_size=page_size,
+        product_line_options=product_line_options,
+        variant_options=variant_options,
+    )
 
 
 @router.get('/inventory/export')
@@ -627,7 +797,16 @@ def export_inventory_workbook(tenant_id: str = Query('tenant-admin')) -> Respons
 
 
 @router.get('/inventory/sites/{site_id}', response_model=InventorySiteListResponse)
-def list_inventory_by_site(site_id: str, tenant_id: str = Query('tenant-admin')) -> InventorySiteListResponse:
+def list_inventory_by_site(
+    site_id: str,
+    tenant_id: str = Query('tenant-admin'),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    search: str | None = Query(default=None),
+    product_line: str | None = Query(default=None),
+    variant: str | None = Query(default=None),
+    availability: str | None = Query(default=None),
+) -> InventorySiteListResponse:
     stock_records = [map_record(record, ProductStockDocument) for record in product_stock_controller.list(tenant_id)]
     variant_by_id, product_by_id = _variant_maps(tenant_id)
     rows: list[InventorySiteItemRead] = []
@@ -652,7 +831,37 @@ def list_inventory_by_site(site_id: str, tenant_id: str = Query('tenant-admin'))
             qty_reserved=qty_reserved,
             qty_available=_available(qty_on_hand, qty_reserved),
         ))
-    return InventorySiteListResponse(site_id=site_id, items=rows)
+    rows.sort(key=lambda item: (
+        str(item.product_line_name or '').casefold(),
+        str(item.product_name or '').casefold(),
+        str(item.variant_name or item.sku or '').casefold(),
+    ))
+    if search:
+        rows = [
+            item for item in rows
+            if _contains_query([
+                item.sku,
+                item.variant_name,
+                item.product_name,
+                item.product_line_name,
+                item.product_variant_id,
+            ], search)
+        ]
+    selected_lines = {value for value in str(product_line or '').split(',') if value}
+    if selected_lines:
+        rows = [item for item in rows if str(item.product_line_name or '') in selected_lines]
+    selected_variants = {value for value in str(variant or '').split(',') if value}
+    if selected_variants:
+        rows = [item for item in rows if str(item.variant_name or '') in selected_variants]
+    selected_availability = {value for value in str(availability or '').split(',') if value}
+    if selected_availability and selected_availability != {'with-stock', 'zero-stock'}:
+        rows = [
+            item for item in rows
+            if ('with-stock' in selected_availability and float(item.qty_on_hand or 0) > 0)
+            or ('zero-stock' in selected_availability and float(item.qty_on_hand or 0) <= 0)
+        ]
+    paged, total = _paginate(rows, page, page_size)
+    return InventorySiteListResponse(site_id=site_id, items=paged, total=total, page=page, page_size=page_size)
 
 
 @router.get('/inventory/variants/{variant_id}', response_model=InventoryVariantDetailRead)
@@ -981,9 +1190,55 @@ def create_product_stock(payload: ProductStockCreate, tenant_id: str = Query('te
 
 
 @router.get('/supplies', response_model=SupplyListResponse)
-def list_supplies(tenant_id: str = Query('tenant-admin')) -> SupplyListResponse:
+def list_supplies(
+    tenant_id: str = Query('tenant-admin'),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    search: str | None = Query(default=None),
+    supply_type: str | None = Query(default=None),
+) -> SupplyListResponse:
     records = [map_record(record, SupplyDocument) for record in supply_controller.list(tenant_id)]
-    return SupplyListResponse(supplies=[_to_supply(record) for record in records])
+    supplies = [_to_supply(record) for record in records]
+    adjustment_records = [map_record(record, InventoryAdjustmentDocument) for record in adjustment_controller.list(tenant_id)]
+    last_order_by_supply_id: dict[str, datetime] = {}
+    for adjustment in adjustment_records:
+        target_type = adjustment.payload.target_type.value if hasattr(adjustment.payload.target_type, 'value') else adjustment.payload.target_type
+        if str(target_type).lower() != 'supply':
+            continue
+        if float(adjustment.payload.qty_delta or 0) <= 0:
+            continue
+        current = last_order_by_supply_id.get(adjustment.payload.target_id)
+        if current is None or adjustment.created_at > current:
+            last_order_by_supply_id[adjustment.payload.target_id] = adjustment.created_at
+    supplies = [
+        item.model_copy(update={'last_order_date': last_order_by_supply_id.get(item.id)})
+        for item in supplies
+    ]
+    supply_type_filter = str(supply_type or '').strip().lower()
+    if supply_type_filter:
+        supplies = [item for item in supplies if str(item.supply_type.value if hasattr(item.supply_type, 'value') else item.supply_type).lower() == supply_type_filter]
+    if search:
+        supplies = [
+            item for item in supplies
+            if _contains_query([
+                item.id,
+                item.name,
+                item.brand,
+                item.material_type,
+                item.sub_type,
+                item.color,
+            ], search)
+        ]
+    supplies.sort(key=lambda item: (
+        str(item.supply_type.value if hasattr(item.supply_type, 'value') else item.supply_type).casefold(),
+        str(item.brand or '').casefold(),
+        str(item.material_type or '').casefold(),
+        str(item.sub_type or '').casefold(),
+        str(item.color or '').casefold(),
+        str(item.name or '').casefold(),
+    ))
+    paged, total = _paginate(supplies, page, page_size)
+    return SupplyListResponse(supplies=paged, total=total, page=page, page_size=page_size)
 
 
 @router.get('/brands', response_model=SupplyBrandListResponse)
@@ -1144,9 +1399,15 @@ def list_filament_associated_variants(id: str, tenant_id: str = Query('tenant-ad
 
 
 @router.get('/filaments', response_model=FilamentListResponse)
-def list_filaments(tenant_id: str = Query('tenant-admin')) -> FilamentListResponse:
+def list_filaments(
+    tenant_id: str = Query('tenant-admin'),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+) -> FilamentListResponse:
     records = [map_record(record, FilamentDocument) for record in filament_controller.list(tenant_id)]
-    return FilamentListResponse(filaments=[_to_filament(record) for record in records])
+    filaments = [_to_filament(record) for record in records]
+    paged, total = _paginate(filaments, page, page_size)
+    return FilamentListResponse(filaments=paged, total=total, page=page, page_size=page_size)
 
 
 @router.post('/filaments', response_model=FilamentRead)
@@ -1244,9 +1505,25 @@ def delete_filament_active(id: str, active_id: str, tenant_id: str = Query('tena
 
 
 @router.get('/adjustments', response_model=InventoryAdjustmentListResponse)
-def list_adjustments(tenant_id: str = Query('tenant-admin')) -> InventoryAdjustmentListResponse:
+def list_adjustments(
+    tenant_id: str = Query('tenant-admin'),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    target_type: str | None = Query(default=None),
+    target_id: str | None = Query(default=None),
+) -> InventoryAdjustmentListResponse:
     records = [map_record(record, InventoryAdjustmentDocument) for record in adjustment_controller.list(tenant_id)]
-    return InventoryAdjustmentListResponse(adjustments=[_to_adjustment(record) for record in records])
+    adjustments = [_to_adjustment(record) for record in records]
+    if target_type:
+        adjustments = [
+            item for item in adjustments
+            if str(item.target_type.value if hasattr(item.target_type, 'value') else item.target_type).lower() == str(target_type).lower()
+        ]
+    if target_id:
+        adjustments = [item for item in adjustments if item.target_id == target_id]
+    adjustments.sort(key=lambda item: item.created_at, reverse=True)
+    paged, total = _paginate(adjustments, page, page_size)
+    return InventoryAdjustmentListResponse(adjustments=paged, total=total, page=page, page_size=page_size)
 
 
 @router.post('/adjustments', response_model=InventoryAdjustmentRead)

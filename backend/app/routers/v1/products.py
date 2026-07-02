@@ -51,6 +51,14 @@ product_stock_controller = ProductStock()
 VALID_FSN_VALUES = {'fast', 'normal', 'slow', 'non_moving'}
 
 
+def _paginate(items: list, page: int | None, page_size: int | None) -> tuple[list, int]:
+    total = len(items)
+    if page is None or page_size is None:
+        return items, total
+    start = (page - 1) * page_size
+    return items[start:start + page_size], total
+
+
 def _normalize_fsn(value: str | None, fallback: str = 'normal') -> str:
     normalized = str(value or '').strip().lower()
     if normalized in VALID_FSN_VALUES:
@@ -174,11 +182,15 @@ def _to_variant(record: StoredRecord[ProductVariantDocument], tenant_id: str = '
     parent_fsn = 'normal'
     parent_threshold = 8.0
     parent_price = 0.0
+    parent_name = None
+    parent_line = None
     try:
         product = map_record(product_controller.get(record.payload.product_id, tenant_id), ProductDocument)
         parent_fsn = _normalize_fsn(product.payload.fsn, 'normal')
         parent_threshold = float(product.payload.capacity_threshold_per_site or 8.0)
         parent_price = float(product.payload.list_price or 0)
+        parent_name = product.payload.name
+        parent_line = product.payload.product_line_name
         product_variants = [
             map_record(item, ProductVariantDocument)
             for item in variant_controller.list(tenant_id)
@@ -199,6 +211,32 @@ def _to_variant(record: StoredRecord[ProductVariantDocument], tenant_id: str = '
     return ProductVariantRead(
         id=record.object_id,
         product_id=record.payload.product_id,
+        product_name=parent_name,
+        product_line=parent_line,
+        sku=record.payload.sku,
+        name=record.payload.name,
+        fsn=_normalize_fsn(record.payload.fsn, parent_fsn),
+        capacity_threshold_per_site=variant_threshold,
+        yield_units=int(record.payload.yield_units or 1),
+        print_hours=float(record.payload.print_hours or 0),
+        qr_code=record.payload.qr_code,
+        image_url=record.payload.image_url,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
+def _to_variant_for_list(
+    record: StoredRecord[ProductVariantDocument],
+    product: ProductRead | None = None,
+    variant_threshold: float | None = None,
+) -> ProductVariantRead:
+    parent_fsn = product.fsn if product else 'normal'
+    return ProductVariantRead(
+        id=record.object_id,
+        product_id=record.payload.product_id,
+        product_name=product.name if product else None,
+        product_line=product.product_line if product else None,
         sku=record.payload.sku,
         name=record.payload.name,
         fsn=_normalize_fsn(record.payload.fsn, parent_fsn),
@@ -291,9 +329,70 @@ def create_part(payload: PartCreate, tenant_id: str = Query('tenant-admin')) -> 
 
 
 @router.get('', response_model=ProductListResponse)
-def list_products(tenant_id: str = Query('tenant-admin')) -> ProductListResponse:
+def list_products(
+    tenant_id: str = Query('tenant-admin'),
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    search: str | None = Query(default=None),
+    product_line: str | None = Query(default=None),
+    product_line_id: str | None = Query(default=None),
+    ip: str | None = Query(default=None),
+    fsn: str | None = Query(default=None),
+) -> ProductListResponse:
     records = [map_record(record, ProductDocument) for record in product_controller.list(tenant_id)]
-    return ProductListResponse(products=[_to_product(record) for record in records])
+    products = sorted([_to_product(record) for record in records], key=lambda item: (
+        str(item.product_line or '').casefold(),
+        str(item.name or '').casefold(),
+        str(item.product_code or item.id).casefold(),
+    ))
+    product_line_options = sorted({item.product_line for item in products if item.product_line})
+    ip_options = sorted({item.ip for item in products if item.ip})
+
+    query = str(search or '').strip().casefold()
+    if query:
+        products = [
+            item for item in products
+            if query in str(item.product_code or '').casefold()
+            or query in str(item.name or '').casefold()
+            or query in str(item.product_line or '').casefold()
+            or query in str(item.ip or '').casefold()
+            or query in str(item.category or '').casefold()
+            or query in str(item.list_price or '').casefold()
+        ]
+
+    selected_lines = {value for value in (product_line or '').split(',') if value}
+    if selected_lines:
+        products = [item for item in products if str(item.product_line or '') in selected_lines]
+
+    selected_line_ids = {value for value in (product_line_id or '').split(',') if value}
+    if selected_line_ids:
+        products = [item for item in products if str(item.product_line_id or '') in selected_line_ids]
+
+    selected_ips = {value for value in (ip or '').split(',') if value}
+    if selected_ips:
+        products = [
+            item for item in products
+            if str(item.ip or '').strip() in selected_ips
+            or ('__no_ip__' in selected_ips and not str(item.ip or '').strip())
+        ]
+
+    selected_fsn = {value for value in (fsn or '').split(',') if value}
+    if selected_fsn:
+        products = [item for item in products if str(item.fsn or 'normal') in selected_fsn]
+
+    total = len(products)
+    if page is not None and page_size is not None:
+        start = (page - 1) * page_size
+        products = products[start:start + page_size]
+
+    return ProductListResponse(
+        products=products,
+        total=total,
+        page=page,
+        page_size=page_size,
+        product_line_options=product_line_options,
+        ip_options=ip_options,
+    )
 
 
 @router.post('', response_model=ProductRead)
@@ -386,12 +485,79 @@ def update_product_capacity_threshold(
 def list_product_variants(
     tenant_id: str = Query('tenant-admin'),
     product_id: str | None = None,
+    page: int | None = Query(default=None, ge=1),
+    page_size: int | None = Query(default=None, ge=1, le=250),
+    search: str | None = Query(default=None),
+    product_line: str | None = Query(default=None),
+    product_name: str | None = Query(default=None),
 ) -> ProductVariantListResponse:
     records = [map_record(record, ProductVariantDocument) for record in variant_controller.list(tenant_id)]
-    variants = [_to_variant(record, tenant_id) for record in records]
     if product_id:
-        variants = [variant for variant in variants if variant.product_id == product_id]
-    return ProductVariantListResponse(variants=variants)
+        records = [record for record in records if record.payload.product_id == product_id]
+
+    query = str(search or '').strip().casefold()
+    product_records = [map_record(record, ProductDocument) for record in product_controller.list(tenant_id)]
+    products_by_id = {record.object_id: _to_product(record) for record in product_records}
+    product_line_options = sorted({
+        str(product.product_line or '')
+        for product in products_by_id.values()
+        if str(product.product_line or '').strip()
+    })
+    product_name_options = sorted({
+        str(product.name or '')
+        for product in products_by_id.values()
+        if str(product.name or '').strip()
+    })
+
+    if product_line and products_by_id:
+        selected_lines = {item.strip().casefold() for item in product_line.split(',') if item.strip()}
+        records = [
+            record for record in records
+            if str((products_by_id.get(record.payload.product_id) and products_by_id[record.payload.product_id].product_line) or '').casefold() in selected_lines
+        ]
+    if product_name and products_by_id:
+        selected_products = {item.strip().casefold() for item in product_name.split(',') if item.strip()}
+        records = [
+            record for record in records
+            if str((products_by_id.get(record.payload.product_id) and products_by_id[record.payload.product_id].name) or '').casefold() in selected_products
+        ]
+    if query:
+        records = [
+            record for record in records
+            if query in ' '.join([
+                record.object_id,
+                record.payload.sku,
+                record.payload.name or '',
+                record.payload.product_id,
+                (products_by_id.get(record.payload.product_id) and products_by_id[record.payload.product_id].name) or '',
+                (products_by_id.get(record.payload.product_id) and products_by_id[record.payload.product_id].product_line) or '',
+                record.payload.qr_code or '',
+            ]).casefold()
+        ]
+
+    records.sort(key=lambda item: (str(item.created_at), item.payload.sku.casefold(), item.object_id.casefold()))
+    paged_records, total = _paginate(records, page, page_size)
+
+    if not products_by_id:
+        parent_ids = {record.payload.product_id for record in paged_records if record.payload.product_id}
+        products_by_id = {}
+        for parent_id in parent_ids:
+            try:
+                products_by_id[parent_id] = _to_product(map_record(product_controller.get(parent_id, tenant_id), ProductDocument))
+            except HTTPException:
+                continue
+    variants = [
+        _to_variant_for_list(record, products_by_id.get(record.payload.product_id))
+        for record in paged_records
+    ]
+    return ProductVariantListResponse(
+        variants=variants,
+        total=total,
+        page=page,
+        page_size=page_size,
+        product_line_options=product_line_options,
+        product_name_options=product_name_options,
+    )
 
 
 @router.get('/variants/{id}', response_model=ProductVariantRead)

@@ -66,3 +66,6 @@ class SaleReceiptRead(BaseModel):
 
 class SaleReceiptListResponse(BaseModel):
     receipts: list[SaleReceiptRead]
+    total: int | None = None
+    page: int | None = None
+    page_size: int | None = None

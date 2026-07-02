@@ -268,7 +268,11 @@ const ProductDetailPage = () => {
     variantsLineFilter: String(listContext.variantsLineFilter || 'all'),
     variantsProductFilter: String(listContext.variantsProductFilter || 'all'),
   }), [listContext])
-  const { allProducts } = useProductsList()
+  const { allProducts } = useProductsList('tenant-admin', {
+    includeVariants: false,
+    includeProductLines: false,
+    includeInventory: false,
+  })
   const { sites } = useSitesResource()
   const {
     productDetail,
