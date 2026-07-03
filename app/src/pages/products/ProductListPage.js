@@ -8,6 +8,7 @@ import ListFiltersRow from 'components/reusable/layouts/ListFiltersRow'
 import WorkspaceTabs from 'components/reusable/layouts/WorkspaceTabs'
 import CapacityBar from 'components/reusable/analytics/CapacityBar'
 import { useProductsList } from 'hooks/products/useProductsApi'
+import { useSitesResource } from 'hooks/bazaar/useBazaarApi'
 import BreadcrumbTitle from 'pages/common/BreadcrumbTitle'
 import AddProductModal from './modals/AddProductModal'
 import AddProductLineModal from './modals/AddProductLineModal'
@@ -284,6 +285,11 @@ const ProductListPage = ({ title }) => {
   const isProductsServerPaged = activeTab === 'products' && capacitySort === 'none'
   const isProductLinesServerPaged = activeTab === 'product-lines'
   const isVariantsServerPaged = activeTab === 'variants'
+  const { sites } = useSitesResource()
+  const capacityUnits = useMemo(
+    () => Math.max(1, 1 + (sites || []).filter((site) => site.active).length),
+    [sites],
+  )
 
   const {
     allProducts,
@@ -384,8 +390,8 @@ const ProductListPage = ({ title }) => {
       return (products || []).slice().sort((left, right) => {
         const leftThreshold = Math.max(1, Number(left.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))
         const rightThreshold = Math.max(1, Number(right.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))
-        const leftTarget = leftThreshold * 4
-        const rightTarget = rightThreshold * 4
+        const leftTarget = leftThreshold * capacityUnits
+        const rightTarget = rightThreshold * capacityUnits
         const leftGlobal = Number(storageCapacityByProductId[left.id] || 0)
         const rightGlobal = Number(storageCapacityByProductId[right.id] || 0)
         const leftRatio = leftGlobal / leftTarget
@@ -401,7 +407,7 @@ const ProductListPage = ({ title }) => {
         if (productCompare !== 0) return productCompare
         return alpha(a.product_code || a.id).localeCompare(alpha(b.product_code || b.id))
     })
-  }, [products, capacitySort, storageCapacityByProductId])
+  }, [products, capacitySort, storageCapacityByProductId, capacityUnits])
 
   const filteredVariants = useMemo(() => {
     if (isVariantsServerPaged) return variants || []
@@ -796,7 +802,7 @@ const ProductListPage = ({ title }) => {
               {loading && <Meta>Loading products...</Meta>}
               {!loading && pagedProducts.map(item => {
                 const thresholdPerSite = Math.max(1, Number(item.capacity_threshold_per_site || DEFAULT_THRESHOLD_PER_SITE))
-                const capacityTarget = thresholdPerSite * 4
+                const capacityTarget = thresholdPerSite * capacityUnits
                 const globalCapacity = Number(storageCapacityByProductId[item.id] || 0)
                 return (
                 <ProductRow key={item.id}>

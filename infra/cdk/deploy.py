@@ -347,6 +347,7 @@ def build_env(config: dict[str, str], aws_account_id: str, aws_region: str) -> d
     env = os.environ.copy()
     env["AWS_REGION"] = aws_region
     env["AWS_DEFAULT_REGION"] = aws_region
+    env["AWS_PAGER"] = ""
     env["CDK_DEFAULT_ACCOUNT"] = aws_account_id
     env["CDK_DEFAULT_REGION"] = aws_region
 

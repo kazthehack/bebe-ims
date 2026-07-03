@@ -506,6 +506,7 @@ const ProductDetailPage = () => {
       const value = Object.prototype.hasOwnProperty.call(quickQtyByVariant, variant.id)
         ? quickQtyByVariant[variant.id]
         : '1'
+      const inventoryMetrics = inventoryMetricsByVariantId[variant.id] || {}
       return {
         key: `quick-${variant.id}`,
         sku: variant.sku || 'N/A',
@@ -525,25 +526,28 @@ const ProductDetailPage = () => {
               <MiniMetricRow>
                 <MiniMetricLabel>Storage</MiniMetricLabel>
                 <CapacityBar
-                  value={Number((inventoryMetricsByVariantId[variant.id] || {}).storage_qty || 0)}
+                  value={Number(inventoryMetrics.storage_qty || 0)}
                   target={capacityThresholdPerSite}
                   height={6}
                   textPosition="none"
                 />
-                <MiniMetricValue>{Number((inventoryMetricsByVariantId[variant.id] || {}).storage_qty || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
+                <MiniMetricValue>{Number(inventoryMetrics.storage_qty || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
               </MiniMetricRow>
-              {enabledSiteColumns.map((siteColumn) => (
-                <MiniMetricRow key={`${variant.id}-${siteColumn.key}`}>
-                  <MiniMetricLabel>{siteColumn.label}</MiniMetricLabel>
-                  <CapacityBar
-                    value={Number((inventoryMetricsByVariantId[variant.id] || {})[`${siteColumn.key}_qty`] || 0)}
-                    target={capacityThresholdPerSite}
-                    height={6}
-                    textPosition="none"
-                  />
-                  <MiniMetricValue>{Number((inventoryMetricsByVariantId[variant.id] || {})[`${siteColumn.key}_qty`] || 0)} / {capacityThresholdPerSite}</MiniMetricValue>
-                </MiniMetricRow>
-              ))}
+              {enabledSiteColumns.map((siteColumn) => {
+                const siteQty = Number(inventoryMetrics[`${siteColumn.key}_qty`] || 0)
+                return (
+                  <MiniMetricRow key={`${variant.id}-${siteColumn.key}`}>
+                    <MiniMetricLabel>{siteColumn.label}</MiniMetricLabel>
+                    <CapacityBar
+                      value={siteQty}
+                      target={capacityThresholdPerSite}
+                      height={6}
+                      textPosition="none"
+                    />
+                    <MiniMetricValue>{siteQty} / {capacityThresholdPerSite}</MiniMetricValue>
+                  </MiniMetricRow>
+                )
+              })}
             </CapacityText>
           </CapacityCellWrap>
         ),

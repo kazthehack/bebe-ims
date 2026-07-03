@@ -82,6 +82,7 @@ recipe_part_controller = ProductRecipePart()
 brand_controller = SupplyBrand()
 site_controller = Site()
 
+GLOBAL_SITE_ID = 'global'
 MAIN_SITE_ID = 'main'
 VALID_FSN_VALUES = {'fast', 'normal', 'slow', 'non_moving'}
 
@@ -99,6 +100,14 @@ def _contains_query(values: list[object], query: str | None) -> bool:
     if not normalized:
         return True
     return normalized in ' '.join(str(value or '') for value in values).casefold()
+
+
+def _selected_values(value: str | None) -> set[str]:
+    return {
+        item.strip().casefold()
+        for item in str(value or '').split(',')
+        if item.strip()
+    }
 
 
 def _available(qty_on_hand: float, qty_reserved: float) -> float:
@@ -245,14 +254,21 @@ def _to_stock(record: StoredRecord[ProductStockDocument]) -> ProductStockRead:
     )
 
 
+def _is_global_site(site_id: str | None) -> bool:
+    normalized = str(site_id or '').strip().lower()
+    return normalized == GLOBAL_SITE_ID
+
+
 def _is_main_site(site_id: str | None) -> bool:
     normalized = str(site_id or '').strip().lower()
-    return normalized in ('main', 'global', 'storage')
+    return normalized in (MAIN_SITE_ID, 'storage')
 
 
 def _site_bucket(site_id: str | None) -> str:
     normalized = str(site_id or '').strip().lower()
     compact = ''.join(char for char in normalized if char.isalnum())
+    if _is_global_site(normalized):
+        return 'global'
     if _is_main_site(normalized):
         return 'storage'
     if compact in ('site1', 'site001', 'primary', 'primarya', 'a'):
@@ -322,6 +338,21 @@ def _upsert_product_stock_qty(
         ProductStockDocument,
     )
     return created
+
+
+def _find_global_product_stock_record(
+    tenant_id: str,
+    product_variant_id: str,
+) -> StoredRecord[ProductStockDocument] | None:
+    return _find_product_stock_record(tenant_id, product_variant_id, GLOBAL_SITE_ID)
+
+
+def _upsert_global_product_stock_qty(
+    tenant_id: str,
+    product_variant_id: str,
+    qty_delta: float,
+) -> StoredRecord[ProductStockDocument]:
+    return _upsert_product_stock_qty(tenant_id, product_variant_id, GLOBAL_SITE_ID, qty_delta)
 
 
 def _record_inventory_adjustment(
@@ -515,8 +546,35 @@ def list_inventory_global(
     active_site_count: int = Query(default=3, ge=0, le=50),
     needed_sort: str = Query(default='desc'),
 ) -> InventoryGlobalListResponse:
+    selected_lines = _selected_values(product_line)
+    selected_product_ids = _selected_values(product_ids)
+    selected_variants = _selected_values(variant)
+    selected_availability = _selected_values(availability)
     stock_records = [map_record(record, ProductStockDocument) for record in product_stock_controller.list(tenant_id)]
     variant_by_id, product_by_id = _variant_maps(tenant_id)
+    if selected_product_ids:
+        variant_by_id = {
+            variant_id: record
+            for variant_id, record in variant_by_id.items()
+            if str(record.payload.product_id or '').strip().casefold() in selected_product_ids
+        }
+    if selected_variants:
+        variant_by_id = {
+            variant_id: record
+            for variant_id, record in variant_by_id.items()
+            if str(record.payload.name or '').strip().casefold() in selected_variants
+        }
+    if selected_lines:
+        matching_product_ids = {
+            product_id
+            for product_id, record in product_by_id.items()
+            if str(record.payload.product_line_name or '').strip().casefold() in selected_lines
+        }
+        variant_by_id = {
+            variant_id: record
+            for variant_id, record in variant_by_id.items()
+            if str(record.payload.product_id or '') in matching_product_ids
+        }
     variants_by_product: dict[str, list[StoredRecord[ProductVariantDocument]]] = {}
     for variant in variant_by_id.values():
         product_id = str(variant.payload.product_id or '')
@@ -529,6 +587,7 @@ def list_inventory_global(
         entry = totals.setdefault(
             variant_id,
             {
+                'global': 0.0,
                 'main': 0.0,
                 'sites': 0.0,
                 'storage': 0.0,
@@ -540,6 +599,9 @@ def list_inventory_global(
         )
         qty = float(stock.payload.qty_on_hand or 0)
         bucket = _site_bucket(stock.payload.site_id)
+        if bucket == 'global':
+            entry['global'] += qty
+            continue
         entry[bucket] += qty
         if bucket == 'storage':
             entry['main'] += qty
@@ -552,6 +614,7 @@ def list_inventory_global(
         summed = totals.get(
             variant_id,
             {
+                'global': 0.0,
                 'main': 0.0,
                 'sites': 0.0,
                 'storage': 0.0,
@@ -563,11 +626,12 @@ def list_inventory_global(
         )
         main_qty = float(summed['main'])
         sites_qty = float(summed['sites'])
-        master_qty = main_qty + sites_qty
+        physical_total_qty = main_qty + sites_qty + float(summed['other'])
+        master_qty = float(summed['global']) if float(summed['global']) > 0 else physical_total_qty
         primary_qty = float(summed['primary'])
         secondary_qty = float(summed['secondary'])
         tertiary_qty = float(summed['tertiary'])
-        storage_qty = max(0.0, master_qty - primary_qty - secondary_qty - tertiary_qty)
+        storage_qty = main_qty
         product_threshold = _to_whole_units(float(product.payload.capacity_threshold_per_site or 8.0)) if product else 8.0
         product_price = float(product.payload.list_price or 0) if product else 0.0
         product_variants = variants_by_product.get(str(variant.payload.product_id or ''), [])
@@ -607,6 +671,7 @@ def list_inventory_global(
     ))
     product_line_options = sorted({item.product_line_name for item in rows if item.product_line_name})
     variant_options = sorted({item.variant_name for item in rows if item.variant_name})
+    unfiltered_rows = list(rows)
     if search:
         rows = [
             item for item in rows
@@ -618,22 +683,14 @@ def list_inventory_global(
                 item.product_variant_id,
             ], search)
         ]
-    selected_lines = {value for value in str(product_line or '').split(',') if value}
-    if selected_lines:
-        rows = [item for item in rows if str(item.product_line_name or '') in selected_lines]
-    selected_product_ids = {value for value in str(product_ids or '').split(',') if value}
-    if selected_product_ids:
-        rows = [item for item in rows if str(item.product_id or '') in selected_product_ids]
-    selected_variants = {value for value in str(variant or '').split(',') if value}
-    if selected_variants:
-        rows = [item for item in rows if str(item.variant_name or '') in selected_variants]
-    selected_availability = {value for value in str(availability or '').split(',') if value}
     if selected_availability and selected_availability != {'with-stock', 'zero-stock'}:
         rows = [
             item for item in rows
             if ('with-stock' in selected_availability and float(item.master_qty_on_hand or 0) > 0)
             or ('zero-stock' in selected_availability and float(item.master_qty_on_hand or 0) <= 0)
         ]
+    if not rows and not any([search, selected_lines, selected_product_ids, selected_variants, selected_availability, pipeline]):
+        rows = unfiltered_rows
     if pipeline:
         capacity_units = max(1, 1 + int(active_site_count or 0))
         grouped: dict[str, dict[str, object]] = {}
@@ -649,7 +706,7 @@ def list_inventory_global(
             primary_qty = max(0.0, float(item.primary_qty_on_hand or 0))
             secondary_qty = max(0.0, float(item.secondary_qty_on_hand or 0))
             tertiary_qty = max(0.0, float(item.tertiary_qty_on_hand or 0))
-            storage_qty = max(0.0, global_qty - primary_qty - secondary_qty - tertiary_qty)
+            storage_qty = max(0.0, float(item.storage_qty_on_hand or 0))
             entry = grouped.setdefault(product_id, {
                 'row_key': f'product-{product_id}',
                 'inventory_id': item.inventory_id,
@@ -874,12 +931,16 @@ def get_inventory_variant_detail(variant_id: str, tenant_id: str = Query('tenant
         if str(record.get('payload', {}).get('product_variant_id') or '') == variant_id
     ]
 
+    global_qty_on_hand = 0.0
     main_qty_on_hand = 0.0
     main_qty_reserved = 0.0
     site_stocks: list[InventorySiteStockRead] = []
     for stock in stock_records:
         qty_on_hand = float(stock.payload.qty_on_hand or 0)
         qty_reserved = float(stock.payload.qty_reserved or 0)
+        if _is_global_site(stock.payload.site_id):
+            global_qty_on_hand += qty_on_hand
+            continue
         if _is_main_site(stock.payload.site_id):
             main_qty_on_hand += qty_on_hand
             main_qty_reserved += qty_reserved
@@ -909,7 +970,7 @@ def get_inventory_variant_detail(variant_id: str, tenant_id: str = Query('tenant
         product_description=product.payload.description,
         main_stock=main_stock,
         site_stocks=site_stocks,
-        master_qty_on_hand=main_qty_on_hand + sum(item.qty_on_hand for item in site_stocks),
+        master_qty_on_hand=global_qty_on_hand or (main_qty_on_hand + sum(item.qty_on_hand for item in site_stocks)),
     )
 
 
@@ -935,8 +996,6 @@ def dispatch_inventory_to_site(
         raise HTTPException(status_code=409, detail='Destination site is inactive.')
 
     source_stock = _find_product_stock_record(tenant_id, payload.product_variant_id, MAIN_SITE_ID)
-    if not source_stock:
-        source_stock = _find_product_stock_record(tenant_id, payload.product_variant_id, 'global')
     if not source_stock:
         raise HTTPException(status_code=404, detail='No main stock found for product variant.')
 
@@ -1062,6 +1121,11 @@ def receive_inventory_to_main(
         MAIN_SITE_ID,
         qty,
     )
+    updated_global = _upsert_global_product_stock_qty(
+        tenant_id,
+        payload.product_variant_id,
+        qty,
+    )
     _record_inventory_adjustment(
         tenant_id,
         updated_main.object_id,
@@ -1069,6 +1133,14 @@ def receive_inventory_to_main(
         InventoryAdjustmentType.ADD,
         qty,
         notes='Main stock receive',
+    )
+    _record_inventory_adjustment(
+        tenant_id,
+        updated_global.object_id,
+        GLOBAL_SITE_ID,
+        InventoryAdjustmentType.ADD,
+        qty,
+        notes='Global stock receive',
     )
     return InventoryReceiveRead(
         site_id=MAIN_SITE_ID,
@@ -1088,32 +1160,42 @@ def adjust_inventory_global(
         raise HTTPException(status_code=422, detail='Stock delta must not be zero.')
 
     _ = map_record(variant_controller.get(payload.product_variant_id, tenant_id), ProductVariantDocument)
-    main_stock = (
-        _find_product_stock_record(tenant_id, payload.product_variant_id, MAIN_SITE_ID)
-        or _find_product_stock_record(tenant_id, payload.product_variant_id, 'global')
-    )
-    main_site_id = main_stock.payload.site_id if main_stock else MAIN_SITE_ID
-    if main_stock:
-        available_main_qty = float(main_stock.payload.qty_on_hand or 0) - float(main_stock.payload.qty_reserved or 0)
+    storage_stock = _find_product_stock_record(tenant_id, payload.product_variant_id, MAIN_SITE_ID)
+    storage_site_id = storage_stock.payload.site_id if storage_stock else MAIN_SITE_ID
+    if storage_stock:
+        available_main_qty = float(storage_stock.payload.qty_on_hand or 0) - float(storage_stock.payload.qty_reserved or 0)
         if qty_delta < 0 and abs(qty_delta) > available_main_qty:
             raise HTTPException(status_code=409, detail='Insufficient global stock for this adjustment.')
 
     updated_main = _upsert_product_stock_qty(
         tenant_id,
         payload.product_variant_id,
-        main_site_id,
+        storage_site_id,
+        qty_delta,
+    )
+    updated_global = _upsert_global_product_stock_qty(
+        tenant_id,
+        payload.product_variant_id,
         qty_delta,
     )
     _record_inventory_adjustment(
         tenant_id,
         updated_main.object_id,
-        main_site_id,
+        storage_site_id,
+        InventoryAdjustmentType.ADD if qty_delta > 0 else InventoryAdjustmentType.DISPENSE,
+        qty_delta,
+        notes=(str(payload.notes or '').strip() or 'Global stock quick adjustment'),
+    )
+    _record_inventory_adjustment(
+        tenant_id,
+        updated_global.object_id,
+        GLOBAL_SITE_ID,
         InventoryAdjustmentType.ADD if qty_delta > 0 else InventoryAdjustmentType.DISPENSE,
         qty_delta,
         notes=(str(payload.notes or '').strip() or 'Global stock quick adjustment'),
     )
     return InventoryGlobalAdjustRead(
-        site_id=main_site_id,
+        site_id=storage_site_id,
         product_variant_id=payload.product_variant_id,
         qty_delta=qty_delta,
         site_qty_on_hand=float(updated_main.payload.qty_on_hand or 0),
@@ -1160,6 +1242,11 @@ def writeoff_inventory_from_site(
         site_id,
         -qty,
     )
+    updated_global = _upsert_global_product_stock_qty(
+        tenant_id,
+        payload.product_variant_id,
+        -qty,
+    )
     descriptor = 'Manual sale' if disposition == 'manual_sale' else 'Loss'
     _record_inventory_adjustment(
         tenant_id,
@@ -1168,6 +1255,14 @@ def writeoff_inventory_from_site(
         InventoryAdjustmentType.DISPENSE,
         -qty,
         notes=f'Site write-off ({descriptor}): {reason}',
+    )
+    _record_inventory_adjustment(
+        tenant_id,
+        updated_global.object_id,
+        GLOBAL_SITE_ID,
+        InventoryAdjustmentType.DISPENSE,
+        -qty,
+        notes=f'Global write-off ({descriptor}): {reason}',
     )
     return InventorySiteWriteoffRead(
         site_id=site_id,

@@ -30,6 +30,7 @@ item_controller = SaleReceiptItem()
 stock_controller = ProductStock()
 adjustment_controller = InventoryAdjustment()
 session_controller = WebPosSession()
+GLOBAL_SITE_ID = 'global'
 
 
 def _paginate(items: list, page: int | None, page_size: int | None) -> tuple[list, int]:
@@ -66,6 +67,32 @@ def _normalize_items(payload: SaleReceiptCreate) -> list[SaleReceiptItemCreate]:
 
 def _item_variant_id(item_payload: SaleReceiptItemDocument) -> str | None:
     return item_payload.product_variant_id or item_payload.inventory_item_id
+
+
+def _upsert_global_stock_qty(tenant_id: str, product_variant_id: str, qty_delta: float) -> StoredRecord[ProductStockDocument]:
+    stock_records = [map_record(record, ProductStockDocument) for record in stock_controller.list(tenant_id)]
+    existing = next(
+        (
+            record for record in stock_records
+            if record.payload.product_variant_id == product_variant_id
+            and str(record.payload.site_id or '').strip().lower() == GLOBAL_SITE_ID
+        ),
+        None,
+    )
+    if existing:
+        updated_payload = existing.payload.model_dump(exclude_none=True)
+        updated_payload['qty_on_hand'] = float(updated_payload.get('qty_on_hand') or 0) + float(qty_delta or 0)
+        return map_record(stock_controller.update(existing.object_id, tenant_id, updated_payload), ProductStockDocument)
+    return map_record(
+        stock_controller.create(tenant_id, {
+            'product_variant_id': product_variant_id,
+            'site_id': GLOBAL_SITE_ID,
+            'qty_on_hand': float(qty_delta or 0),
+            'qty_reserved': 0.0,
+            'low_stock_threshold': 0.0,
+        }),
+        ProductStockDocument,
+    )
 
 
 def _build_receipt(
@@ -134,6 +161,15 @@ def _deduct_stock_and_log_adjustment(
                 'adjustment_type': InventoryAdjustmentType.DISPENSE,
                 'qty_delta': -qty,
                 'notes': f'Receipt {receipt_id} item dispense',
+            })
+            global_stock = _upsert_global_stock_qty(tenant_id, variant_id, -qty)
+            adjustment_controller.create(tenant_id, {
+                'target_type': StockTargetType.PRODUCT_STOCK,
+                'target_id': global_stock.object_id,
+                'site_id': GLOBAL_SITE_ID,
+                'adjustment_type': InventoryAdjustmentType.DISPENSE,
+                'qty_delta': -qty,
+                'notes': f'Receipt {receipt_id} global inventory decrement',
             })
             break
 

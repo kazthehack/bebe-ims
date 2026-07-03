@@ -65,7 +65,7 @@ def _upsert_main_stock(
         (
             record for record in records
             if record.payload.product_variant_id == product_variant_id
-            and str(record.payload.site_id or '').strip().lower() in ('main', 'global', 'storage')
+            and str(record.payload.site_id or '').strip().lower() in ('main', 'storage')
         ),
         None,
     )

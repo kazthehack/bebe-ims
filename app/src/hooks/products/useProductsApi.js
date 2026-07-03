@@ -22,6 +22,25 @@ const appendQueryParam = (params, key, value) => {
   params.set(key, value)
 }
 
+const inventoryMetricFromGlobalItem = (item) => ({
+  global_qty: Number(item.master_qty_on_hand || 0),
+  storage_qty: Number(item.storage_qty_on_hand || 0),
+  primary_qty: Number(item.primary_qty_on_hand || 0),
+  secondary_qty: Number(item.secondary_qty_on_hand || 0),
+  tertiary_qty: Number(item.tertiary_qty_on_hand || 0),
+})
+
+const inventoryMetricFromDetail = (item) => {
+  const siteStocks = item.site_stocks || []
+  return {
+    global_qty: Number(item.master_qty_on_hand || 0),
+    storage_qty: Number((item.main_stock && item.main_stock.qty_on_hand) || 0),
+    primary_qty: Number((siteStocks.find((stock) => String(stock.site_id || '').toLowerCase() === 'site1') || {}).qty_on_hand || 0),
+    secondary_qty: Number((siteStocks.find((stock) => String(stock.site_id || '').toLowerCase() === 'site2') || {}).qty_on_hand || 0),
+    tertiary_qty: Number((siteStocks.find((stock) => String(stock.site_id || '').toLowerCase() === 'site3') || {}).qty_on_hand || 0),
+  }
+}
+
 export const useProductsList = (tenantId = 'tenant-admin', options = {}) => {
   const {
     productsPage,
@@ -314,37 +333,42 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
       const productData = await getJson(`/products/${productId}?${tenantQuery(tenantId)}`)
       let inventoryData = { items: [] }
       try {
-        inventoryData = await getJson(`/stock/inventory/global?${tenantQuery(tenantId)}`)
+        const inventoryParams = new URLSearchParams(tenantQuery(tenantId))
+        appendQueryParam(inventoryParams, 'product_ids', productId)
+        inventoryData = await getJson(`/stock/inventory/global?${inventoryParams.toString()}`)
       } catch (_err) {
         inventoryData = { items: [] }
       }
+      const productVariantIds = (productData.variants || [])
+        .map((variant) => String(variant.id || ''))
+        .filter(Boolean)
+      const detailInventoryItems = await Promise.all(
+        productVariantIds.map(async (variantId) => {
+          try {
+            return await getJson(`/stock/inventory/items/${encodeURIComponent(`inv-${variantId}`)}?${tenantQuery(tenantId)}`)
+          } catch (_err) {
+            return null
+          }
+        }),
+      )
       if (!cancelled) {
         setProductDetail(productData)
+        const productVariantIdSet = new Set(productVariantIds)
         const metricsByVariant = (inventoryData.items || [])
-          .filter((item) => item.product_id === productId)
+          .filter((item) => productVariantIdSet.has(String(item.product_variant_id || '')))
           .reduce((acc, item) => {
             const variantId = String(item.product_variant_id || '')
             if (!variantId) return acc
-            const globalQty = Number(item.master_qty_on_hand || 0)
-            const primaryQty = Number(item.primary_qty_on_hand || 0)
-            const secondaryQty = Number(item.secondary_qty_on_hand || 0)
-            const tertiaryQty = Number(item.tertiary_qty_on_hand || 0)
-            const storageQty = Math.max(
-              0,
-              Number(item.master_qty_on_hand || 0)
-                - primaryQty
-                - secondaryQty
-                - tertiaryQty,
-            )
-            acc[variantId] = {
-              global_qty: globalQty,
-              storage_qty: storageQty,
-              primary_qty: primaryQty,
-              secondary_qty: secondaryQty,
-              tertiary_qty: tertiaryQty,
-            }
+            acc[variantId] = inventoryMetricFromGlobalItem(item)
             return acc
           }, {})
+        detailInventoryItems
+          .filter(Boolean)
+          .forEach((item) => {
+            const variantId = String(item.product_variant_id || '')
+            if (!variantId || !productVariantIdSet.has(variantId)) return
+            metricsByVariant[variantId] = inventoryMetricFromDetail(item)
+          })
         const qtyByVariant = Object.keys(metricsByVariant).reduce((acc, variantId) => {
           acc[variantId] = Number(metricsByVariant[variantId].global_qty || 0)
           return acc
@@ -428,9 +452,25 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
       qty_delta: qtyDelta,
       notes: notes || null,
     })
-    await load(false)
+    setInventoryMetricsByVariantId((prev) => {
+      const current = prev[variantId] || {}
+      const globalQty = Math.max(0, Number(current.global_qty || 0) + Number(qtyDelta || 0))
+      const storageQty = Math.max(0, Number(current.storage_qty || 0) + Number(qtyDelta || 0))
+      return {
+        ...prev,
+        [variantId]: {
+          ...current,
+          global_qty: globalQty,
+          storage_qty: storageQty,
+        },
+      }
+    })
+    setInventoryByVariantId((prev) => ({
+      ...prev,
+      [variantId]: Math.max(0, Number(prev[variantId] || 0) + Number(qtyDelta || 0)),
+    }))
     return adjusted
-  }, [tenantId, load])
+  }, [tenantId])
 
   return {
     productDetail,
@@ -484,7 +524,7 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
         getJson(`/products/variants/${variantId}/recipe-parts?${query}`),
         getJson(`/stock/supplies?${query}`),
         getJson(`/products/parts?${query}`),
-        getJson(`/stock/inventory/global?${query}`),
+        getJson(`/stock/inventory/items/${encodeURIComponent(`inv-${variantId}`)}?${query}`),
       ])
       let productData = null
       try {
@@ -495,22 +535,7 @@ export const useVariantDetail = (variantId, tenantId = 'tenant-admin') => {
       if (!cancelled) {
         setVariantDetail(variantData)
         setParentProduct((productData && productData.product) || null)
-        const inventoryRow = (inventoryData.items || []).find((item) => (
-          String(item.product_variant_id || '') === String(variantId || '')
-        ))
-        setInventorySnapshot({
-          global_qty: Number((inventoryRow && inventoryRow.master_qty_on_hand) || 0),
-          storage_qty: Math.max(
-            0,
-            Number((inventoryRow && inventoryRow.master_qty_on_hand) || 0)
-              - Number((inventoryRow && inventoryRow.primary_qty_on_hand) || 0)
-              - Number((inventoryRow && inventoryRow.secondary_qty_on_hand) || 0)
-              - Number((inventoryRow && inventoryRow.tertiary_qty_on_hand) || 0),
-          ),
-          primary_qty: Number((inventoryRow && inventoryRow.primary_qty_on_hand) || 0),
-          secondary_qty: Number((inventoryRow && inventoryRow.secondary_qty_on_hand) || 0),
-          tertiary_qty: Number((inventoryRow && inventoryRow.tertiary_qty_on_hand) || 0),
-        })
+        setInventorySnapshot(inventoryMetricFromDetail(inventoryData))
         setRecipeParts(recipeData.parts || [])
         setRecipeTotalCost(Number(recipeData.total_cost || 0))
         setRecipeSummary({

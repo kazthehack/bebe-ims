@@ -11,6 +11,7 @@ from typing import Any
 
 import boto3
 from boto3.dynamodb.types import TypeDeserializer
+from botocore.config import Config
 from botocore.exceptions import ClientError, EndpointConnectionError
 
 DEFAULT_INVENTORY_OBJECT_TYPES = {
@@ -28,6 +29,10 @@ DEFAULT_INVENTORY_OBJECT_TYPES = {
     "supply",
     "supply_brand",
 }
+
+
+def log(message: str) -> None:
+    print(f"[port] {message}", flush=True)
 
 
 def load_env_file(path: Path) -> dict[str, str]:
@@ -97,6 +102,91 @@ def local_dynamodb_client(
         aws_access_key_id=access_key_id or os.getenv("AWS_ACCESS_KEY_ID", "local"),
         aws_secret_access_key=secret_access_key
         or os.getenv("AWS_SECRET_ACCESS_KEY", "local"),
+        config=Config(connect_timeout=5, read_timeout=10, retries={"max_attempts": 1}),
+    )
+
+
+def local_access_key_candidates(
+    repo_root: Path,
+    region: str,
+    explicit_access_key_id: str,
+    cloud_access_key_id: str | None,
+) -> list[str]:
+    candidates = [
+        explicit_access_key_id,
+        os.getenv("AWS_ACCESS_KEY_ID", ""),
+        cloud_access_key_id or "",
+        "local",
+    ]
+    db_dir = repo_root / "dynamodb_local_latest"
+    for db_file in sorted(db_dir.glob(f"*_{region}.db")):
+        candidates.append(db_file.name[: -len(f"_{region}.db")])
+
+    seen: set[str] = set()
+    return [
+        candidate
+        for candidate in candidates
+        if candidate and not (candidate in seen or seen.add(candidate))
+    ]
+
+
+def list_table_names(client: Any) -> list[str]:
+    names: list[str] = []
+    kwargs: dict[str, Any] = {}
+    while True:
+        response = client.list_tables(**kwargs)
+        names.extend(response.get("TableNames", []))
+        last_name = response.get("LastEvaluatedTableName")
+        if not last_name:
+            return names
+        kwargs["ExclusiveStartTableName"] = last_name
+
+
+def resolve_local_client(
+    repo_root: Path,
+    endpoint_url: str,
+    region: str,
+    table_name: str,
+    explicit_access_key_id: str,
+    cloud_access_key_id: str | None,
+    secret_access_key: str,
+) -> tuple[Any, str, list[str]]:
+    last_error: Exception | None = None
+    checked: list[str] = []
+    for access_key_id in local_access_key_candidates(
+        repo_root,
+        region,
+        explicit_access_key_id,
+        cloud_access_key_id,
+    ):
+        client = local_dynamodb_client(
+            endpoint_url,
+            region,
+            access_key_id,
+            secret_access_key,
+        )
+        try:
+            table_names = list_table_names(client)
+        except Exception as exc:
+            last_error = exc
+            continue
+        checked.append(f"{access_key_id}: {', '.join(table_names) or '(no tables)'}")
+        if table_name in table_names:
+            return client, access_key_id, checked
+
+    if last_error and not checked:
+        raise SystemExit(
+            f"Could not connect to local DynamoDB at {endpoint_url}. "
+            "Start it with `make run-dynamodb-local` from the repository root, "
+            "then retry `make migrate prod`."
+        ) from last_error
+
+    raise SystemExit(
+        f"Local DynamoDB table {table_name!r} was not found at {endpoint_url}.\n"
+        "Checked local credential namespaces:\n"
+        + "\n".join(f"  - {entry}" for entry in checked)
+        + "\nStart the populated local DynamoDB database or pass "
+        "--local-access-key-id with the namespace that owns the table."
     )
 
 
@@ -150,6 +240,29 @@ def decoded_object_type(
     if raw_sk:
         return str(deserializer.deserialize(raw_sk)).split("#", 1)[0].lower()
     return ""
+
+
+def object_type_counts(
+    raw_items: list[dict[str, Any]], deserializer: TypeDeserializer
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in raw_items:
+        object_type = decoded_object_type(item, deserializer) or "(unknown)"
+        counts[object_type] = counts.get(object_type, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def log_object_type_counts(
+    label: str,
+    raw_items: list[dict[str, Any]],
+    deserializer: TypeDeserializer,
+) -> None:
+    counts = object_type_counts(raw_items, deserializer)
+    if not counts:
+        log(f"{label}: no records")
+        return
+    summary = ", ".join(f"{object_type}={count}" for object_type, count in counts.items())
+    log(f"{label}: {summary}")
 
 
 def get_existing_item(
@@ -324,13 +437,25 @@ def main() -> None:
         default="",
         help="Required value for full clone writes: clone-local-to-prod.",
     )
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=100,
+        help="Print write/delete progress every N records. Use 0 to disable.",
+    )
     args = parser.parse_args()
 
+    log("starting local-to-cloud DynamoDB migration")
     if args.full_clone:
         args.all_tenants = True
         args.all_object_types = True
         args.overwrite = True
         args.prune_destination = True
+        log("mode: full clone (all tenants, all object types, overwrite, prune)")
+    else:
+        scope = "all tenants" if args.all_tenants else f"tenant={args.tenant_id}"
+        type_scope = "all object types" if args.all_object_types else args.object_types
+        log(f"mode: selective copy ({scope}; object_types={type_scope})")
 
     if (
         args.full_clone
@@ -350,13 +475,31 @@ def main() -> None:
     local_endpoint = args.local_endpoint or endpoint_from_local_config(
         Path(args.local_config).expanduser()
     )
+    rollback_path = Path(args.rollback_file).expanduser()
 
-    local_client = local_dynamodb_client(
+    log(f"local config: {Path(args.local_config).expanduser()}")
+    log(f"cloud config: {Path(args.cloud_config).expanduser()}")
+    log(f"source table: {args.local_table} at {local_endpoint}")
+    log(f"destination table: {cloud_table} in {cloud_region}")
+    log(f"rollback file: {rollback_path}")
+
+    log("resolving local DynamoDB credential namespace")
+    local_client, local_access_key_id, checked_local_namespaces = resolve_local_client(
+        repo_root,
         local_endpoint,
         cloud_region,
-        args.local_access_key_id or cloud_config.get("AWS_ACCESS_KEY_ID"),
+        args.local_table,
+        args.local_access_key_id,
+        cloud_config.get("AWS_ACCESS_KEY_ID"),
         args.local_secret_access_key,
     )
+    log(f"source local access key namespace: {local_access_key_id}")
+    if len(checked_local_namespaces) > 1:
+        log("checked local namespaces before source match:")
+        for namespace in checked_local_namespaces:
+            log(f"  {namespace}")
+
+    log("creating cloud DynamoDB client")
     cloud_client = dynamodb_client_from_config(cloud_config)
     deserializer = TypeDeserializer()
     selected_types = {
@@ -364,6 +507,8 @@ def main() -> None:
     }
 
     try:
+        scan_scope = "all tenants" if args.all_tenants else f"tenant={args.tenant_id}"
+        log(f"scanning source records ({scan_scope})")
         source_items = scan_items(
             local_client,
             args.local_table,
@@ -373,20 +518,28 @@ def main() -> None:
         raise SystemExit(
             f"Could not connect to local DynamoDB at {local_endpoint}. "
             "Start it with `make run-dynamodb-local` from the repository root, "
-            "then retry `make port-inventory-cloud`."
+            "then retry `make migrate prod`."
         ) from exc
+    log(f"source scan complete: {len(source_items)} records")
+    log_object_type_counts("source object types", source_items, deserializer)
+
     filtered_items = [
         item
         for item in source_items
         if args.all_object_types
         or decoded_object_type(item, deserializer) in selected_types
     ]
+    log(f"selected source records: {len(filtered_items)}")
+    if not args.all_object_types:
+        log_object_type_counts("selected source object types", filtered_items, deserializer)
+
     destination_items: list[dict[str, Any]] = []
     destination_by_key: dict[str, dict[str, Any]] = {}
     source_by_key = {key_id(item_key(item)): item for item in filtered_items}
     destination_only_keys: list[dict[str, Any]] = []
 
     if args.prune_destination:
+        log("scanning destination records for prune comparison")
         destination_items = scan_items(
             cloud_client,
             cloud_table,
@@ -403,20 +556,20 @@ def main() -> None:
             for identifier, item in destination_by_key.items()
             if identifier not in source_by_key
         ]
+        log(f"destination scan complete: {len(destination_items)} records")
+        log_object_type_counts(
+            "destination object types in scope",
+            list(destination_by_key.values()),
+            deserializer,
+        )
+        log(f"destination-only records to delete: {len(destination_only_keys)}")
 
-    print(f"[port] source: {args.local_table} at {local_endpoint}")
-    print(f"[port] destination: {cloud_table} in {cloud_region}")
-    print(
-        f"[port] scanned={len(source_items)} selected={len(filtered_items)} "
+    log(
+        f"summary before write: scanned={len(source_items)} selected={len(filtered_items)} "
         f"overwrite={args.overwrite} prune={args.prune_destination}"
     )
-    if args.prune_destination:
-        print(
-            f"[port] destination scanned={len(destination_items)} "
-            f"destination_only={len(destination_only_keys)}"
-        )
     if args.dry_run:
-        print("[port] dry run only; no cloud writes performed")
+        log("dry run only; no cloud writes performed")
         return
 
     rollback_items: dict[str, dict[str, Any] | None] = {}
@@ -427,7 +580,8 @@ def main() -> None:
     deleted = 0
 
     try:
-        for item in filtered_items:
+        log("writing selected source records to destination")
+        for index, item in enumerate(filtered_items, start=1):
             key = item_key(item)
             identifier = key_id(key)
             if identifier not in rollback_items:
@@ -440,17 +594,37 @@ def main() -> None:
                 written_keys.append(key)
             elif result == "skipped_existing":
                 skipped_existing += 1
+            if args.progress_every > 0 and index % args.progress_every == 0:
+                log(
+                    f"write progress: processed={index}/{len(filtered_items)} "
+                    f"written={written} skipped_existing={skipped_existing}"
+                )
 
-        for key in destination_only_keys:
+        log(
+            f"write phase complete: written={written}, "
+            f"skipped_existing={skipped_existing}"
+        )
+
+        if destination_only_keys:
+            log("deleting destination-only records")
+        for index, key in enumerate(destination_only_keys, start=1):
             identifier = key_id(key)
             if identifier not in rollback_items:
                 rollback_items[identifier] = destination_by_key.get(identifier)
             delete_item(cloud_client, cloud_table, key)
             deleted += 1
             deleted_keys.append(key)
+            if args.progress_every > 0 and index % args.progress_every == 0:
+                log(
+                    f"delete progress: processed={index}/{len(destination_only_keys)} "
+                    f"deleted={deleted}"
+                )
 
+        log(f"delete phase complete: deleted={deleted}")
+
+        log("writing rollback metadata")
         write_json(
-            Path(args.rollback_file).expanduser(),
+            rollback_path,
             {
                 "created_at": datetime.now(UTC).isoformat(),
                 "cloud_table": cloud_table,
@@ -470,7 +644,7 @@ def main() -> None:
         )
     except Exception:
         if not args.no_rollback_on_failure and (written_keys or deleted_keys):
-            print("[port] failure detected; rolling back cloud writes", file=sys.stderr)
+            print("[port] failure detected; rolling back cloud writes", file=sys.stderr, flush=True)
             rollback_written_items(
                 cloud_client,
                 cloud_table,
@@ -478,13 +652,14 @@ def main() -> None:
                 written_keys,
                 deleted_keys,
             )
+            log("rollback complete")
         raise
 
-    print(
-        f"[port] complete: written={written}, skipped_existing={skipped_existing}, "
+    log(
+        f"complete: written={written}, skipped_existing={skipped_existing}, "
         f"deleted={deleted}"
     )
-    print(f"[port] rollback metadata: {Path(args.rollback_file).expanduser()}")
+    log(f"rollback metadata: {rollback_path}")
 
 
 if __name__ == "__main__":
