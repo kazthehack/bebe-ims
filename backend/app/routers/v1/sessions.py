@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.controllers.event import Event
 from app.controllers.site import Site
 from app.controllers.web_pos_cash_movement import WebPosCashMovement
 from app.controllers.web_pos_session import WebPosSession
 from app.domain.enums import WebPosSessionStatus
+from app.domain.permissions import require_permission
 from app.domain.record_mapper import StoredRecord, map_record
 from app.models.event import EventDocument
 from app.models.site import SiteDocument
@@ -64,7 +65,7 @@ def list_sessions(tenant_id: str = Query('tenant-admin')) -> WebPosSessionListRe
     return WebPosSessionListResponse(sessions=[_to_session(record) for record in records])
 
 
-@router.post('', response_model=WebPosSessionRead)
+@router.post('', response_model=WebPosSessionRead, dependencies=[Depends(require_permission("pos:access"))])
 def create_session(payload: WebPosSessionCreate, tenant_id: str = Query('tenant-admin')) -> WebPosSessionRead:
     _ = map_record(site_controller.get(payload.site_id, tenant_id), SiteDocument)
     if payload.event_id:
@@ -101,7 +102,7 @@ def create_session(payload: WebPosSessionCreate, tenant_id: str = Query('tenant-
     return _to_session(record)
 
 
-@router.post('/{id}/close', response_model=WebPosSessionRead)
+@router.post('/{id}/close', response_model=WebPosSessionRead, dependencies=[Depends(require_permission("pos:access"))])
 def close_session(
     id: str,
     payload: WebPosSessionCloseCreate,
@@ -137,7 +138,7 @@ def list_cash_movements(id: str, tenant_id: str = Query('tenant-admin')) -> WebP
     return WebPosCashMovementListResponse(movements=movements)
 
 
-@router.post('/{id}/cash-movements', response_model=WebPosCashMovementRead)
+@router.post('/{id}/cash-movements', response_model=WebPosCashMovementRead, dependencies=[Depends(require_permission("pos:access"))])
 def create_cash_movement(
     id: str,
     payload: WebPosCashMovementCreate,

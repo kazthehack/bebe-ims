@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.controllers.event import Event
 from app.controllers.inventory_adjustment import InventoryAdjustment
 from app.controllers.product_stock import ProductStock
 from app.controllers.site import Site
 from app.domain.enums import InventoryAdjustmentType, StockTargetType
+from app.domain.permissions import require_permission
 from app.domain.record_mapper import StoredRecord, map_record
 from app.models.event import EventDocument
 from app.models.product_stock import ProductStockDocument
@@ -138,13 +139,13 @@ def get_site(id: str, tenant_id: str = Query('tenant-admin')) -> SiteRead:
     return _to_site(map_record(site_controller.get(id, tenant_id), SiteDocument))
 
 
-@router.post('', response_model=SiteRead)
+@router.post('', response_model=SiteRead, dependencies=[Depends(require_permission("sites:create"))])
 def create_site(payload: SiteCreate, tenant_id: str = Query('tenant-admin')) -> SiteRead:
     record = map_record(site_controller.create(tenant_id, payload.model_dump(exclude_none=True)), SiteDocument)
     return _to_site(record)
 
 
-@router.put('/{id}', response_model=SiteRead)
+@router.put('/{id}', response_model=SiteRead, dependencies=[Depends(require_permission("sites:update"))])
 def update_site(id: str, payload: SiteUpdate, tenant_id: str = Query('tenant-admin')) -> SiteRead:
     existing = map_record(site_controller.get(id, tenant_id), SiteDocument)
     merged = existing.payload.model_dump(exclude_none=True)
@@ -155,7 +156,7 @@ def update_site(id: str, payload: SiteUpdate, tenant_id: str = Query('tenant-adm
     return _to_site(record)
 
 
-@router.delete('/{id}')
+@router.delete('/{id}', dependencies=[Depends(require_permission("sites:delete"))])
 def delete_site(id: str, tenant_id: str = Query('tenant-admin')) -> dict[str, bool]:
     return {'deleted': site_controller.delete(id, tenant_id)}
 
@@ -183,7 +184,7 @@ def list_site_events(id: str, tenant_id: str = Query('tenant-admin')) -> SiteEve
     return SiteEventListResponse(events=rows)
 
 
-@router.post('/{id}/events/assign', response_model=SiteRead)
+@router.post('/{id}/events/assign', response_model=SiteRead, dependencies=[Depends(require_permission("events:update"))])
 def assign_event_to_site(
     id: str,
     payload: SiteEventAssignCreate,
@@ -207,7 +208,7 @@ def assign_event_to_site(
     return _to_site(updated)
 
 
-@router.post('/{id}/events/{event_id}/close', response_model=SiteEventCloseRead)
+@router.post('/{id}/events/{event_id}/close', response_model=SiteEventCloseRead, dependencies=[Depends(require_permission("events:update"))])
 def close_site_event(id: str, event_id: str, tenant_id: str = Query('tenant-admin')) -> SiteEventCloseRead:
     site = map_record(site_controller.get(id, tenant_id), SiteDocument)
     event = map_record(event_controller.get(event_id, tenant_id), EventDocument)
@@ -241,7 +242,7 @@ def close_site_event(id: str, event_id: str, tenant_id: str = Query('tenant-admi
     )
 
 
-@router.post('/{id}/inventory/return-all', response_model=SiteReturnInventoryRead)
+@router.post('/{id}/inventory/return-all', response_model=SiteReturnInventoryRead, dependencies=[Depends(require_permission("inventory:update"))])
 def return_site_inventory_to_global(id: str, tenant_id: str = Query('tenant-admin')) -> SiteReturnInventoryRead:
     site = map_record(site_controller.get(id, tenant_id), SiteDocument)
     if not site.payload.active:

@@ -1,4 +1,11 @@
 import { AuthApi, ObjectApi } from './client'
+import {
+  getAccessToken,
+  getAuthPermissions,
+  getAuthRole,
+  getCurrentAuthSession,
+  persistAuthSession,
+} from './authSession'
 
 const DEFAULT_TENANT_ID = process.env.REACT_APP_TENANT_ID || 'tenant-admin'
 const DEFAULT_STORE_ID = process.env.REACT_APP_DEFAULT_STORE_ID || 'store-admin'
@@ -53,25 +60,41 @@ export const authLogin = async (email, password) => {
     refreshToken: auth.refresh_token,
     expires: auth.expires,
   }
+  const authSession = {
+    accessToken: auth.access_token,
+    refreshToken: auth.refresh_token,
+    tenantId: auth.tenant_id,
+    storeId: auth.store_id,
+    ownerId: auth.owner_id,
+    userId: auth.user_id,
+    employeeId: auth.employee_id,
+    username: auth.username || username,
+    role: auth.role,
+    permissions: auth.permissions || [],
+    forcePasswordChange: !!auth.force_password_change,
+  }
 
   try {
-    localStorage.setItem('tenantId', auth.tenant_id)
-    localStorage.setItem('storeId', auth.store_id)
-    localStorage.setItem('ownerId', auth.owner_id)
-    sessionStorage.setItem('tenantId', auth.tenant_id)
-    sessionStorage.setItem('storeId', auth.store_id)
-    sessionStorage.setItem('ownerId', auth.owner_id)
-    sessionStorage.setItem('currentUserEmail', username)
+    persistAuthSession(authSession)
   } catch (err) {
     // ignore storage errors
   }
 
   return {
     authToken,
-    tenantId: auth.tenant_id,
-    storeId: auth.store_id,
-    ownerId: auth.owner_id,
+    ...authSession,
   }
+}
+
+export const changePassword = async ({ currentPassword, newPassword }) => {
+  const response = await AuthApi.changePassword(getTenantId(), getAccessToken(), currentPassword, newPassword)
+  try {
+    sessionStorage.setItem('forcePasswordChange', 'false')
+    localStorage.setItem('forcePasswordChange', 'false')
+  } catch (err) {
+    // ignore storage errors
+  }
+  return response
 }
 
 export const verifyPasswordEmailToken = async ({ passwordResetToken }) => {
@@ -131,9 +154,12 @@ export const getStoreSettings = async (storeId) => {
 }
 
 export const getAuthenticatedEmployee = async (storeId) => {
+  const session = getCurrentAuthSession()
+  const permissions = getAuthPermissions()
+  const role = getAuthRole() || 'user'
   const email = (() => {
     try {
-      return sessionStorage.getItem('currentUserEmail') || 'admin@example.com'
+      return sessionStorage.getItem('currentUserEmail') || session.username || 'admin@example.com'
     } catch (err) {
       return 'admin@example.com'
     }
@@ -143,7 +169,7 @@ export const getAuthenticatedEmployee = async (storeId) => {
     viewer: {
       id: (() => {
         try {
-          return localStorage.getItem('ownerId') || 'employee-current'
+          return localStorage.getItem('ownerId') || session.ownerId || 'employee-current'
         } catch (err) {
           return 'employee-current'
         }
@@ -152,14 +178,14 @@ export const getAuthenticatedEmployee = async (storeId) => {
       stores: [toEdge({ id: storeId || getStoreId(), name: 'Default Store' })],
       portalRoles: [
         {
-          id: 'portal-role-admin',
-          permissions: defaultPermissions,
+          id: `portal-role-${role}`,
+          permissions: permissions.length ? permissions : defaultPermissions,
         },
       ],
       posRoles: [
         {
-          id: 'pos-role-admin',
-          permissions: defaultPermissions,
+          id: `pos-role-${role}`,
+          permissions: permissions.length ? permissions : defaultPermissions,
         },
       ],
     },

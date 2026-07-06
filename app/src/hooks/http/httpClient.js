@@ -1,4 +1,5 @@
 import { resolveApiBase } from '../../api/resolveApiBase'
+import { getAccessToken } from '../../api/authSession'
 
 const apiBaseRaw = process.env.REACT_APP_REST_API_ENDPOINT || ''
 const apiBase = resolveApiBase(apiBaseRaw)
@@ -11,9 +12,14 @@ const ensureApiBase = () => {
 
 export const requestJson = async (path, options = {}) => {
   ensureApiBase()
+  const accessToken = getAccessToken()
   const response = await fetch(`${apiBase}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(options.headers || {}),
+    },
   })
 
   if (!response.ok) {
@@ -26,8 +32,13 @@ export const requestJson = async (path, options = {}) => {
 
 export const requestBlob = async (path, options = {}) => {
   ensureApiBase()
+  const accessToken = getAccessToken()
   const response = await fetch(`${apiBase}${path}`, {
     ...options,
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(options.headers || {}),
+    },
   })
   if (!response.ok) {
     const body = await response.text()
@@ -47,9 +58,13 @@ export const postJson = (path, payload) => requestJson(path, {
 
 export const postForm = async (path, formData) => {
   ensureApiBase()
+  const accessToken = getAccessToken()
   const response = await fetch(`${apiBase}${path}`, {
     method: 'POST',
     body: formData,
+    headers: {
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
   })
 
   if (!response.ok) {

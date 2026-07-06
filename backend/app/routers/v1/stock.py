@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 import re
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.controllers.filament import Filament
 from app.controllers.filament_active import FilamentActive
@@ -16,6 +16,7 @@ from app.controllers.site import Site
 from app.controllers.supply_brand import SupplyBrand
 from app.controllers.supply import Supply
 from app.domain.enums import InventoryAdjustmentType, StockTargetType, SupplyType
+from app.domain.permissions import require_permission
 from app.domain.inventory_workbook_export import export_inventory_workbook_bytes, find_inventory_workbook
 from app.domain.record_mapper import StoredRecord, map_record
 from app.models.filament import FilamentDocument
@@ -980,7 +981,7 @@ def get_inventory_item_detail(inventory_id: str, tenant_id: str = Query('tenant-
     return get_inventory_variant_detail(variant_id, tenant_id)
 
 
-@router.post('/inventory/dispatch', response_model=InventoryDispatchRead)
+@router.post('/inventory/dispatch', response_model=InventoryDispatchRead, dependencies=[Depends(require_permission("inventory:update"))])
 def dispatch_inventory_to_site(
     payload: InventoryDispatchCreate,
     tenant_id: str = Query('tenant-admin'),
@@ -1043,7 +1044,7 @@ def dispatch_inventory_to_site(
     )
 
 
-@router.post('/inventory/transfer', response_model=InventoryTransferRead)
+@router.post('/inventory/transfer', response_model=InventoryTransferRead, dependencies=[Depends(require_permission("inventory:update"))])
 def transfer_inventory_between_sites(
     payload: InventoryTransferCreate,
     tenant_id: str = Query('tenant-admin'),
@@ -1105,7 +1106,7 @@ def transfer_inventory_between_sites(
     )
 
 
-@router.post('/inventory/receive', response_model=InventoryReceiveRead)
+@router.post('/inventory/receive', response_model=InventoryReceiveRead, dependencies=[Depends(require_permission("inventory:create"))])
 def receive_inventory_to_main(
     payload: InventoryReceiveCreate,
     tenant_id: str = Query('tenant-admin'),
@@ -1150,7 +1151,7 @@ def receive_inventory_to_main(
     )
 
 
-@router.post('/inventory/global-adjust', response_model=InventoryGlobalAdjustRead)
+@router.post('/inventory/global-adjust', response_model=InventoryGlobalAdjustRead, dependencies=[Depends(require_permission("inventory:update"))])
 def adjust_inventory_global(
     payload: InventoryGlobalAdjustCreate,
     tenant_id: str = Query('tenant-admin'),
@@ -1202,7 +1203,7 @@ def adjust_inventory_global(
     )
 
 
-@router.post('/inventory/site-writeoff', response_model=InventorySiteWriteoffRead)
+@router.post('/inventory/site-writeoff', response_model=InventorySiteWriteoffRead, dependencies=[Depends(require_permission("inventory:update"))])
 def writeoff_inventory_from_site(
     payload: InventorySiteWriteoffCreate,
     tenant_id: str = Query('tenant-admin'),
@@ -1275,7 +1276,7 @@ def writeoff_inventory_from_site(
     )
 
 
-@router.post('/products', response_model=ProductStockRead)
+@router.post('/products', response_model=ProductStockRead, dependencies=[Depends(require_permission("inventory:create"))])
 def create_product_stock(payload: ProductStockCreate, tenant_id: str = Query('tenant-admin')) -> ProductStockRead:
     record = map_record(
         product_stock_controller.create(tenant_id, payload.model_dump(exclude_none=True)),
@@ -1343,7 +1344,7 @@ def list_brands(tenant_id: str = Query('tenant-admin')) -> SupplyBrandListRespon
     return SupplyBrandListResponse(brands=[_to_brand(record) for record in records])
 
 
-@router.post('/brands', response_model=SupplyBrandRead)
+@router.post('/brands', response_model=SupplyBrandRead, dependencies=[Depends(require_permission("inventory:create"))])
 def create_brand(payload: SupplyBrandCreate, tenant_id: str = Query('tenant-admin')) -> SupplyBrandRead:
     normalized_id = _normalize_brand_id(payload.brand)
     if not normalized_id:
@@ -1375,7 +1376,7 @@ def get_supply(id: str, tenant_id: str = Query('tenant-admin')) -> SupplyRead:
     return _to_supply(record)
 
 
-@router.post('/supplies', response_model=SupplyRead)
+@router.post('/supplies', response_model=SupplyRead, dependencies=[Depends(require_permission("inventory:create"))])
 def create_supply(payload: SupplyCreate, tenant_id: str = Query('tenant-admin')) -> SupplyRead:
     create_payload = payload.model_dump(exclude_none=True)
     supply_type = _normalize_supply_type(
@@ -1417,7 +1418,7 @@ def create_supply(payload: SupplyCreate, tenant_id: str = Query('tenant-admin'))
     return _to_supply(record)
 
 
-@router.put('/supplies/{id}', response_model=SupplyRead)
+@router.put('/supplies/{id}', response_model=SupplyRead, dependencies=[Depends(require_permission("inventory:update"))])
 def update_supply(id: str, payload: SupplyUpdate, tenant_id: str = Query('tenant-admin')) -> SupplyRead:
     existing = map_record(supply_controller.get(id, tenant_id), SupplyDocument)
     merged = existing.payload.model_dump(exclude_none=True)
@@ -1462,7 +1463,7 @@ def update_supply(id: str, payload: SupplyUpdate, tenant_id: str = Query('tenant
     return _to_supply(record)
 
 
-@router.delete('/supplies/{id}')
+@router.delete('/supplies/{id}', dependencies=[Depends(require_permission("inventory:delete"))])
 def delete_supply(id: str, tenant_id: str = Query('tenant-admin')) -> dict[str, bool]:
     return {'deleted': supply_controller.delete(id, tenant_id)}
 
@@ -1505,7 +1506,7 @@ def list_filaments(
     return FilamentListResponse(filaments=paged, total=total, page=page, page_size=page_size)
 
 
-@router.post('/filaments', response_model=FilamentRead)
+@router.post('/filaments', response_model=FilamentRead, dependencies=[Depends(require_permission("inventory:create"))])
 def create_filament(payload: FilamentCreate, tenant_id: str = Query('tenant-admin')) -> FilamentRead:
     record = map_record(
         filament_controller.create(tenant_id, payload.model_dump(exclude_none=True)),
@@ -1533,7 +1534,7 @@ def list_filament_active(id: str, tenant_id: str = Query('tenant-admin')) -> Fil
     return FilamentActiveListResponse(entries=[_to_filament_active(record) for record in records])
 
 
-@router.post('/filaments/{id}/active', response_model=FilamentActiveRead)
+@router.post('/filaments/{id}/active', response_model=FilamentActiveRead, dependencies=[Depends(require_permission("inventory:update"))])
 def open_filament_active(
     id: str,
     payload: FilamentActiveCreate,
@@ -1568,7 +1569,7 @@ def open_filament_active(
     return _to_filament_active(active_record)
 
 
-@router.put('/filaments/{id}/active/{active_id}', response_model=FilamentActiveRead)
+@router.put('/filaments/{id}/active/{active_id}', response_model=FilamentActiveRead, dependencies=[Depends(require_permission("inventory:update"))])
 def update_filament_active(
     id: str,
     active_id: str,
@@ -1591,7 +1592,7 @@ def update_filament_active(
     return _to_filament_active(updated)
 
 
-@router.delete('/filaments/{id}/active/{active_id}')
+@router.delete('/filaments/{id}/active/{active_id}', dependencies=[Depends(require_permission("inventory:delete"))])
 def delete_filament_active(id: str, active_id: str, tenant_id: str = Query('tenant-admin')) -> dict[str, bool]:
     existing = map_record(filament_active_controller.get(active_id, tenant_id), FilamentActiveDocument)
     if existing.payload.filament_id != id:
@@ -1621,7 +1622,7 @@ def list_adjustments(
     return InventoryAdjustmentListResponse(adjustments=paged, total=total, page=page, page_size=page_size)
 
 
-@router.post('/adjustments', response_model=InventoryAdjustmentRead)
+@router.post('/adjustments', response_model=InventoryAdjustmentRead, dependencies=[Depends(require_permission("inventory:update"))])
 def create_adjustment(payload: InventoryAdjustmentCreate, tenant_id: str = Query('tenant-admin')) -> InventoryAdjustmentRead:
     _apply_adjustment(tenant_id, payload)
     record = map_record(

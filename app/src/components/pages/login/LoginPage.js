@@ -6,6 +6,7 @@ import { Grid, Row, Col } from 'react-styled-flexboxgrid'
 import LogoSVG from 'assets/logo.png'
 import colors from 'styles/colors'
 import { PageNotFound } from 'components/pages/ErrorPage'
+import ChangePasswordFragment from './ChangePasswordFragment'
 import LoginFragment from './LoginFragment'
 
 /*
@@ -82,6 +83,7 @@ const LoginPage = ({ match }) => (
       </LogoWrapper>
       <Switch>
         <Route exact path={match.url} component={LoginFragment} />
+        <Route exact path={`${match.url}/change-password`} component={ChangePasswordFragment} />
         <Route exact path={`${match.url}/reset`} render={() => <LoginFragment />} />
         <Route exact path={`${match.url}/request`} render={() => <LoginFragment />} />
         <Route component={PageNotFound(true)} />

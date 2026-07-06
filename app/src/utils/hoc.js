@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import { Redirect } from 'react-router-dom'
 import { get, isEmpty } from 'lodash'
+import { getForcePasswordChange } from 'api/authSession'
 
 const asArray = value => (Array.isArray(value) ? value : [value])
 
@@ -74,6 +75,9 @@ const isAuthenticated = () => {
 export const requireAuthentication = Wrapped => (props) => {
   if (!isAuthenticated()) {
     return <Redirect to="/login" />
+  }
+  if (getForcePasswordChange()) {
+    return <Redirect to="/login/change-password" />
   }
   return <Wrapped {...props} />
 }

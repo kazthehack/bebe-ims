@@ -7,6 +7,7 @@ from app.routers.objects import (
     customer,
     demo,
     discount,
+    employee,
     hardware,
     integration,
     inventory_report,
@@ -39,6 +40,7 @@ router.include_router(compliance.router)
 router.include_router(customer.router)
 router.include_router(demo.router)
 router.include_router(discount.router)
+router.include_router(employee.router)
 router.include_router(hardware.router)
 router.include_router(integration.router)
 router.include_router(inventory_report.router)

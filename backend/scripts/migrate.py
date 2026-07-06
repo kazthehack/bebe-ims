@@ -12,9 +12,11 @@ import zipfile
 from botocore.exceptions import ClientError
 
 from app.core.config import get_settings
+from app.core.auth import hash_password
 from app.db.dynamodb import get_dynamodb_client
 from app.db.repository import ObjectRepository
 from app.domain.object_record import ObjectRecord
+from app.domain.permissions import permissions_for_role
 
 GSI1_NAME = "gsi1"
 DEFAULT_EVENTS = [
@@ -37,6 +39,13 @@ DEFAULT_SITES = [
     ("site2", "SITE-002", "Secondary (B)", "Secondary (B)"),
     ("site3", "SITE-003", "Tertiary (C)", "Tertiary (C)"),
 ]
+DEFAULT_USER_SEEDS = (
+    ("admin", "admin", "P@ssword1234!", "employee-admin", "EMP-ADMIN", "Admin User", ()),
+    ("manager1", "manager", "P@ss1234!", "employee-manager1", "EMP-MANAGER1", "Manager One", ()),
+    ("site1", "user", "P@ss1234!", "employee-site1", "EMP-SITE1", "Site One User", ("site1",)),
+    ("site2", "user", "P@ss1234!", "employee-site2", "EMP-SITE2", "Site Two User", ("site2",)),
+    ("site3", "user", "P@ss1234!", "employee-site3", "EMP-SITE3", "Site Three User", ("site3",)),
+)
 INVENTORY_SEED_SOURCE = "inventory_xlsm_seed_v2"
 INVENTORY_CATEGORY_SHEETS = (
     "BEBESWEETS",
@@ -527,54 +536,78 @@ def upsert_object(
 
 
 def seed_default_accounts() -> None:
-    settings = get_settings()
     repository = ObjectRepository()
-    users = ["admin", "site1", "site2", "site3"]
+    tenant_id = "tenant-admin"
+    store_id = "store-admin"
 
-    for username in users:
-        tenant_id = f"tenant-{username}"
-        store_id = f"store-{username}"
+    store_created = create_object_if_missing(
+        repository,
+        tenant_id=tenant_id,
+        object_type="store",
+        object_id=store_id,
+        payload={
+            "id": store_id,
+            "name": "Admin Store",
+            "owner": {
+                "id": "user-admin",
+                "username": "admin",
+            },
+            "settings": {
+                "timezone": "Asia/Manila",
+                "enableNewDashboard": False,
+                "allowDashboardSelection": False,
+            },
+        },
+    )
+    if store_created:
+        print(f"[migrate] seeded store: {store_id} (tenant={tenant_id})")
+
+    for username, role, password, employee_id, employee_code, display_name, site_ids in DEFAULT_USER_SEEDS:
         user_id = f"user-{username}"
+        email = f"{username}@local.bebe"
 
-        user_created = create_object_if_missing(
+        employee_created = create_object_if_missing(
+            repository,
+            tenant_id=tenant_id,
+            object_type="employee",
+            object_id=employee_id,
+            payload={
+                "employee_code": employee_code,
+                "display_name": display_name,
+                "legal_name": display_name,
+                "email": email,
+                "employment_status": "active",
+                "site_ids": list(site_ids),
+                "active": True,
+            },
+        )
+
+        upsert_object(
             repository,
             tenant_id=tenant_id,
             object_type="users",
             object_id=user_id,
             payload={
-                "name": username.title(),
+                "id": user_id,
+                "username": username,
+                "role": role,
+                "permissions": permissions_for_role(role),
+                "name": display_name,
                 "short_name": username,
-                "email": f"{username}@local.bebe",
-                "password": settings.local_auth_password,
+                "email": email,
+                "password_hash": hash_password(password),
+                "force_password_change": False,
                 "global_active": True,
                 "active": True,
+                "employee_id": employee_id,
                 "store_id": store_id,
             },
         )
-
-        store_created = create_object_if_missing(
-            repository,
-            tenant_id=tenant_id,
-            object_type="store",
-            object_id=store_id,
-            payload={
-                "id": store_id,
-                "name": f"{username.title()} Store",
-                "owner": {
-                    "id": user_id,
-                    "username": username,
-                },
-                "settings": {
-                    "timezone": "Asia/Manila",
-                    "enableNewDashboard": False,
-                    "allowDashboardSelection": False,
-                },
-            },
-        )
-        if user_created or store_created:
-            print(f"[migrate] seeded account: {username} (tenant={tenant_id}, store={store_id})")
+        if employee_created:
+            print(f"[migrate] seeded employee: {employee_id} ({display_name})")
         else:
-            print(f"[migrate] skip existing account: {username} (tenant={tenant_id})")
+            print(f"[migrate] skip existing employee: {employee_id}")
+        print(f"[migrate] upserted user: {username} (role={role}, tenant={tenant_id})")
 
 
 def seed_default_events() -> None:

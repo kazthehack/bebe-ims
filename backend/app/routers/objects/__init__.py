@@ -4,6 +4,7 @@ from app.routers.objects import compliance
 from app.routers.objects import customer
 from app.routers.objects import demo
 from app.routers.objects import discount
+from app.routers.objects import employee
 from app.routers.objects import hardware
 from app.routers.objects import integration
 from app.routers.objects import inventory_report
@@ -27,4 +28,4 @@ from app.routers.objects import types
 from app.routers.objects import units
 from app.routers.objects import users
 
-__all__ = ["brand", "changelog", "compliance", "customer", "demo", "discount", "hardware", "integration", "inventory_report", "notification", "online_menu", "order", "permissions", "receipt", "reward", "sales_export", "sales_report", "sales_type", "shift", "shift_report", "store", "strain", "task", "tax", "transaction_history_report", "types", "units", "users"]
+__all__ = ["brand", "changelog", "compliance", "customer", "demo", "discount", "employee", "hardware", "integration", "inventory_report", "notification", "online_menu", "order", "permissions", "receipt", "reward", "sales_export", "sales_report", "sales_type", "shift", "shift_report", "store", "strain", "task", "tax", "transaction_history_report", "types", "units", "users"]

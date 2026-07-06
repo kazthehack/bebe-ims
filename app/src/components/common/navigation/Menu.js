@@ -248,6 +248,7 @@ const Menu = ({ enableDareMode }) => {
       <ConnectedMenuItem to="/supplies" label="Supplies" icon="bag" />
       <ConnectedMenuItem to="/sites" label="Sites" icon="home" />
       <ConnectedMenuItem to="/events" label="Events" icon="calendar" />
+      <ConnectedMenuItem to="/employees" label="Employees" icon="profile" />
       <ConnectedMenuItem to="/crm" label="PARTNERS" icon="profile" />
       <VersionBreak />
       <AppVersionContainer>

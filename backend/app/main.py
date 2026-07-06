@@ -3,8 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.core.config import get_settings
-from app.routers import auth, health, resources, object_api
-from app.routers.v1 import events, product_lines, products, receipts, sessions, sites, slicer, stock
+from app.routers import auth, health, object_api, resources
+from app.routers.v1 import (
+    events,
+    product_lines,
+    products,
+    receipts,
+    sessions,
+    sites,
+    slicer,
+    stock,
+    user_management,
+)
 
 settings = get_settings()
 
@@ -34,6 +44,7 @@ app.include_router(events.router, prefix=settings.api_prefix)
 app.include_router(slicer.router, prefix=settings.api_prefix)
 app.include_router(receipts.router, prefix=settings.api_prefix)
 app.include_router(sessions.router, prefix=settings.api_prefix)
+app.include_router(user_management.router, prefix=settings.api_prefix)
 app.include_router(resources.router, prefix=settings.api_prefix)
 app.include_router(object_api.router, prefix=settings.api_prefix)
 

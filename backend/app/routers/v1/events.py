@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.controllers.event import Event
 from app.controllers.site import Site
+from app.domain.permissions import require_permission
 from app.domain.record_mapper import StoredRecord, map_record
 from app.models.event import EventDocument
 from app.schemas.event import EventCreate, EventListResponse, EventRead, EventUpdate
@@ -146,13 +147,13 @@ def get_event(id: str, tenant_id: str = Query('tenant-admin')) -> EventRead:
     return _to_event(map_record(event_controller.get(id, tenant_id), EventDocument))
 
 
-@router.post('', response_model=EventRead)
+@router.post('', response_model=EventRead, dependencies=[Depends(require_permission("events:create"))])
 def create_event(payload: EventCreate, tenant_id: str = Query('tenant-admin')) -> EventRead:
     record = map_record(event_controller.create(tenant_id, payload.model_dump(exclude_none=True)), EventDocument)
     return _to_event(record)
 
 
-@router.put('/{id}', response_model=EventRead)
+@router.put('/{id}', response_model=EventRead, dependencies=[Depends(require_permission("events:update"))])
 def update_event(id: str, payload: EventUpdate, tenant_id: str = Query('tenant-admin')) -> EventRead:
     existing = map_record(event_controller.get(id, tenant_id), EventDocument)
     merged = existing.payload.model_dump(exclude_none=True)
@@ -163,6 +164,6 @@ def update_event(id: str, payload: EventUpdate, tenant_id: str = Query('tenant-a
     return _to_event(record)
 
 
-@router.delete('/{id}')
+@router.delete('/{id}', dependencies=[Depends(require_permission("events:delete"))])
 def delete_event(id: str, tenant_id: str = Query('tenant-admin')) -> dict[str, bool]:
     return {'deleted': event_controller.delete(id, tenant_id)}

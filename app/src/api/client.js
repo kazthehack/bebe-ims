@@ -1,9 +1,10 @@
 import { resolveApiBase } from './resolveApiBase'
+import { getAccessToken } from './authSession'
 
 const API_BASE = resolveApiBase(process.env.REACT_APP_REST_API_ENDPOINT || '')
 
 async function request(path, options = {}) {
-  const accessToken = sessionStorage.getItem('accessToken') || process.env.REACT_APP_API_ACCESS_TOKEN
+  const accessToken = getAccessToken()
   const headers = {
     'Content-Type': 'application/json',
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
@@ -35,6 +36,8 @@ export const AuthApi = {
     username,
     password,
   }),
+  me: (tenantId) => RestClient.get(`/auth/me?tenant_id=${encodeURIComponent(tenantId)}`),
+  updateMe: (tenantId, payload) => RestClient.put(`/auth/me?tenant_id=${encodeURIComponent(tenantId)}`, payload),
   verifyPasswordToken: (tenantId, token) => RestClient.post('/auth/verify-password-token', {
     tenant_id: tenantId,
     token,
@@ -47,6 +50,12 @@ export const AuthApi = {
   sendResetPasswordEmail: (tenantId, email) => RestClient.post('/auth/send-reset-password-email', {
     tenant_id: tenantId,
     email,
+  }),
+  changePassword: (tenantId, accessToken, currentPassword, newPassword) => RestClient.post('/auth/change-password', {
+    tenant_id: tenantId,
+    access_token: accessToken,
+    current_password: currentPassword,
+    new_password: newPassword,
   }),
 }
 

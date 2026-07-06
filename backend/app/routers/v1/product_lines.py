@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.controllers.product_line import ProductLine
 from app.controllers.product import Product
+from app.domain.permissions import require_permission
 from app.domain.record_mapper import StoredRecord, map_record
 from app.models.product_line import ProductLineDocument
 from app.models.product import ProductDocument
@@ -69,7 +70,7 @@ def list_product_lines(
     return ProductLineListResponse(product_lines=paged, total=total, page=page, page_size=page_size)
 
 
-@router.post('', response_model=ProductLineRead)
+@router.post('', response_model=ProductLineRead, dependencies=[Depends(require_permission("products:create"))])
 def create_product_line(payload: ProductLineCreate, tenant_id: str = Query('tenant-admin')) -> ProductLineRead:
     record = map_record(
         product_line_controller.create(tenant_id, payload.model_dump(exclude_none=True)),
@@ -78,7 +79,7 @@ def create_product_line(payload: ProductLineCreate, tenant_id: str = Query('tena
     return _to_product_line(record)
 
 
-@router.put('/{id}', response_model=ProductLineRead)
+@router.put('/{id}', response_model=ProductLineRead, dependencies=[Depends(require_permission("products:update"))])
 def update_product_line(
     id: str,
     payload: ProductLineUpdate,
@@ -96,7 +97,7 @@ def update_product_line(
     return _to_product_line(record, products_count)
 
 
-@router.delete('/{id}')
+@router.delete('/{id}', dependencies=[Depends(require_permission("products:delete"))])
 def delete_product_line(id: str, tenant_id: str = Query('tenant-admin')) -> dict[str, bool]:
     product_records = [map_record(record, ProductDocument) for record in product_controller.list(tenant_id)]
     has_associated_products = any(product.payload.product_line_id == id for product in product_records)

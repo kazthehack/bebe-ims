@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.controllers.product import Product
 from app.controllers.product_line import ProductLine
@@ -10,6 +10,7 @@ from app.controllers.product_variant import ProductVariant
 from app.controllers.part import Part
 from app.controllers.supply import Supply
 from app.domain.enums import SupplyType
+from app.domain.permissions import require_permission
 from app.domain.record_mapper import StoredRecord, map_record
 from app.models.product import ProductDocument
 from app.models.product_line import ProductLineDocument
@@ -319,7 +320,7 @@ def list_parts(tenant_id: str = Query('tenant-admin')) -> PartListResponse:
     return PartListResponse(parts=[_to_part(record) for record in records])
 
 
-@router.post('/parts', response_model=PartRead)
+@router.post('/parts', response_model=PartRead, dependencies=[Depends(require_permission("products:create"))])
 def create_part(payload: PartCreate, tenant_id: str = Query('tenant-admin')) -> PartRead:
     record = map_record(
         part_controller.create(tenant_id, payload.model_dump(exclude_none=True)),
@@ -395,7 +396,7 @@ def list_products(
     )
 
 
-@router.post('', response_model=ProductRead)
+@router.post('', response_model=ProductRead, dependencies=[Depends(require_permission("products:create"))])
 def create_product(payload: ProductCreate, tenant_id: str = Query('tenant-admin')) -> ProductRead:
     product_line_record: dict | None = None
     try:
@@ -438,7 +439,7 @@ def create_product(payload: ProductCreate, tenant_id: str = Query('tenant-admin'
     return _to_product(record)
 
 
-@router.delete('/{id}')
+@router.delete('/{id}', dependencies=[Depends(require_permission("products:delete"))])
 def delete_product(id: str, tenant_id: str = Query('tenant-admin')) -> dict[str, bool]:
     variant_records = [map_record(record, ProductVariantDocument) for record in variant_controller.list(tenant_id)]
     has_variants = any(variant.payload.product_id == id for variant in variant_records)
@@ -450,7 +451,7 @@ def delete_product(id: str, tenant_id: str = Query('tenant-admin')) -> dict[str,
     return {'deleted': product_controller.delete(id, tenant_id)}
 
 
-@router.put('/{id}', response_model=ProductRead)
+@router.put('/{id}', response_model=ProductRead, dependencies=[Depends(require_permission("products:update"))])
 def update_product(id: str, payload: ProductUpdate, tenant_id: str = Query('tenant-admin')) -> ProductRead:
     existing = map_record(product_controller.get(id, tenant_id), ProductDocument)
     product_line = map_record(product_line_controller.get(payload.product_line_id, tenant_id), ProductLineDocument)
@@ -468,7 +469,7 @@ def update_product(id: str, payload: ProductUpdate, tenant_id: str = Query('tena
     return _to_product(record)
 
 
-@router.put('/{id}/capacity-threshold', response_model=ProductRead)
+@router.put('/{id}/capacity-threshold', response_model=ProductRead, dependencies=[Depends(require_permission("products:update"))])
 def update_product_capacity_threshold(
     id: str,
     payload: ProductCapacityThresholdUpdate,
@@ -565,7 +566,7 @@ def get_product_variant(id: str, tenant_id: str = Query('tenant-admin')) -> Prod
     return _to_variant(map_record(variant_controller.get(id, tenant_id), ProductVariantDocument), tenant_id)
 
 
-@router.put('/variants/{id}', response_model=ProductVariantRead)
+@router.put('/variants/{id}', response_model=ProductVariantRead, dependencies=[Depends(require_permission("products:update"))])
 def update_product_variant(id: str, payload: ProductVariantUpdate, tenant_id: str = Query('tenant-admin')) -> ProductVariantRead:
     existing = map_record(variant_controller.get(id, tenant_id), ProductVariantDocument)
     merged = existing.payload.model_dump(exclude_none=True)
@@ -604,7 +605,7 @@ def update_product_variant(id: str, payload: ProductVariantUpdate, tenant_id: st
     return _to_variant(record, tenant_id)
 
 
-@router.delete('/variants/{id}')
+@router.delete('/variants/{id}', dependencies=[Depends(require_permission("products:delete"))])
 def delete_product_variant(id: str, tenant_id: str = Query('tenant-admin')) -> dict[str, bool]:
     variant_controller.get(id, tenant_id)
 
@@ -674,7 +675,7 @@ def list_variant_recipe_parts(id: str, tenant_id: str = Query('tenant-admin')) -
     )
 
 
-@router.post('/variants/{id}/recipe-parts', response_model=ProductRecipePartRead)
+@router.post('/variants/{id}/recipe-parts', response_model=ProductRecipePartRead, dependencies=[Depends(require_permission("products:update"))])
 def create_variant_recipe_part(
     id: str,
     payload: ProductRecipePartCreate,
@@ -740,7 +741,7 @@ def create_variant_recipe_part(
     return _to_recipe_part(record, supply, part if supply_type == SupplyType.FILAMENT else None, yield_units)
 
 
-@router.post('/variants', response_model=ProductVariantRead)
+@router.post('/variants', response_model=ProductVariantRead, dependencies=[Depends(require_permission("products:create"))])
 def create_product_variant(payload: ProductVariantCreate, tenant_id: str = Query('tenant-admin')) -> ProductVariantRead:
     product_controller.get(payload.product_id, tenant_id)
     create_payload = payload.model_dump(exclude_none=True)

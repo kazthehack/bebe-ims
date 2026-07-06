@@ -18,6 +18,7 @@ import {
 import { withState as withAuthState } from 'store/modules/auth'
 import { withVenueID } from 'components/Venue'
 import { authLogin } from 'api/imsBridge'
+import { getDefaultAuthenticatedPath } from 'api/authSession'
 import LoginButton from './components/LoginButton'
 import LoginErrorMessage from './components/LoginErrorMessage'
 import LoginInputGroup from './components/LoginInputGroup'
@@ -90,7 +91,7 @@ const LoginFragmentPure = ({
             <LoginInputGroup
               id="email-input"
               label="Username"
-              placeholder="admin | site1 | site2 | site3"
+              placeholder="Username"
               name="email"
               validate={compositeEmailValidator}
             />
@@ -99,7 +100,7 @@ const LoginFragmentPure = ({
               type="password"
               label="Password"
               name="password"
-              placeholder="password"
+              placeholder="Password"
               validate={required}
             />
             <Row>
@@ -170,12 +171,12 @@ const LoginFragmentManager = ({
     setLoading(true)
 
     return login(email, password)
-      .then(({ authToken }) => {
+      .then(({ authToken, forcePasswordChange }) => {
         setAuthToken({ expires: authToken.expires })
         localStorage.setItem('refreshToken', authToken.refreshToken)
         sessionStorage.setItem('accessToken', authToken.accessToken)
         addNotification(LOGIN_SUCCESS)
-        history.push('/daily')
+        history.push(forcePasswordChange ? '/login/change-password' : getDefaultAuthenticatedPath())
       })
       .catch(({ message }) => {
         setErrorMessage(get(mapErrorMessage, message, message || 'an unknown error occurred'))

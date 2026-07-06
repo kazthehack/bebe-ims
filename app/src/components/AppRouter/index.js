@@ -22,6 +22,7 @@ import {
   SitesPage,
   EventsPage,
   EmployeesPage,
+  EmployeeDetailPage,
   ReportsPage,
   SettingsPage,
   LoginPage,
@@ -35,6 +36,7 @@ import {
   TryPage,
 } from 'pages'
 import { PageNotFound } from 'pages/ErrorPage'
+import { getAuthRole, getDefaultAuthenticatedPath, getForcePasswordChange } from 'api/authSession'
 import { withVenueID, withVenues } from 'components/Venue'
 import { requireAuthentication } from 'utils/hoc'
 import ScrollToTop from 'components/common/container/ScrollToTop'
@@ -55,6 +57,9 @@ const withAuth = compose(
 
 const AuthRoutes = withAuth(({ authenticatedUserData }) => {
   const location = useLocation()
+  const role = getAuthRole()
+  const isPosUser = role === 'user'
+  const isAdmin = role === 'admin'
 
   useEffect(() => {
     trackPageView(location)
@@ -70,6 +75,18 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
     })
   }, [])
 
+  if (getForcePasswordChange()) {
+    return <Redirect to="/login/change-password" />
+  }
+
+  if (isPosUser && !location.pathname.startsWith('/web-pos')) {
+    return <Redirect to="/web-pos" />
+  }
+
+  if (!isAdmin && ['/employees', '/settings'].some(path => location.pathname.startsWith(path))) {
+    return <Redirect to={getDefaultAuthenticatedPath()} />
+  }
+
   return (
     location.pathname.startsWith('/web-pos') ? (
       <Switch>
@@ -82,7 +99,7 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
     ) : (
       <Page>
       <Switch>
-        <Route exact path="/" render={() => <Redirect to="/daily" />} />
+        <Route exact path="/" render={() => <Redirect to={getDefaultAuthenticatedPath()} />} />
         <Route
           exact
           path="/daily"
@@ -148,6 +165,12 @@ const AuthRoutes = withAuth(({ authenticatedUserData }) => {
           render={() => <EventsPage authenticatedUserData={authenticatedUserData} />}
         />
         <Route
+          exact
+          path="/employees/:id"
+          render={() => <EmployeeDetailPage authenticatedUserData={authenticatedUserData} />}
+        />
+        <Route
+          exact
           path="/employees"
           render={() => <EmployeesPage authenticatedUserData={authenticatedUserData} />}
         />

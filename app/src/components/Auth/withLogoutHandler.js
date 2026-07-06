@@ -3,6 +3,7 @@
 import { connect } from 'react-redux'
 import { compose, lifecycle } from 'recompose'
 import { withRouter } from 'react-router'
+import { clearAuthSession } from 'api/authSession'
 
 const mapStateToProps = () => ({
   accessToken: sessionStorage.getItem('accessToken'),
@@ -20,8 +21,7 @@ const withLogoutHandler = compose(
       const prevRefreshToken = prevProps.refreshToken
       const currentPath = history.location.pathname
       if ((!refreshToken && prevRefreshToken)) {
-        localStorage.clear()
-        sessionStorage.clear()
+        clearAuthSession()
         if (currentPath !== '/login') history.push('/login')
       }
     },

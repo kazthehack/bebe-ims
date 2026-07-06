@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.controllers.inventory_adjustment import InventoryAdjustment
 from app.controllers.product_stock import ProductStock
@@ -10,6 +10,7 @@ from app.controllers.sale_receipt import SaleReceipt
 from app.controllers.sale_receipt_item import SaleReceiptItem
 from app.controllers.web_pos_session import WebPosSession
 from app.domain.enums import InventoryAdjustmentType, StockTargetType
+from app.domain.permissions import require_permission
 from app.domain.record_mapper import StoredRecord, map_record
 from app.models.product_stock import ProductStockDocument
 from app.models.sale_receipt import SaleReceiptDocument
@@ -229,7 +230,7 @@ def list_receipts(
     return SaleReceiptListResponse(receipts=paged, total=total, page=page, page_size=page_size)
 
 
-@router.post('', response_model=SaleReceiptRead)
+@router.post('', response_model=SaleReceiptRead, dependencies=[Depends(require_permission("receipts:create"))])
 def create_receipt(payload: SaleReceiptCreate, tenant_id: str = Query('tenant-admin')) -> SaleReceiptRead:
     normalized_items = _normalize_items(payload)
     if not normalized_items:

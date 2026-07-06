@@ -5,6 +5,7 @@ from app.models.compliance import ComplianceDocument
 from app.models.customer import CustomerDocument
 from app.models.demo import DemoDocument
 from app.models.discount import DiscountDocument
+from app.models.employee import EmployeeDocument
 from app.models.event import EventDocument
 from app.models.filament_active import FilamentActiveDocument
 from app.models.hardware import HardwareDocument
@@ -41,6 +42,7 @@ OBJECT_MODELS = {
     "customer": CustomerDocument,
     "demo": DemoDocument,
     "discount": DiscountDocument,
+    "employee": EmployeeDocument,
     "event": EventDocument,
     "filament_active": FilamentActiveDocument,
     "hardware": HardwareDocument,

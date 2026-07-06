@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.db.repository import ObjectRepository
+from app.domain.permissions import require_permission
 
 router = APIRouter(tags=["resources"])
 
@@ -611,7 +612,7 @@ def list_sites() -> SiteListResponse:
     return SiteListResponse(sites=sites)
 
 
-@router.post("/sites", response_model=SiteItem)
+@router.post("/sites", response_model=SiteItem, dependencies=[Depends(require_permission("sites:create"))])
 def create_site(payload: SiteItem) -> SiteItem:
     site = payload.model_copy(update={"id": _next_id("site", _SITES)})
     _SITES.append(site)
@@ -633,7 +634,7 @@ def list_inventory_units() -> UomListResponse:
     return UomListResponse(units=_UNITS)
 
 
-@router.post("/inventory/adjustments", response_model=StockAdjustmentItem)
+@router.post("/inventory/adjustments", response_model=StockAdjustmentItem, dependencies=[Depends(require_permission("inventory:update"))])
 def create_stock_adjustment(payload: StockAdjustmentCreate) -> StockAdjustmentItem:
     item = StockAdjustmentItem(
         id=_next_id("adj", _STOCK_ADJUSTMENTS),
@@ -703,7 +704,7 @@ def list_web_pos_sessions() -> WebPosSessionListResponse:
     return WebPosSessionListResponse(sessions=_WEB_POS_SESSIONS)
 
 
-@router.post("/web-pos", response_model=WebPosSessionItem)
+@router.post("/web-pos", response_model=WebPosSessionItem, dependencies=[Depends(require_permission("pos:access"))])
 def create_web_pos_session(payload: WebPosSessionCreate) -> WebPosSessionItem:
     session = WebPosSessionItem(
         id=_next_id("wps", _WEB_POS_SESSIONS),
@@ -824,7 +825,7 @@ def list_partnerships(
     return PartnershipListResponse(partnerships=paged, total=total, page=page, page_size=page_size)
 
 
-@router.post("/partners/partnerships", response_model=PartnershipItem)
+@router.post("/partners/partnerships", response_model=PartnershipItem, dependencies=[Depends(require_permission("partnerships:create"))])
 def create_partnership(payload: PartnershipCreate) -> PartnershipItem:
     item = PartnershipItem(
         id=_next_id("ptn", _PARTNERSHIPS),
@@ -846,7 +847,7 @@ def get_partnership(partnership_id: str) -> PartnershipItem:
     return _find_partnership(partnership_id)
 
 
-@router.put("/partners/partnerships/{partnership_id}", response_model=PartnershipItem)
+@router.put("/partners/partnerships/{partnership_id}", response_model=PartnershipItem, dependencies=[Depends(require_permission("partnerships:update"))])
 def update_partnership(partnership_id: str, payload: PartnershipUpdate) -> PartnershipItem:
     index = _find_partnership_index(partnership_id)
     existing = _PARTNERSHIPS[index]
@@ -863,7 +864,7 @@ def update_partnership(partnership_id: str, payload: PartnershipUpdate) -> Partn
     return updated
 
 
-@router.delete("/partners/partnerships/{partnership_id}")
+@router.delete("/partners/partnerships/{partnership_id}", dependencies=[Depends(require_permission("partnerships:delete"))])
 def delete_partnership(partnership_id: str) -> dict[str, bool]:
     index = _find_partnership_index(partnership_id)
     removed_id = _PARTNERSHIPS[index].id
@@ -883,7 +884,7 @@ def list_partnership_remittances(partnership_id: str) -> PartnershipRemittanceLi
     return PartnershipRemittanceListResponse(remittances=items)
 
 
-@router.post("/partners/partnerships/{partnership_id}/remittances", response_model=PartnershipRemittanceItem)
+@router.post("/partners/partnerships/{partnership_id}/remittances", response_model=PartnershipRemittanceItem, dependencies=[Depends(require_permission("partnerships:update"))])
 def create_partnership_remittance(partnership_id: str, payload: PartnershipRemittanceCreate) -> PartnershipRemittanceItem:
     _find_partnership(partnership_id)
     item = PartnershipRemittanceItem(
@@ -919,7 +920,7 @@ def list_partnership_requests(
     return PartnershipRequestListResponse(requests=paged, total=total, page=page, page_size=page_size)
 
 
-@router.post("/partners/requests", response_model=PartnershipRequestItem)
+@router.post("/partners/requests", response_model=PartnershipRequestItem, dependencies=[Depends(require_permission("partnerships:create"))])
 def create_partnership_request(payload: PartnershipRequestCreate) -> PartnershipRequestItem:
     partnership_name = None
     if payload.partnership_id:
@@ -949,7 +950,7 @@ def get_partnership_request(request_id: str) -> PartnershipRequestItem:
     raise HTTPException(status_code=404, detail="Request not found.")
 
 
-@router.put("/partners/requests/{request_id}", response_model=PartnershipRequestItem)
+@router.put("/partners/requests/{request_id}", response_model=PartnershipRequestItem, dependencies=[Depends(require_permission("partnerships:update"))])
 def update_partnership_request(request_id: str, payload: PartnershipRequestUpdate) -> PartnershipRequestItem:
     index = _find_request_index(request_id)
     existing = _PARTNERSHIP_REQUESTS[index]
@@ -970,7 +971,7 @@ def update_partnership_request(request_id: str, payload: PartnershipRequestUpdat
     return _to_partner_request(updated)
 
 
-@router.delete("/partners/requests/{request_id}")
+@router.delete("/partners/requests/{request_id}", dependencies=[Depends(require_permission("partnerships:delete"))])
 def delete_partnership_request(request_id: str) -> dict[str, bool]:
     index = _find_request_index(request_id)
     _PARTNERSHIP_REQUESTS.pop(index)
