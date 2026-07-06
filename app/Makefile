@@ -1,4 +1,5 @@
 SHELL := /bin/zsh
+.DEFAULT_GOAL := build
 IMAGE ?= bebe-ims-app:local
 CONTAINER ?= bebe-ims-app
 PORT ?= 2306

@@ -1,0 +1,22 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.bebeinventory.pos"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.bebeinventory.pos"
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName "0.1.0"
+        buildConfigField "String", "WEB_POS_URL", "\"https://bebeinventory.net/web-pos\""
+        buildConfigField "String", "ALLOWED_WEB_POS_HOSTS", "\"bebeinventory.net,www.bebeinventory.net\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+}

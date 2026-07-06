@@ -5,6 +5,13 @@ import Icon from 'components/common/display/Icon'
 import { useProductsList } from 'hooks/products/useProductsApi'
 import { useEventsResource, useInventoryResource, useReceiptsResource, useSessionsResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
 import logo from 'assets/logo-dashboard-cropped.png'
+import {
+  getHardwareCapabilities,
+  getPrinterStatus,
+  hasAndroidHardwareBridge,
+  printReceipt,
+  subscribeHardwareStatus,
+} from './hardware/hardwareBridge'
 
 const PosViewport = styled.div`
   width: 100%;
@@ -131,6 +138,12 @@ const Subtle = styled.div`
 
 const ErrorText = styled.div`
   color: #ff8f8f;
+  font-size: 12px;
+  margin-top: 6px;
+`
+
+const NoticeText = styled.div`
+  color: #4f6479;
   font-size: 12px;
   margin-top: 6px;
 `
@@ -373,6 +386,34 @@ const TopActionRow = styled.div`
   width: 100%;
 `
 
+const HeaderControls = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const HardwareStatusPill = styled.div`
+  border: 1px solid ${({ $connected }) => ($connected ? '#8cc79f' : '#e2c46b')};
+  background: ${({ $connected }) => ($connected ? '#eef9f1' : '#fff8dd')};
+  color: ${({ $connected }) => ($connected ? '#28673d' : '#755d17')};
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+`
+
+const HardwareDot = styled.span`
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: ${({ $connected }) => ($connected ? '#2da84f' : '#d4a41f')};
+`
+
 const PosLogo = styled.img`
   width: 280px;
   max-width: 60vw;
@@ -554,6 +595,12 @@ const WebPosPage = () => {
   const [discountAmount, setDiscountAmount] = useState('0')
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [checkoutError, setCheckoutError] = useState('')
+  const [checkoutNotice, setCheckoutNotice] = useState('')
+  const [hardwareStatus, setHardwareStatus] = useState({
+    platform: 'web',
+    printer: { connected: false, status: 'hardware_unavailable' },
+    scanner: { available: false },
+  })
 
   const [closingCash, setClosingCash] = useState('0')
   const [closeNotes, setCloseNotes] = useState('')
@@ -587,6 +634,23 @@ const WebPosPage = () => {
       document.documentElement.style.overflowX = prevHtmlOverflowX
       document.body.style.overflowX = prevBodyOverflowX
     }
+  }, [])
+
+  useEffect(() => {
+    if (!hasAndroidHardwareBridge()) return undefined
+    setHardwareStatus((prev) => ({
+      ...prev,
+      ...getHardwareCapabilities(),
+      printer: getPrinterStatus(),
+    }))
+    return subscribeHardwareStatus((status) => {
+      setHardwareStatus((prev) => ({
+        ...prev,
+        ...status,
+        printer: status.printer || prev.printer,
+        scanner: status.scanner || prev.scanner,
+      }))
+    })
   }, [])
 
   const activeSession = useMemo(
@@ -722,6 +786,7 @@ const WebPosPage = () => {
 
   const addVariantToCart = (variant, qty = 1) => {
     if (!variant) return
+    setCheckoutNotice('')
     const safeQty = Math.max(1, Number.parseInt(String(qty || '1'), 10) || 1)
     const available = Number(siteStockByVariant[variant.id] || 0)
     const inCartQty = cartItems
@@ -785,6 +850,7 @@ const WebPosPage = () => {
 
   const openRegister = async () => {
     setSetupError('')
+    setCheckoutNotice('')
     try {
       if (!siteId) {
         setSetupError('Site is required.')
@@ -833,6 +899,7 @@ const WebPosPage = () => {
     const qrCode = String(qrValue || '').trim()
     if (!qrCode) return
     setScanError('')
+    setCheckoutNotice('')
     try {
       const resolved = await resolveVariantByQr(qrCode)
       addVariantToCart(resolved, 1)
@@ -840,6 +907,18 @@ const WebPosPage = () => {
       setScanError(err.message || 'QR not found.')
     }
   }
+
+  useEffect(() => {
+    if (!hasAndroidHardwareBridge()) return undefined
+
+    const handleNativeScan = (event) => {
+      const code = String(((event || {}).detail || {}).code || '').trim()
+      if (code) scanToCart(code)
+    }
+
+    window.addEventListener('bebe:scan', handleNativeScan)
+    return () => window.removeEventListener('bebe:scan', handleNativeScan)
+  }, [variantCatalog, productById, siteStockByVariant, cartItems, activeSessionContext])
 
   const stopScanner = () => {
     if (scannerTimerRef.current) {
@@ -933,6 +1012,8 @@ const WebPosPage = () => {
 
   const subtotal = cartItems.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.unit_price || 0)), 0)
   const total = subtotal - Number(discountAmount || 0)
+  const showHardwareStatus = hasAndroidHardwareBridge()
+  const printerConnected = !!(((hardwareStatus || {}).printer || {}).connected)
 
   const postReceipt = async () => {
     if (!activeSessionContext || !activeSessionContext.id || !activeSessionContext.site_id) {
@@ -940,24 +1021,39 @@ const WebPosPage = () => {
       return
     }
     setCheckoutError('')
+    setCheckoutNotice('')
     try {
       if (!cartItems.length) {
         setCheckoutError('Cart is empty.')
         return
       }
-      await receipts.createReceipt({
+      const receiptPayload = {
         receipt_number: null,
         site_id: activeSessionContext.site_id,
         event_id: activeSessionContext.event_id || null,
         web_pos_session_id: activeSessionContext.id,
         payment_method: paymentMethod,
         discount_amount: Number(discountAmount || 0),
+        subtotal,
+        total,
         items: cartItems.map((item) => ({
           product_variant_id: item.product_variant_id,
+          name: item.name,
+          sku: item.sku,
           qty: Number(item.qty || 1),
           unit_price: Number(item.unit_price || 0),
         })),
+      }
+      const createdReceipt = await receipts.createReceipt(receiptPayload)
+      const printResult = printReceipt({
+        ...receiptPayload,
+        receipt_number: (createdReceipt && (createdReceipt.receipt_number || createdReceipt.id)) || null,
       })
+      if (hasAndroidHardwareBridge() && printResult && printResult.ok === false && !printResult.skipped) {
+        setCheckoutNotice(printResult.message || 'Receipt posted, but printing failed.')
+      } else if (hasAndroidHardwareBridge() && printResult && printResult.ok) {
+        setCheckoutNotice('Receipt posted and sent to printer.')
+      }
       setCartItems([])
       setDiscountAmount('0')
       setActivePosTab('menu')
@@ -979,6 +1075,7 @@ const WebPosPage = () => {
     setCartItems([])
     setDiscountAmount('0')
     setCheckoutError('')
+    setCheckoutNotice('')
   }
 
   return (
@@ -1109,37 +1206,45 @@ const WebPosPage = () => {
         {showKebabMenu && <KebabOverlay aria-label="Close POS menu" onClick={() => setShowKebabMenu(false)} />}
         <TopActionRow>
           <PosLogo src={logo} alt="Bebe Inventory" />
-          <KebabWrap>
-            <KebabButton type="button" onClick={() => setShowKebabMenu((prev) => !prev)} aria-label="POS menu" title="POS menu">
-              <Icon name="menu" />
-            </KebabButton>
-            {showKebabMenu && (
-              <KebabMenu>
-                <KebabItem
-                  type="button"
-                  onClick={() => {
-                    setShowKebabMenu(false)
-                    setShowExitConfirm(true)
-                  }}
-                >
-                  Exit POS
-                  <KebabSub>Return to Inventory Management</KebabSub>
-                </KebabItem>
-                <KebabDivider />
-                <KebabItem
-                  type="button"
-                  onClick={() => {
-                    setShowKebabMenu(false)
-                    setCloseError('')
-                    setShowCloseConfirm(true)
-                  }}
-                >
-                  Close Register
-                  <KebabSub>Set closing cash and finalize session</KebabSub>
-                </KebabItem>
-              </KebabMenu>
+          <HeaderControls>
+            {showHardwareStatus && (
+              <HardwareStatusPill $connected={printerConnected} title="Printer status">
+                <HardwareDot $connected={printerConnected} />
+                {printerConnected ? 'PRINTER READY' : 'PRINTER OFFLINE'}
+              </HardwareStatusPill>
             )}
-          </KebabWrap>
+            <KebabWrap>
+              <KebabButton type="button" onClick={() => setShowKebabMenu((prev) => !prev)} aria-label="POS menu" title="POS menu">
+                <Icon name="menu" />
+              </KebabButton>
+              {showKebabMenu && (
+                <KebabMenu>
+                  <KebabItem
+                    type="button"
+                    onClick={() => {
+                      setShowKebabMenu(false)
+                      setShowExitConfirm(true)
+                    }}
+                  >
+                    Exit POS
+                    <KebabSub>Return to Inventory Management</KebabSub>
+                  </KebabItem>
+                  <KebabDivider />
+                  <KebabItem
+                    type="button"
+                    onClick={() => {
+                      setShowKebabMenu(false)
+                      setCloseError('')
+                      setShowCloseConfirm(true)
+                    }}
+                  >
+                    Close Register
+                    <KebabSub>Set closing cash and finalize session</KebabSub>
+                  </KebabItem>
+                </KebabMenu>
+              )}
+            </KebabWrap>
+          </HeaderControls>
         </TopActionRow>
         {!activeSession && (
           <SetupCard>
@@ -1314,6 +1419,7 @@ const WebPosPage = () => {
                     <Button type="button" onClick={postReceipt}>CHECK OUT</Button>
                   </CheckoutRow>
                   {checkoutError && <ErrorText>{checkoutError}</ErrorText>}
+                  {checkoutNotice && <NoticeText>{checkoutNotice}</NoticeText>}
                 </Section>
                 </>
               )}
