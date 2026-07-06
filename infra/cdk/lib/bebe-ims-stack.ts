@@ -1,14 +1,17 @@
 import * as path from "path";
+import * as childProcess from "child_process";
 import * as cdk from "aws-cdk-lib";
+import * as fs from "fs";
 import {
+  aws_certificatemanager as acm,
+  aws_apigateway as apigateway,
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
   aws_dynamodb as dynamodb,
-  aws_ecr_assets as ecrAssets,
-  aws_ec2 as ec2,
-  aws_ecs as ecs,
-  aws_ecs_patterns as ecsPatterns,
+  aws_lambda as lambda,
   aws_logs as logs,
+  aws_route53 as route53,
+  aws_route53_targets as targets,
   aws_s3 as s3,
   aws_s3_deployment as s3deploy,
 } from "aws-cdk-lib";
@@ -24,9 +27,15 @@ export class BebeImsStack extends cdk.Stack {
     const tableName = String(this.node.tryGetContext("tableName") ?? "bebe_ims");
     const useExistingDynamoTable = String(this.node.tryGetContext("useExistingDynamoTable") ?? "false")
       .toLowerCase() === "true";
-    const backendCpu = Number(this.node.tryGetContext("backendCpu") ?? 256);
     const backendMemoryMiB = Number(this.node.tryGetContext("backendMemoryMiB") ?? 512);
-    const backendDesiredCount = Number(this.node.tryGetContext("backendDesiredCount") ?? 1);
+    const domainName = String(this.node.tryGetContext("domainName") ?? "")
+      .trim()
+      .replace(/\.$/, "")
+      .toLowerCase();
+    const hostedZoneDomainName = String(this.node.tryGetContext("hostedZoneDomainName") ?? domainName)
+      .trim()
+      .replace(/\.$/, "")
+      .toLowerCase();
 
     let dynamoTable: dynamodb.ITable;
     if (useExistingDynamoTable) {
@@ -52,67 +61,98 @@ export class BebeImsStack extends cdk.Stack {
       dynamoTable = createdDynamoTable;
     }
 
-    const vpc = new ec2.Vpc(this, "BebeImsVpc", {
-      maxAzs: 2,
-      natGateways: 0,
-    });
-
-    const cluster = new ecs.Cluster(this, "BebeImsCluster", {
-      clusterName: `${projectName}-${environmentName}-cluster`,
-      vpc,
-    });
-
-    const backendImage = ecs.ContainerImage.fromAsset(
-      path.resolve(__dirname, "../../../backend"),
-      {
-        file: "Dockerfile",
-        platform: ecrAssets.Platform.LINUX_AMD64,
-      },
-    );
-
     const backendLogGroup = new logs.LogGroup(this, "BebeImsApiLogGroup", {
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const backendService = new ecsPatterns.ApplicationLoadBalancedFargateService(this, "BebeImsApi", {
-      cluster,
-      publicLoadBalancer: true,
-      assignPublicIp: true,
-      taskSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      desiredCount: backendDesiredCount,
-      cpu: backendCpu,
-      memoryLimitMiB: backendMemoryMiB,
-      listenerPort: 80,
-      runtimePlatform: {
-        cpuArchitecture: ecs.CpuArchitecture.X86_64,
-        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
-      },
-      taskImageOptions: {
-        image: backendImage,
-        containerPort: 8001,
-        logDriver: ecs.LogDrivers.awsLogs({
-          streamPrefix: `${projectName}-${environmentName}-api`,
-          logGroup: backendLogGroup,
-        }),
-        environment: {
-          BEBE_IMS_APP_ENV: "production",
-          BEBE_IMS_API_PREFIX: apiPrefix,
-          BEBE_IMS_AWS_REGION: cdk.Stack.of(this).region,
-          BEBE_IMS_DYNAMODB_TABLE_NAME: dynamoTable.tableName,
-          BEBE_IMS_DYNAMODB_ENDPOINT_URL: `https://dynamodb.${cdk.Stack.of(this).region}.amazonaws.com`,
-          BEBE_IMS_CORS_ORIGINS: "",
-          BEBE_IMS_CORS_ORIGIN_REGEX: "^https://.*$",
+    const backendFunction = new lambda.Function(this, "BebeImsApiFunction", {
+      functionName: `${projectName}-${environmentName}-api`,
+      runtime: lambda.Runtime.PYTHON_3_12,
+      architecture: lambda.Architecture.X86_64,
+      handler: "lambda_handler.handler",
+      memorySize: backendMemoryMiB,
+      timeout: cdk.Duration.seconds(30),
+      logGroup: backendLogGroup,
+      code: lambda.Code.fromAsset(path.resolve(__dirname, "../../../backend"), {
+        bundling: {
+          image: lambda.Runtime.PYTHON_3_12.bundlingImage,
+          local: {
+            tryBundle(outputDir: string): boolean {
+              const backendDir = path.resolve(__dirname, "../../../backend");
+              const pipArgs = [
+                "-m",
+                "pip",
+                "install",
+                "--platform",
+                "manylinux2014_x86_64",
+                "--implementation",
+                "cp",
+                "--python-version",
+                "3.12",
+                "--only-binary=:all:",
+                "--upgrade",
+                "-r",
+                "requirements.txt",
+                "mangum",
+                "-t",
+                outputDir,
+              ];
+
+              try {
+                childProcess.execFileSync("python3", pipArgs, {
+                  cwd: backendDir,
+                  stdio: "inherit",
+                });
+                fs.cpSync(path.join(backendDir, "app"), path.join(outputDir, "app"), {
+                  recursive: true,
+                });
+                fs.writeFileSync(
+                  path.join(outputDir, "lambda_handler.py"),
+                  'from mangum import Mangum\nfrom app.main import app\nhandler = Mangum(app, lifespan="off")\n',
+                  { encoding: "utf-8" },
+                );
+                return true;
+              } catch {
+                return false;
+              }
+            },
+          },
+          command: [
+            "bash",
+            "-c",
+            [
+              "pip install --no-cache-dir -r requirements.txt mangum -t /asset-output",
+              "cp -R app /asset-output/app",
+              "printf 'from mangum import Mangum\\nfrom app.main import app\\nhandler = Mangum(app, lifespan=\"off\")\\n' > /asset-output/lambda_handler.py",
+            ].join(" && "),
+          ],
         },
+      }),
+      environment: {
+        BEBE_IMS_APP_ENV: "production",
+        BEBE_IMS_API_PREFIX: apiPrefix,
+        BEBE_IMS_AWS_REGION: cdk.Stack.of(this).region,
+        BEBE_IMS_DYNAMODB_TABLE_NAME: dynamoTable.tableName,
+        BEBE_IMS_DYNAMODB_ENDPOINT_URL: `https://dynamodb.${cdk.Stack.of(this).region}.amazonaws.com`,
+        BEBE_IMS_CORS_ORIGINS: "",
+        BEBE_IMS_CORS_ORIGIN_REGEX: "^https://.*$",
       },
     });
 
-    backendService.targetGroup.configureHealthCheck({
-      path: `${apiPrefix}/health`,
-      healthyHttpCodes: "200",
-    });
+    dynamoTable.grantReadWriteData(backendFunction);
 
-    dynamoTable.grantReadWriteData(backendService.taskDefinition.taskRole);
+    const backendApi = new apigateway.LambdaRestApi(this, "BebeImsApi", {
+      restApiName: `${projectName}-${environmentName}-api`,
+      handler: backendFunction,
+      proxy: true,
+      deployOptions: {
+        stageName: environmentName,
+        metricsEnabled: true,
+        loggingLevel: apigateway.MethodLoggingLevel.ERROR,
+      },
+      cloudWatchRole: true,
+    });
 
     const frontendBucket = new s3.Bucket(this, "BebeImsFrontendBucket", {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -130,8 +170,32 @@ export class BebeImsStack extends cdk.Stack {
       ],
     });
 
+    const backendOrigin = new origins.HttpOrigin(
+      `${backendApi.restApiId}.execute-api.${cdk.Stack.of(this).region}.${cdk.Stack.of(this).urlSuffix}`,
+      {
+        originPath: `/${backendApi.deploymentStage.stageName}`,
+        protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+      },
+    );
+
+    const hostedZone = domainName
+      ? route53.HostedZone.fromLookup(this, "BebeImsHostedZone", {
+          domainName: hostedZoneDomainName,
+        })
+      : undefined;
+    const certificate = domainName && hostedZone
+      ? new acm.DnsValidatedCertificate(this, "BebeImsCertificate", {
+          domainName,
+          hostedZone,
+          region: "us-east-1",
+          subjectAlternativeNames: [`www.${domainName}`],
+        })
+      : undefined;
+
     const distribution = new cloudfront.Distribution(this, "BebeImsDistribution", {
       defaultRootObject: "index.html",
+      certificate,
+      domainNames: domainName ? [domainName, `www.${domainName}`] : undefined,
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(frontendBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -139,13 +203,32 @@ export class BebeImsStack extends cdk.Stack {
       },
       additionalBehaviors: {
         "api/*": {
-          origin: new origins.LoadBalancerV2Origin(backendService.loadBalancer, {
-            protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
-          }),
+          origin: backendOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        },
+        docs: {
+          origin: backendOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        },
+        "openapi.json": {
+          origin: backendOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        },
+        redoc: {
+          origin: backendOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
         },
       },
       errorResponses: [
@@ -161,6 +244,31 @@ export class BebeImsStack extends cdk.Stack {
         },
       ],
     });
+
+    if (domainName && hostedZone) {
+      const cloudFrontTarget = route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution));
+
+      new route53.ARecord(this, "BebeImsApexAliasRecord", {
+        zone: hostedZone,
+        recordName: domainName,
+        target: cloudFrontTarget,
+      });
+      new route53.AaaaRecord(this, "BebeImsApexIpv6AliasRecord", {
+        zone: hostedZone,
+        recordName: domainName,
+        target: cloudFrontTarget,
+      });
+      new route53.ARecord(this, "BebeImsWwwAliasRecord", {
+        zone: hostedZone,
+        recordName: `www.${domainName}`,
+        target: cloudFrontTarget,
+      });
+      new route53.AaaaRecord(this, "BebeImsWwwIpv6AliasRecord", {
+        zone: hostedZone,
+        recordName: `www.${domainName}`,
+        target: cloudFrontTarget,
+      });
+    }
 
     const frontendBuildPath = path.resolve(__dirname, "../../../app/build");
     new s3deploy.BucketDeployment(this, "DeployFrontendBuild", {
@@ -187,8 +295,16 @@ export class BebeImsStack extends cdk.Stack {
     new cdk.CfnOutput(this, "ApiBaseUrl", {
       value: `https://${distribution.domainName}${apiPrefix}`,
     });
-    new cdk.CfnOutput(this, "AlbApiUrl", {
-      value: `http://${backendService.loadBalancer.loadBalancerDnsName}${apiPrefix}`,
+    if (domainName) {
+      new cdk.CfnOutput(this, "DomainUrl", {
+        value: `https://${domainName}`,
+      });
+      new cdk.CfnOutput(this, "WwwDomainUrl", {
+        value: `https://www.${domainName}`,
+      });
+    }
+    new cdk.CfnOutput(this, "ApiGatewayUrl", {
+      value: `${backendApi.url}${apiPrefix.replace(/^\//, "")}`,
     });
     new cdk.CfnOutput(this, "DynamoTableName", {
       value: dynamoTable.tableName,

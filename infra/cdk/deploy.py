@@ -396,9 +396,9 @@ def main() -> None:
     environment_name = config.get("ENVIRONMENT_NAME", "prod")
     api_prefix = config.get("API_PREFIX", "/api/v1")
     table_name = config.get("TABLE_NAME", "bebe_ims")
-    backend_cpu = config.get("BACKEND_CPU", "256")
     backend_memory_mib = config.get("BACKEND_MEMORY_MIB", "512")
-    backend_desired_count = config.get("BACKEND_DESIRED_COUNT", "1")
+    domain_name = config.get("DOMAIN_NAME", "").strip().rstrip(".").lower()
+    hosted_zone_domain_name = config.get("HOSTED_ZONE_DOMAIN_NAME", domain_name).strip().rstrip(".").lower()
     frontend_api_base = config.get("FRONTEND_API_BASE", "/api/v1")
     auto_bootstrap = bool_value(config.get("AUTO_BOOTSTRAP"), True)
     run_migrate = bool_value(config.get("RUN_MIGRATE"), True)
@@ -414,16 +414,16 @@ def main() -> None:
 
     if args.action == "audit":
         status = stack_status(env, repo_root, stack_name) or "NOT_FOUND"
-        ecs_state = current_ecs_state(env, repo_root, stack_name)
         table = dynamodb_table_description(env, repo_root, table_name)
         stack_table = stack_resource(env, repo_root, stack_name, "AWS::DynamoDB::Table")
+        lambda_function = stack_resource(env, repo_root, stack_name, "AWS::Lambda::Function")
+        rest_api = stack_resource(env, repo_root, stack_name, "AWS::ApiGateway::RestApi")
         print(f"Stack: {stack_name}")
         print(f"Region: {aws_region}")
         print(f"Status: {status}")
-        print(f"ECS cluster: {ecs_state.get('cluster_name') or 'not found'}")
-        print(f"ECS service: {ecs_state.get('service_name') or 'not found'}")
-        print(f"ECS task definition: {ecs_state.get('task_definition') or 'not found'}")
-        print(f"ECS desired count: {ecs_state.get('desired_count') or 'not found'}")
+        print(f"Domain name: {domain_name or 'not configured'}")
+        print(f"Lambda function: {lambda_function if lambda_function and lambda_function != 'None' else 'not found'}")
+        print(f"API Gateway REST API: {rest_api if rest_api and rest_api != 'None' else 'not found'}")
         print(f"DynamoDB table: {table_name if table else 'not found'}")
         print(f"DynamoDB table status: {table.get('TableStatus') if table else 'not found'}")
         print(f"DynamoDB stack resource: {stack_table if stack_table and stack_table != 'None' else 'not found'}")
@@ -496,11 +496,11 @@ def main() -> None:
                 "-c",
                 f"useExistingDynamoTable={str(use_existing_dynamodb_table).lower()}",
                 "-c",
-                f"backendCpu={backend_cpu}",
-                "-c",
                 f"backendMemoryMiB={backend_memory_mib}",
                 "-c",
-                f"backendDesiredCount={backend_desired_count}",
+                f"domainName={domain_name}",
+                "-c",
+                f"hostedZoneDomainName={hosted_zone_domain_name}",
             ],
             cwd=cdk_dir,
             env=env,
@@ -508,9 +508,9 @@ def main() -> None:
 
         outputs = stack_outputs(env, repo_root, stack_name)
         if post_deploy_healthcheck:
-            health_base = outputs.get("AlbApiUrl") or outputs.get("ApiBaseUrl")
+            health_base = outputs.get("ApiBaseUrl") or outputs.get("ApiGatewayUrl")
             if not health_base:
-                raise RuntimeError("Missing AlbApiUrl/ApiBaseUrl stack output for health check")
+                raise RuntimeError("Missing ApiBaseUrl/ApiGatewayUrl stack output for health check")
             wait_for_health(f"{health_base.rstrip('/')}/health", healthcheck_timeout_seconds)
 
         if run_migrate:

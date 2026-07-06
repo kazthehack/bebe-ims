@@ -3,5 +3,9 @@
     "ap-southeast-1a",
     "ap-southeast-1b",
     "ap-southeast-1c"
-  ]
+  ],
+  "hosted-zone:account=841354339749:domainName=bebeinventory.net:region=ap-southeast-1": {
+    "Id": "/hostedzone/Z02735083G6OEU7CAWYON",
+    "Name": "bebeinventory.net."
+  }
 }

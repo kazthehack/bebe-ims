@@ -7,10 +7,10 @@ This repository now includes an AWS CDK infrastructure scaffold under:
 It deploys:
 
 - `DynamoDB` table (`pk/sk` + `gsi1`)
-- `ECS Fargate` backend service (from `backend/Dockerfile`)
-- `Application Load Balancer` for backend traffic
+- `Lambda` backend function packaged from the existing FastAPI app
+- `API Gateway` for backend traffic
 - `S3 + CloudFront` for frontend hosting
-- CloudFront route `/api/*` to backend ALB
+- CloudFront route `/api/*` to API Gateway
 
 ## CDK in plain terms
 
@@ -24,7 +24,7 @@ So it is not replacing CloudFormation. It is a higher-level way to generate and 
 
 ## Why this setup is low resistance
 
-- Backend is containerized and deployed directly from this repo.
+- Backend is packaged as a Lambda asset directly from this repo.
 - Frontend is static hosting (simple, cheap, robust).
 - DynamoDB stays managed by AWS (no DB container to run).
 - Infra is versioned in code (`infra/cdk`) and reproducible.
@@ -55,7 +55,7 @@ What `deploy.py` does:
 - builds frontend with `REACT_APP_REST_API_ENDPOINT=/api/v1`
 - runs `cdk bootstrap` (optional via config)
 - deploys stack with your context values
-- validates the deployed backend through the stack `AlbApiUrl`/`ApiBaseUrl` health endpoint
+- validates the deployed backend through the stack `ApiBaseUrl`/`ApiGatewayUrl` health endpoint
 - prints stack outputs
 - runs safe `scripts/migrate.py` against AWS DynamoDB (optional via config)
 - automatically rolls back the deployment path on failure when `AUTO_ROLLBACK_ON_FAILURE=true`
@@ -83,19 +83,16 @@ Optional GitHub repository variables:
 - `AWS_REGION` defaults to `ap-southeast-1`
 - `PROJECT_NAME` defaults to `bebe-ims`
 - `TABLE_NAME` defaults to `bebe_ims`
-- `BACKEND_CPU` defaults to `256`
 - `BACKEND_MEMORY_MIB` defaults to `512`
-- `BACKEND_DESIRED_COUNT` defaults to `1`
 - `HEALTHCHECK_TIMEOUT_SECONDS` defaults to `300`
 
 ## Prerequisites
 
 1. AWS account and an IAM user/role with permissions for:
 - CloudFormation
-- ECS/Fargate
-- ECR (for CDK Docker assets)
-- ELB
-- VPC
+- Lambda
+- API Gateway
+- ECR (for CDK asset bundling image access)
 - S3
 - CloudFront
 - DynamoDB
@@ -132,12 +129,12 @@ npx cdk deploy
 3. Read stack outputs:
 - `FrontendUrl`
 - `ApiBaseUrl`
-- `AlbApiUrl`
+- `ApiGatewayUrl`
 - `DynamoTableName`
 
 ## Audit and rollback
 
-Before or after an attempted deployment, inspect the live AWS stack/ECS state:
+Before or after an attempted deployment, inspect the live AWS stack state:
 
 ```bash
 make deploy-audit
@@ -152,8 +149,7 @@ make deploy-rollback
 Rollback behavior:
 - cancels in-progress CloudFormation updates when possible
 - deletes failed/in-progress first-time stack creates
-- restores the previous ECS task definition when `deploy.py` captured one before an update
-- otherwise scales the ECS service to `0` and stops running tasks
+- keeps legacy ECS rollback support only for old stacks that still contain ECS resources
 
 The normal deploy path runs this rollback automatically when `AUTO_ROLLBACK_ON_FAILURE=true`.
 
@@ -253,9 +249,7 @@ npx cdk deploy \
   -c environmentName=prod \
   -c apiPrefix=/api/v1 \
   -c tableName=bebe_ims \
-  -c backendCpu=256 \
-  -c backendMemoryMiB=512 \
-  -c backendDesiredCount=1
+  -c backendMemoryMiB=512
 ```
 
 ## Deployment behavior flags
@@ -271,9 +265,8 @@ Configure these in `infra/cdk/deploy.env`:
 
 ## Cost and operations notes
 
-- Current VPC config uses public subnets and no NAT Gateway (lower cost, simpler).
-- ALB is public.
-- Backend Fargate defaults to `256 CPU / 512 MiB`, the smallest Fargate size, to reduce always-on compute cost.
+- Backend API traffic runs through API Gateway and Lambda, avoiding always-on ECS/ALB compute.
+- Lambda memory defaults to `512 MiB`; increase only if runtime performance needs it.
 - Backend CloudWatch logs are retained for 7 days to avoid unbounded log storage growth.
 - DynamoDB uses on-demand billing and PITR enabled.
 - S3/CloudFront resources are retained on stack delete by default safeguards.
