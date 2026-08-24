@@ -18,6 +18,8 @@ import {
   toInventoryListQuery,
 } from './inventoryListState'
 
+const ENABLE_ADJUSTMENT_REASON_MODALS = false
+
 const Section = styled.section`
   border: 1px solid #d7e0ec;
   border-radius: 4px;
@@ -479,11 +481,26 @@ const InventoryDetailPage = () => {
     }
   }
 
-  const openGlobalLossModal = () => {
+  const openGlobalLossModal = async () => {
     setInlineError('')
     setLossError('')
     const qty = parseInlineQty('global')
     setQtyForSite('global', String(qty))
+    if (!ENABLE_ADJUSTMENT_REASON_MODALS) {
+      if (!detail) return
+      try {
+        await adjustGlobalInventory({
+          product_variant_id: detail.product_variant_id,
+          qty_delta: -Math.abs(qty),
+          notes: 'Quick loss adjustment',
+        })
+        setQtyForSite('global', '1')
+        await load()
+      } catch (err) {
+        setInlineError(err.message || 'Failed to record loss adjustment.')
+      }
+      return
+    }
     setShowLossModal(true)
   }
 
@@ -550,10 +567,28 @@ const InventoryDetailPage = () => {
     }
   }
 
-  const openSiteWriteoffModal = (siteId) => {
+  const openSiteWriteoffModal = async (siteId) => {
     setInlineError('')
     setSiteWriteoffError('')
-    setQtyForSite(siteId, String(parseInlineQty(siteId)))
+    const qty = parseInlineQty(siteId)
+    setQtyForSite(siteId, String(qty))
+    if (!ENABLE_ADJUSTMENT_REASON_MODALS) {
+      if (!detail) return
+      try {
+        await writeoffSiteInventory({
+          product_variant_id: detail.product_variant_id,
+          site_id: siteId,
+          qty,
+          reason: 'Quick site write-off',
+          disposition: 'loss',
+        })
+        setQtyForSite(siteId, '1')
+        await load()
+      } catch (err) {
+        setInlineError(err.message || 'Failed to write off site stock.')
+      }
+      return
+    }
     setSiteWriteoffSiteId(siteId)
     setSiteWriteoffReason('')
     setSiteWriteoffDisposition('loss')

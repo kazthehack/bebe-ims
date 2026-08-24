@@ -1,5 +1,5 @@
 import { resolveApiBase } from '../../api/resolveApiBase'
-import { getAccessToken } from '../../api/authSession'
+import { clearAuthSession, getAccessToken } from '../../api/authSession'
 
 const apiBaseRaw = process.env.REACT_APP_REST_API_ENDPOINT || ''
 const apiBase = resolveApiBase(apiBaseRaw)
@@ -8,6 +8,19 @@ const ensureApiBase = () => {
   if (!apiBase) {
     throw new Error('Missing REACT_APP_REST_API_ENDPOINT in app environment.')
   }
+}
+
+const handleAuthFailure = (response, body) => {
+  if (response.status !== 401) return false
+  const text = String(body || '')
+  if (!text.includes('Token not found') && !text.includes('Token is inactive') && !text.includes('Token is expired')) {
+    return false
+  }
+  clearAuthSession()
+  if (typeof window !== 'undefined' && window.location && window.location.pathname !== '/login') {
+    window.location.assign('/login')
+  }
+  return true
 }
 
 export const requestJson = async (path, options = {}) => {
@@ -24,6 +37,9 @@ export const requestJson = async (path, options = {}) => {
 
   if (!response.ok) {
     const body = await response.text()
+    if (handleAuthFailure(response, body)) {
+      throw new Error('Session expired. Please log in again.')
+    }
     throw new Error(`HTTP ${response.status}: ${body}`)
   }
 
@@ -42,6 +58,9 @@ export const requestBlob = async (path, options = {}) => {
   })
   if (!response.ok) {
     const body = await response.text()
+    if (handleAuthFailure(response, body)) {
+      throw new Error('Session expired. Please log in again.')
+    }
     throw new Error(`HTTP ${response.status}: ${body}`)
   }
   const blob = await response.blob()
@@ -69,6 +88,9 @@ export const postForm = async (path, formData) => {
 
   if (!response.ok) {
     const body = await response.text()
+    if (handleAuthFailure(response, body)) {
+      throw new Error('Session expired. Please log in again.')
+    }
     throw new Error(`HTTP ${response.status}: ${body}`)
   }
 

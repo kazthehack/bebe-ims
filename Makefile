@@ -1,7 +1,7 @@
 SHELL := /bin/zsh
 .DEFAULT_GOAL := build
 
-.PHONY: help install build clean migrate prod migrate-prod migrate-init port-inventory-cloud reset snapshot restore-snapshot run up run-local dev run-backend run-app run-dynamodb-local deploy deploy-cdk deploy-audit deploy-rollback deploy-version-rollback deploy-backend deploy-app deploy-docker lint fmt test
+.PHONY: help install build clean migrate prod migrate-prod migrate-init port-inventory-cloud reset snapshot checkpoint restore-snapshot run up run-local dev run-backend run-app run-dynamodb-local deploy deploy-cdk deploy-audit deploy-rollback deploy-version-rollback deploy-backend deploy-app deploy-docker lint fmt test
 
 DYNAMODB_LOCAL_DIR ?= dynamodb_local_latest
 DYNAMODB_LOCAL_JAR ?= $(DYNAMODB_LOCAL_DIR)/DynamoDBLocal.jar
@@ -20,6 +20,7 @@ help:
 	@echo "  make port-inventory-cloud # dry-run local inventory port to AWS DynamoDB"
 	@echo "  make reset         # zero out inventory quantities"
 	@echo "  make snapshot      # save backend DynamoDB snapshot JSON"
+	@echo "  make checkpoint    # clear inventory numbers, then save migrate-init baseline"
 	@echo "  make restore-snapshot SNAPSHOT_FILE=... # restore a snapshot JSON"
 	@echo "  make run           # run backend + app locally (dev mode, with reload)"
 	@echo "  make up            # run Docker Compose stack"
@@ -76,6 +77,9 @@ reset:
 
 snapshot:
 	$(MAKE) -C backend snapshot
+
+checkpoint:
+	$(MAKE) -C backend checkpoint
 
 restore-snapshot:
 	$(MAKE) -C backend restore-snapshot SNAPSHOT_FILE="$(SNAPSHOT_FILE)"

@@ -17,6 +17,7 @@ from app.db.dynamodb import get_dynamodb_client
 from app.db.repository import ObjectRepository
 from app.domain.object_record import ObjectRecord
 from app.domain.permissions import permissions_for_role
+from scripts.snapshot_db import restore_snapshot
 
 GSI1_NAME = "gsi1"
 DEFAULT_EVENTS = [
@@ -66,6 +67,7 @@ INVENTORY_EXTRA_PRODUCT_LINES = (
 INVENTORY_IMPORT_SOURCES = (
     Path(__file__).resolve().parents[1] / "data" / "inventory_seed.xlsm",
 )
+MIGRATE_INIT_BASELINE = Path(__file__).resolve().parents[1] / "data" / "migrate_init_baseline.json"
 PRODUCT_VARIANT_OVERRIDES: dict[str, tuple[str, ...]] = {
     "matcha whisk": ("Gray", "Black", "Marble"),
     "treasure chest": ("Closed", "Tongue"),
@@ -902,6 +904,14 @@ def seed_inventory_from_workbook() -> None:
     )
 
 
+def restore_migrate_init_baseline() -> bool:
+    if not MIGRATE_INIT_BASELINE.exists():
+        return False
+    restore_snapshot(MIGRATE_INIT_BASELINE)
+    print(f"[migrate] restored migrate-init baseline: {MIGRATE_INIT_BASELINE}")
+    return True
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Run DynamoDB migration and seed tasks.")
     parser.add_argument(
@@ -917,7 +927,8 @@ def main(argv: list[str] | None = None) -> None:
     seed_default_supply_brands()
     seed_default_sites()
     if args.include_inventory_seed:
-        seed_inventory_from_workbook()
+        if not restore_migrate_init_baseline():
+            seed_inventory_from_workbook()
     else:
         print("[migrate] skip inventory import (use --include-inventory-seed to enable)")
     print("[migrate] done")

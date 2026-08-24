@@ -22,6 +22,7 @@ make run
 make up
 make run-backend
 make run-app
+make checkpoint
 make lint
 make fmt
 make test
@@ -33,6 +34,7 @@ make test
 - `make up` is Docker Compose startup.
 - `make run-backend` starts FastAPI.
 - `make run-app` starts the React app.
+- `make checkpoint` clears inventory quantity numbers first, then writes `backend/data/migrate_init_baseline.json` from that cleared DB for the next `make migrate-init`.
 - Run root `make` after implementation changes before handoff.
 
 ## Backend (FastAPI)
@@ -45,6 +47,7 @@ make
 make run
 make up
 make migrate
+make checkpoint
 make test
 make lint
 make fmt
@@ -53,6 +56,7 @@ make fmt
 - `make` inside `backend/` defaults to compiling/building the backend module.
 - `make run` starts the backend locally with reload.
 - `make up` builds/runs the backend Docker container.
+- `make checkpoint` clears inventory quantity numbers first, then snapshots the cleared DB as the migrate-init baseline.
 - Business logic belongs in controllers/domain/services, not view-layer code.
 - Auth/password/hash behavior belongs in auth-focused modules.
 - Permission/RBAC checks belong in permission-focused modules.

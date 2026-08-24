@@ -1,24 +1,21 @@
-## Inventory Seed File
+## Migrate-Init Baseline
 
-Replace `inventory_seed.xlsm` with the latest inventory workbook.
+`migrate_init_baseline.json` is the preferred baseline for `make migrate-init` when present.
 
-Format:
-1. v2 category-tab format:
-- Sheets: `BEBESWEETS`, `BEBENTO`, `BEBEEATS`, `BEBEPLAYS`, `BEBECATS`, `BEBEDOGS`, `BEBEMONS`, `BEBESAURS`
-- Header row contains:
-`SKU`, `Item`, `Color / Variant`, `Display A`, `Display B`, `Display C`, `Back Stock`
+Create or refresh it from the current working DB:
 
 Run:
 ```bash
-cd backend
-make migrate-init
+make checkpoint
 ```
 
 Behavior:
-- Import is overwrite-sync for seeded inventory objects.
-- Previously seeded inventory objects missing from the new workbook are removed.
-- Manually created non-seeded objects are left untouched.
+- clears inventory quantity numbers in the working DB first
+- writes a timestamped baseline under `backend/backups/`
+- writes the active baseline to `backend/data/migrate_init_baseline.json`
+- the saved baseline already has product stock and supply stock quantity fields at zero
 
 Important:
 - `make migrate` does **not** run inventory import.
-- Use `make migrate-init` when you intentionally want workbook sync.
+- `make migrate-init` restores `migrate_init_baseline.json` when present.
+- `inventory_seed.xlsm` is the legacy fallback only when no baseline exists.

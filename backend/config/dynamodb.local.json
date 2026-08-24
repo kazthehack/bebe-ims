@@ -3,7 +3,7 @@
   "InMemory": false,
   "Version": "3.3.0",
   "DbPath": null,
-  "SharedDb": false,
+  "SharedDb": true,
   "shouldDelayTransientStatuses": false,
   "CorsParams": null
 }

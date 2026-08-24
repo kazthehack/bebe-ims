@@ -7,7 +7,7 @@ HOST ?= 0.0.0.0
 
 export PATH := $(CURDIR)/.tools/bin:$(PATH)
 
-.PHONY: help install build migrate prod migrate-prod migrate-init port-inventory-cloud reset snapshot restore-snapshot run up run-dev run-no-reload deploy stop logs clean lint fmt test ensure-slicer-cli
+.PHONY: help install build migrate prod migrate-prod migrate-init port-inventory-cloud reset snapshot checkpoint restore-snapshot run up run-dev run-no-reload deploy stop logs clean lint fmt test ensure-slicer-cli
 
 help:
 	@echo "Targets:"
@@ -20,6 +20,7 @@ help:
 	@echo "  make port-inventory-cloud # dry-run local inventory port to AWS DynamoDB"
 	@echo "  make reset     # zero out product inventory quantities"
 	@echo "  make snapshot  # save DynamoDB snapshot JSON (tenant-admin by default)"
+	@echo "  make checkpoint # clear inventory numbers, then save migrate-init baseline"
 	@echo "  make restore-snapshot SNAPSHOT_FILE=... # restore snapshot JSON into DynamoDB"
 	@echo "  make run       # run backend locally with auto-reload"
 	@echo "  make up        # build and run backend Docker container"
@@ -73,6 +74,10 @@ reset:
 snapshot:
 	test -d .venv || $(MAKE) install
 	. .venv/bin/activate && PYTHONPATH=. python scripts/snapshot_db.py --mode snapshot --tenant-id tenant-admin
+
+checkpoint:
+	test -d .venv || $(MAKE) install
+	. .venv/bin/activate && PYTHONPATH=. python scripts/checkpoint.py --tenant-id tenant-admin
 
 restore-snapshot:
 	test -d .venv || $(MAKE) install

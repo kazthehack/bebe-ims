@@ -228,6 +228,7 @@ const money = (value) => new Intl.NumberFormat('en-PH', {
 
 const alpha = (value) => String(value || '').trim().toLowerCase()
 const DEFAULT_THRESHOLD_PER_SITE = 8
+const ENABLE_ADJUSTMENT_REASON_MODALS = false
 const NO_IP_VALUE = '__no_ip__'
 const FSN_OPTIONS = [
   { value: 'fast', label: 'Fast' },
@@ -281,6 +282,7 @@ const ProductDetailPage = () => {
     loading,
     error,
     createVariant,
+    deleteProductVariants,
     deleteProduct,
     updateProduct,
     adjustVariantGlobalStock,
@@ -301,6 +303,8 @@ const ProductDetailPage = () => {
   const [showAddVariantModal, setShowAddVariantModal] = useState(false)
   const [variantName, setVariantName] = useState('')
   const [variantFormError, setVariantFormError] = useState('')
+  const [showDeleteVariantsConfirm, setShowDeleteVariantsConfirm] = useState(false)
+  const [deleteVariantsError, setDeleteVariantsError] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [quickQtyByVariant, setQuickQtyByVariant] = useState({})
@@ -466,9 +470,26 @@ const ProductDetailPage = () => {
     }
   }
 
-  const openQuickLossModal = (variantId) => {
+  const openQuickLossModal = async (variantId) => {
     const qty = resolveQuickQty(variantId)
     setQuickQtyByVariant((prev) => ({ ...prev, [variantId]: String(qty) }))
+    if (!ENABLE_ADJUSTMENT_REASON_MODALS) {
+      try {
+        setQuickInventoryError('')
+        setQuickBusyByVariant((prev) => ({ ...prev, [variantId]: true }))
+        await adjustVariantGlobalStock({
+          variantId,
+          qtyDelta: -qty,
+          notes: 'Quick loss adjustment',
+        })
+        setQuickQtyByVariant((prev) => ({ ...prev, [variantId]: '1' }))
+      } catch (err) {
+        setQuickInventoryError(err.message || 'Failed to record loss adjustment.')
+      } finally {
+        setQuickBusyByVariant((prev) => ({ ...prev, [variantId]: false }))
+      }
+      return
+    }
     setQuickLossVariantId(variantId)
     setQuickLossReason('')
     setQuickLossError('')
@@ -589,6 +610,16 @@ const ProductDetailPage = () => {
       setShowAddVariantModal(false)
     } catch (err) {
       setVariantFormError(err.message || 'Failed to create variant.')
+    }
+  }
+
+  const handleDeleteProductVariants = async () => {
+    setDeleteVariantsError('')
+    try {
+      await deleteProductVariants()
+    } catch (err) {
+      setDeleteVariantsError(err.message || 'Failed to delete variants.')
+      throw err
     }
   }
 
@@ -803,13 +834,25 @@ const ProductDetailPage = () => {
           <RelatedObjectsTableSection
             title="Variants"
             actions={(
-              <PrimaryButton type="button" onClick={() => {
-                setVariantFormError('')
-                setShowAddVariantModal(true)
-              }}
-              >
-                Add Variant
-              </PrimaryButton>
+              <PageActions style={{ marginBottom: 0 }}>
+                <SecondaryButton
+                  type="button"
+                  disabled={variants.length === 0}
+                  onClick={() => {
+                    setDeleteVariantsError('')
+                    setShowDeleteVariantsConfirm(true)
+                  }}
+                >
+                  Delete Variants
+                </SecondaryButton>
+                <PrimaryButton type="button" onClick={() => {
+                  setVariantFormError('')
+                  setShowAddVariantModal(true)
+                }}
+                >
+                  Add Variant
+                </PrimaryButton>
+              </PageActions>
             )}
             columns={[
               { key: 'sku', label: 'Variant SKU', width: '1.2fr' },
@@ -821,6 +864,7 @@ const ProductDetailPage = () => {
             loadingText={loading ? 'Loading variants...' : ''}
             emptyText={error ? error : 'No variants yet.'}
           />
+          {deleteVariantsError && <ErrorText>{deleteVariantsError}</ErrorText>}
 
           <RelatedObjectsTableSection
             title="Quick Inventory"
@@ -896,6 +940,21 @@ const ProductDetailPage = () => {
             </ModalField>
             {quickLossError && <ErrorText>{quickLossError}</ErrorText>}
           </FormModal>
+
+          <ConfirmActionModal
+            open={showDeleteVariantsConfirm}
+            title="Delete Variants"
+            description={`You are deleting extra variant definitions for: ${product.name || product.product_code || product.id}`}
+            helperText="The first variant will be retained, renamed to the product name, and receive stock from deleted variants. Recipe parts for deleted variants will be removed."
+            helperVariant="danger"
+            requiredText={product.product_code || product.id}
+            requiredTextLabel="Type product code to confirm"
+            inputPlaceholder="Enter product code"
+            confirmLabel="Delete Variants"
+            cancelLabel="Cancel"
+            onClose={() => setShowDeleteVariantsConfirm(false)}
+            onConfirm={handleDeleteProductVariants}
+          />
 
           <ConfirmActionModal
             open={showDeleteConfirm}

@@ -629,6 +629,88 @@ def delete_product_variant(id: str, tenant_id: str = Query('tenant-admin')) -> d
     return {'deleted': variant_controller.delete(id, tenant_id)}
 
 
+@router.delete('/{id}/variants', dependencies=[Depends(require_permission("products:delete"))])
+def delete_product_variants(id: str, tenant_id: str = Query('tenant-admin')) -> dict[str, int | bool]:
+    product = map_record(product_controller.get(id, tenant_id), ProductDocument)
+    variant_records = [
+        map_record(record, ProductVariantDocument)
+        for record in variant_controller.list(tenant_id)
+        if str(record.get('payload', {}).get('product_id') or '') == str(id)
+    ]
+    variant_records.sort(key=lambda item: (str(item.created_at), item.payload.sku.casefold(), item.object_id.casefold()))
+    retained_variant = variant_records[0] if variant_records else None
+    delete_variant_records = variant_records[1:] if retained_variant else []
+    delete_variant_ids = {record.object_id for record in delete_variant_records}
+    if not delete_variant_ids:
+        return {
+            'deleted': True,
+            'variants_deleted': 0,
+            'recipe_parts_deleted': 0,
+            'stock_records_moved': 0,
+            'variants_retained': len(variant_records),
+        }
+
+    stock_records = [map_record(record, ProductStockDocument) for record in product_stock_controller.list(tenant_id)]
+    retained_stock_by_site = {
+        stock.payload.site_id: stock
+        for stock in stock_records
+        if stock.payload.product_variant_id == retained_variant.object_id
+    }
+    moved_stock_records = 0
+    for source_stock in stock_records:
+        if source_stock.payload.product_variant_id not in delete_variant_ids:
+            continue
+        site_id = source_stock.payload.site_id
+        target_stock = retained_stock_by_site.get(site_id)
+        source_payload = source_stock.payload.model_dump(exclude_none=True)
+        if target_stock:
+            target_payload = target_stock.payload.model_dump(exclude_none=True)
+            target_payload['qty_on_hand'] = float(target_payload.get('qty_on_hand') or 0) + float(source_payload.get('qty_on_hand') or 0)
+            target_payload['qty_reserved'] = float(target_payload.get('qty_reserved') or 0) + float(source_payload.get('qty_reserved') or 0)
+            target_payload['low_stock_threshold'] = max(
+                float(target_payload.get('low_stock_threshold') or 0),
+                float(source_payload.get('low_stock_threshold') or 0),
+            )
+            retained_stock_by_site[site_id] = map_record(
+                product_stock_controller.update(target_stock.object_id, tenant_id, target_payload),
+                ProductStockDocument,
+            )
+            product_stock_controller.delete(source_stock.object_id, tenant_id)
+        else:
+            source_payload['product_variant_id'] = retained_variant.object_id
+            retained_stock_by_site[site_id] = map_record(
+                product_stock_controller.update(source_stock.object_id, tenant_id, source_payload),
+                ProductStockDocument,
+            )
+        moved_stock_records += 1
+
+    recipe_parts_deleted = 0
+    recipe_records = [map_record(record, ProductRecipePartDocument) for record in recipe_part_controller.list(tenant_id)]
+    for recipe in recipe_records:
+        if recipe.payload.variant_id in delete_variant_ids:
+            if recipe_part_controller.delete(recipe.object_id, tenant_id):
+                recipe_parts_deleted += 1
+
+    variants_deleted = 0
+    for variant in delete_variant_records:
+        if variant_controller.delete(variant.object_id, tenant_id):
+            variants_deleted += 1
+
+    retained_payload = retained_variant.payload.model_dump(exclude_none=True)
+    retained_payload['name'] = product.payload.name
+    retained_payload['sku'] = retained_variant.payload.sku
+    retained_payload['qr_code'] = retained_variant.payload.qr_code
+    variant_controller.update(retained_variant.object_id, tenant_id, retained_payload)
+
+    return {
+        'deleted': variants_deleted == len(delete_variant_records),
+        'variants_deleted': variants_deleted,
+        'recipe_parts_deleted': recipe_parts_deleted,
+        'stock_records_moved': moved_stock_records,
+        'variants_retained': 1,
+    }
+
+
 @router.get('/variants/{id}/recipe-parts', response_model=ProductRecipePartListResponse)
 def list_variant_recipe_parts(id: str, tenant_id: str = Query('tenant-admin')) -> ProductRecipePartListResponse:
     variant = map_record(variant_controller.get(id, tenant_id), ProductVariantDocument)

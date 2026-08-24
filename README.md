@@ -21,6 +21,7 @@ make run
 make up
 make run-backend
 make run-app
+make checkpoint
 make lint
 make fmt
 make test
@@ -32,6 +33,7 @@ make test
 - `make up` is reserved for Docker Compose startup.
 - `make run-backend` starts FastAPI on port `8001`.
 - `make run-app` serves the React app on port `2306`.
+- `make checkpoint` clears inventory quantity numbers first, then snapshots that cleared DB as the migrate-init baseline.
 
 Module-local commands:
 
@@ -40,6 +42,7 @@ cd backend
 make
 make run
 make migrate
+make checkpoint
 make test
 
 cd ../app

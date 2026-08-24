@@ -1,5 +1,5 @@
 import { resolveApiBase } from './resolveApiBase'
-import { getAccessToken } from './authSession'
+import { clearAuthSession, getAccessToken } from './authSession'
 
 const API_BASE = resolveApiBase(process.env.REACT_APP_REST_API_ENDPOINT || '')
 
@@ -18,6 +18,16 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const text = await response.text()
+    if (
+      response.status === 401
+      && (text.includes('Token not found') || text.includes('Token is inactive') || text.includes('Token is expired'))
+    ) {
+      clearAuthSession()
+      if (typeof window !== 'undefined' && window.location && window.location.pathname !== '/login') {
+        window.location.assign('/login')
+      }
+      throw new Error('Session expired. Please log in again.')
+    }
     throw new Error(`REST request failed (${response.status}): ${text}`)
   }
 

@@ -409,6 +409,12 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
     return created
   }, [tenantId, productId, load])
 
+  const deleteProductVariants = useCallback(async () => {
+    const result = await deleteJson(`/products/${encodeURIComponent(productId)}/variants?${tenantQuery(tenantId)}`)
+    await load(false)
+    return result
+  }, [tenantId, productId, load])
+
   const deleteProduct = useCallback(async () => {
     const result = await deleteJson(`/products/${encodeURIComponent(productId)}?${tenantQuery(tenantId)}`)
     return result
@@ -480,6 +486,7 @@ export const useProductDetail = (productId, tenantId = 'tenant-admin') => {
     error,
     apiBase,
     createVariant,
+    deleteProductVariants,
     deleteProduct,
     updateProduct,
     adjustVariantGlobalStock,
