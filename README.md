@@ -17,6 +17,8 @@ Run from the repository root unless noted otherwise.
 make install
 make build
 make dev
+make run
+make up
 make run-backend
 make run-app
 make lint
@@ -26,6 +28,8 @@ make test
 
 - `make` at the root defaults to `make build` and builds backend + app.
 - `make dev` starts backend and app together for local development.
+- `make run` is the local instance shortcut and currently aliases `make dev`.
+- `make up` is reserved for Docker Compose startup.
 - `make run-backend` starts FastAPI on port `8001`.
 - `make run-app` serves the React app on port `2306`.
 
@@ -45,13 +49,33 @@ make run-dev
 
 cd ../pos
 make
+make run
 ```
 
 - `make` inside `backend/` defaults to the backend module build.
 - `make` inside `app/` defaults to the React production build.
 - `make` inside `pos/` defaults to the Android debug APK build, but requires Gradle and Android SDK tooling.
+- `make run` means a local instance/runtime for each module.
+- `make up` is used only for Docker/container startup where applicable.
 
 `DEVELOPMENT.md` includes additional setup, run, lint, and formatter commands.
+
+## Workflow Context
+
+- `AGENTS.md` is the source-of-truth operating guide for future implementation agents.
+- `DEVELOPMENT.md` is the local build/run workflow.
+- `DEPLOY.md` is the AWS/CDK deployment workflow.
+- `pos/README.md` and `pos/TEST_PLAN.md` cover the Android hybrid shell and physical device validation.
+
+Core do/don't summary:
+
+- Do preserve legacy behavior and existing visible controls unless removal is explicitly requested.
+- Do keep API base configuration in environment settings.
+- Do use local POS catalog cache for menu/scan lookup.
+- Do keep inventory counts, checkout, and stock decrement backend-authoritative.
+- Do not create a sale or decrement inventory from a QR scan.
+- Do not put business rules in the Android wrapper.
+- Do not claim APK/device validation without Android Studio/SDK and the physical Soonpos device.
 
 ## Discovery Outputs
 - `docs/discovery/legacy-inventory.md`
@@ -134,6 +158,15 @@ Current native bridge capabilities:
 - binds the Soonpos printer AIDL service
 - forwards hardware scanner broadcasts into Web POS
 - skips hardware calls when Web POS runs in a normal browser
+
+POS runtime cache:
+
+- POS-user login preloads product, variant, and product-line listings into WebView/local browser storage.
+- Web POS hydrates the menu from cache first to reduce startup latency and backend round trips.
+- `REFRESH MENU` refreshes cached listings and the current site stock snapshot without clearing the in-progress cart.
+- QR scan resolves from local cache first and uses backend lookup only as fallback.
+- QR scan adds to the current in-progress cart only.
+- Inventory counts, checkout, and stock deduction remain backend-authoritative.
 
 Build and device validation:
 

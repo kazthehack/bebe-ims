@@ -1,7 +1,7 @@
 SHELL := /bin/zsh
 .DEFAULT_GOAL := build
 
-.PHONY: help install build clean migrate prod migrate-prod migrate-init port-inventory-cloud reset snapshot restore-snapshot run run-local dev run-backend run-app run-dynamodb-local deploy deploy-cdk deploy-audit deploy-rollback deploy-version-rollback deploy-backend deploy-app deploy-docker lint fmt test
+.PHONY: help install build clean migrate prod migrate-prod migrate-init port-inventory-cloud reset snapshot restore-snapshot run up run-local dev run-backend run-app run-dynamodb-local deploy deploy-cdk deploy-audit deploy-rollback deploy-version-rollback deploy-backend deploy-app deploy-docker lint fmt test
 
 DYNAMODB_LOCAL_DIR ?= dynamodb_local_latest
 DYNAMODB_LOCAL_JAR ?= $(DYNAMODB_LOCAL_DIR)/DynamoDBLocal.jar
@@ -21,7 +21,8 @@ help:
 	@echo "  make reset         # zero out inventory quantities"
 	@echo "  make snapshot      # save backend DynamoDB snapshot JSON"
 	@echo "  make restore-snapshot SNAPSHOT_FILE=... # restore a snapshot JSON"
-	@echo "  make run           # run backend + app locally (separate terminals recommended)"
+	@echo "  make run           # run backend + app locally (dev mode, with reload)"
+	@echo "  make up            # run Docker Compose stack"
 	@echo "  make run-local     # run backend + app bound to 127.0.0.1 only"
 	@echo "  make dev           # run backend + app together (dev mode, with reload)"
 	@echo "  make run-backend   # run backend locally"
@@ -44,7 +45,6 @@ install:
 	$(MAKE) -C app install
 
 build:
-	$(MAKE) install
 	$(MAKE) -C backend build
 	$(MAKE) -C app build
 
@@ -80,10 +80,10 @@ snapshot:
 restore-snapshot:
 	$(MAKE) -C backend restore-snapshot SNAPSHOT_FILE="$(SNAPSHOT_FILE)"
 
-run:
-	@echo "Use two terminals for dev services:"
-	@echo "  Terminal 1: make run-backend"
-	@echo "  Terminal 2: make run-app"
+run: dev
+
+up:
+	docker compose up --build
 
 run-local:
 	@echo "Starting backend + app in local-only mode (127.0.0.1)..."

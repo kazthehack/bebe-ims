@@ -19,6 +19,23 @@ Native responsibilities:
 
 The Web POS remains the source of truth for auth, cart, checkout, receipt creation, inventory rules, and RBAC.
 
+## POS Runtime Cache
+
+The Web POS uses WebView/local browser storage as the POS catalog cache. On POS-user login, the app preloads product, product variant, and product-line listings into that cache. The Web POS hydrates its menu from the cached catalog first, then refreshes the cache when needed.
+
+Cached data is used for display and scan lookup only:
+
+- product names
+- product variants
+- SKUs
+- QR codes
+- product lines/categories
+- prices/display metadata
+
+Inventory counts, receipt creation, and stock deduction remain backend-authoritative. Scanning a QR adds an item to the in-progress cart only; the sale is created at checkout.
+
+Use `REFRESH MENU` in Web POS to refresh the cached catalog and the current site stock snapshot without clearing the cart.
+
 ## Build
 
 From `pos/`:

@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useHistory } from 'react-router-dom'
 import styled from 'styled-components'
 import Icon from 'components/common/display/Icon'
-import { useProductsList } from 'hooks/products/useProductsApi'
 import { useEventsResource, useInventoryResource, useReceiptsResource, useSessionsResource, useSitesResource } from 'hooks/bazaar/useBazaarApi'
 import logo from 'assets/logo-dashboard-cropped.png'
 import {
@@ -12,6 +11,7 @@ import {
   printReceipt,
   subscribeHardwareStatus,
 } from './hardware/hardwareBridge'
+import { usePosCatalogCache } from './cache/usePosCatalogCache'
 
 const PosViewport = styled.div`
   width: 100%;
@@ -148,6 +148,15 @@ const NoticeText = styled.div`
   margin-top: 6px;
 `
 
+const MenuRefreshStatus = styled.div`
+  color: ${({ $error }) => ($error ? '#ff8f8f' : '#4f6479')};
+  font-size: 12px;
+  padding: 8px 10px;
+  border-left: 1px solid #cfdbeb;
+  border-right: 1px solid #cfdbeb;
+  background: #ffffff;
+`
+
 const SplitRow = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -184,6 +193,11 @@ const ScanTabButton = styled(TabButton)`
   display: inline-flex;
   align-items: center;
   gap: 6px;
+`
+
+const RefreshTabButton = styled(ScanTabButton)`
+  color: ${({ disabled }) => (disabled ? '#8a9caf' : '#607890')};
+  cursor: ${({ disabled }) => (disabled ? 'not-allowed' : 'pointer')};
 `
 
 const Pane = styled.div`
@@ -578,6 +592,23 @@ const money = (value) => new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 2,
 }).format(Number(value || 0))
 
+const qrLookupCandidates = (qrCode) => {
+  const raw = String(qrCode || '').trim()
+  if (!raw) return []
+  const values = [raw]
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object') {
+      ;['product_variant_id', 'variant_id', 'sku', 'qr_code', 'inventory_item_id'].forEach((key) => {
+        if (parsed[key]) values.push(String(parsed[key]).trim())
+      })
+    }
+  } catch (_error) {
+    // Plain SKU/QR strings are expected.
+  }
+  return [...new Set(values.filter(Boolean))]
+}
+
 const WebPosPage = () => {
   const history = useHistory()
   const [activeSessionId, setActiveSessionId] = useState('')
@@ -596,6 +627,9 @@ const WebPosPage = () => {
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [checkoutError, setCheckoutError] = useState('')
   const [checkoutNotice, setCheckoutNotice] = useState('')
+  const [menuRefreshBusy, setMenuRefreshBusy] = useState(false)
+  const [menuRefreshMessage, setMenuRefreshMessage] = useState('')
+  const [menuRefreshError, setMenuRefreshError] = useState('')
   const [hardwareStatus, setHardwareStatus] = useState({
     platform: 'web',
     printer: { connected: false, status: 'hardware_unavailable' },
@@ -622,7 +656,7 @@ const WebPosPage = () => {
   const events = useEventsResource()
   const sites = useSitesResource()
   const inventory = useInventoryResource()
-  const products = useProductsList()
+  const products = usePosCatalogCache()
   const [siteStockByVariant, setSiteStockByVariant] = useState({})
 
   useEffect(() => {
@@ -667,6 +701,21 @@ const WebPosPage = () => {
       event_id: eventId || null,
     }
   }, [activeSession, activeSessionId, siteId, eventId])
+
+  const loadSiteStockSnapshot = useCallback(async (selectedSiteId) => {
+    const safeSiteId = String(selectedSiteId || '').trim()
+    if (!safeSiteId) {
+      setSiteStockByVariant({})
+      return {}
+    }
+    const data = await inventory.loadSite(safeSiteId)
+    const nextMap = (data.items || []).reduce((acc, item) => {
+      acc[item.product_variant_id] = Number(item.qty_available || 0)
+      return acc
+    }, {})
+    setSiteStockByVariant(nextMap)
+    return nextMap
+  }, [inventory.loadSite])
 
   useEffect(() => {
     const selectedSiteId = String((activeSessionContext && activeSessionContext.site_id) || siteId || '').trim()
@@ -832,6 +881,14 @@ const WebPosPage = () => {
   }
 
   const resolveVariantByQr = async (qrCode) => {
+    const candidates = qrLookupCandidates(qrCode)
+    const localMatch = variantCatalog.find((item) => (
+      candidates.includes(String(item.qr_code || '').trim())
+      || candidates.includes(String(item.sku || '').trim())
+      || candidates.includes(String(item.id || '').trim())
+    ))
+    if (localMatch) return localMatch
+
     const resolved = await receipts.resolveVariantByQr(qrCode)
     const catalogVariant = variantCatalog.find((item) => item.id === resolved.id)
     if (catalogVariant) return catalogVariant
@@ -1015,6 +1072,25 @@ const WebPosPage = () => {
   const showHardwareStatus = hasAndroidHardwareBridge()
   const printerConnected = !!(((hardwareStatus || {}).printer || {}).connected)
 
+  const refreshMenu = async () => {
+    if (menuRefreshBusy) return
+    setMenuRefreshBusy(true)
+    setMenuRefreshMessage('')
+    setMenuRefreshError('')
+    try {
+      const selectedSiteId = String((activeSessionContext && activeSessionContext.site_id) || siteId || '').trim()
+      await products.reload()
+      if (selectedSiteId) {
+        await loadSiteStockSnapshot(selectedSiteId)
+      }
+      setMenuRefreshMessage('Menu refreshed.')
+    } catch (err) {
+      setMenuRefreshError(err.message || 'Failed to refresh menu.')
+    } finally {
+      setMenuRefreshBusy(false)
+    }
+  }
+
   const postReceipt = async () => {
     if (!activeSessionContext || !activeSessionContext.id || !activeSessionContext.site_id) {
       setCheckoutError('Open a register first.')
@@ -1059,12 +1135,7 @@ const WebPosPage = () => {
       setActivePosTab('menu')
       const selectedSiteId = String((activeSessionContext && activeSessionContext.site_id) || '').trim()
       if (selectedSiteId) {
-        const data = await inventory.loadSite(selectedSiteId)
-        const nextMap = (data.items || []).reduce((acc, item) => {
-          acc[item.product_variant_id] = Number(item.qty_available || 0)
-          return acc
-        }, {})
-        setSiteStockByVariant(nextMap)
+        await loadSiteStockSnapshot(selectedSiteId)
       }
     } catch (err) {
       setCheckoutError(err.message || 'Failed to post receipt.')
@@ -1285,6 +1356,17 @@ const WebPosPage = () => {
               <TabButton type="button" $active={activePosTab === 'menu'} onClick={() => setActivePosTab('menu')}>MENU</TabButton>
               <TabButton type="button" $active={activePosTab === 'cart'} onClick={() => setActivePosTab('cart')}>CART ({cartItems.length})</TabButton>
               <TabSpacer />
+              <RefreshTabButton
+                type="button"
+                $active={false}
+                onClick={refreshMenu}
+                disabled={menuRefreshBusy}
+                title="Refresh Menu"
+                aria-label="Refresh Menu"
+              >
+                <Icon name="sync" />
+                {menuRefreshBusy ? 'REFRESHING' : 'REFRESH MENU'}
+              </RefreshTabButton>
               <ScanTabButton
                 type="button"
                 $active={showScannerModal}
@@ -1296,6 +1378,11 @@ const WebPosPage = () => {
                 SCAN
               </ScanTabButton>
             </ViewTabs>
+            {(menuRefreshMessage || menuRefreshError) && (
+              <MenuRefreshStatus $error={!!menuRefreshError}>
+                {menuRefreshError || menuRefreshMessage}
+              </MenuRefreshStatus>
+            )}
 
             <ContentPane>
               {activePosTab === 'menu' && (

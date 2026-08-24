@@ -3,13 +3,14 @@ SHELL := /bin/zsh
 
 GRADLE ?= $(shell if [ -x ./gradlew ]; then echo ./gradlew; elif command -v gradle >/dev/null 2>&1; then echo gradle; fi)
 
-.PHONY: help build debug clean install check-android-tooling
+.PHONY: help build debug clean install run check-android-tooling
 
 help:
 	@echo "Targets:"
 	@echo "  make         # build debug APK"
 	@echo "  make build   # build debug APK"
 	@echo "  make debug   # build debug APK"
+	@echo "  make run     # install debug APK to connected Android device"
 	@echo "  make install # install debug APK to connected Android device"
 	@echo "  make clean   # clean Android build artifacts"
 
@@ -24,6 +25,8 @@ debug: check-android-tooling
 
 install: check-android-tooling
 	$(GRADLE) installDebug
+
+run: install
 
 clean: check-android-tooling
 	$(GRADLE) clean

@@ -29,6 +29,23 @@ So it is not replacing CloudFormation. It is a higher-level way to generate and 
 - DynamoDB stays managed by AWS (no DB container to run).
 - Infra is versioned in code (`infra/cdk`) and reproducible.
 
+## Fast path: root commands
+
+Prefer the root `make` deployment targets:
+
+```bash
+cp infra/cdk/deploy.env.example infra/cdk/deploy.env
+make
+make deploy
+make deploy-audit
+make deploy-rollback
+```
+
+- `make deploy` deploys through `infra/cdk/deploy.py`.
+- `make deploy-audit` inspects the live AWS stack state.
+- `make deploy-rollback` recovers/cancels failed stack operations when possible.
+- Do not commit `infra/cdk/deploy.env`; it can contain credentials/secrets.
+
 ## Fast path: config + one script
 
 You can now deploy with a single script after filling one config file.
@@ -59,6 +76,21 @@ What `deploy.py` does:
 - prints stack outputs
 - runs safe `scripts/migrate.py` against AWS DynamoDB (optional via config)
 - automatically rolls back the deployment path on failure when `AUTO_ROLLBACK_ON_FAILURE=true`
+
+## Deployment do / don't
+
+Do:
+- Run root `make` before deployment.
+- Use `make deploy-audit` before and after risky stack work.
+- Keep DynamoDB state handling explicit and cautious.
+- Confirm domain/CloudFront/API health after deployment.
+- Treat Android APK packaging as separate from web/cloud deployment.
+
+Don't:
+- Do not run `migrate-init`, `reset`, or production clone commands unless that data operation is explicitly intended.
+- Do not delete or recreate stateful cloud resources casually.
+- Do not assume CloudFront invalidation is instant.
+- Do not ship a POS APK without building it through Android Studio/SDK tooling and testing on the physical Soonpos device.
 
 ## GitHub Actions production deploy
 
@@ -173,6 +205,7 @@ Notes:
 - This uses AWS-managed DynamoDB endpoint.
 - Do not run `migrate-init` unless you explicitly want inventory catalog sync.
 - Do not run `reset` unless you explicitly intend to zero stock quantities.
+- POS catalog cache is client-side display/lookup cache only. It is refreshed from backend data and is not a replacement for backend inventory validation.
 
 ## Clone local DynamoDB to production
 

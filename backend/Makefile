@@ -7,11 +7,11 @@ HOST ?= 0.0.0.0
 
 export PATH := $(CURDIR)/.tools/bin:$(PATH)
 
-.PHONY: help install build migrate prod migrate-prod migrate-init port-inventory-cloud reset snapshot restore-snapshot run run-dev deploy stop logs clean lint fmt test ensure-slicer-cli
+.PHONY: help install build migrate prod migrate-prod migrate-init port-inventory-cloud reset snapshot restore-snapshot run up run-dev run-no-reload deploy stop logs clean lint fmt test ensure-slicer-cli
 
 help:
 	@echo "Targets:"
-	@echo "  make install   # ensure slicer cli + create venv + install deps"
+	@echo "  make install   # ensure slicer cli + venv + deps"
 	@echo "  make ensure-slicer-cli # install/link slicer cli for 3MF parsing"
 	@echo "  make build     # install deps + compile backend modules"
 	@echo "  make migrate   # create table + seed defaults (no inventory overwrite)"
@@ -22,6 +22,7 @@ help:
 	@echo "  make snapshot  # save DynamoDB snapshot JSON (tenant-admin by default)"
 	@echo "  make restore-snapshot SNAPSHOT_FILE=... # restore snapshot JSON into DynamoDB"
 	@echo "  make run       # run backend locally with auto-reload"
+	@echo "  make up        # build and run backend Docker container"
 	@echo "  make run-dev   # run backend locally with auto-reload"
 	@echo "  make deploy    # build and run backend docker container"
 	@echo "  make stop      # stop backend docker container"
@@ -35,7 +36,7 @@ ensure-slicer-cli:
 
 install:
 	$(MAKE) ensure-slicer-cli
-	python3 -m venv --clear .venv
+	test -d .venv || python3 -m venv .venv
 	. .venv/bin/activate && python -m pip install -r requirements-dev.txt
 
 build:
@@ -82,13 +83,13 @@ run:
 	$(MAKE) migrate
 	. .venv/bin/activate && uvicorn app.main:app --reload --host $(HOST) --port $(PORT)
 
+up: deploy
+
+run-dev: run
+
 run-no-reload:
 	$(MAKE) migrate
 	. .venv/bin/activate && uvicorn app.main:app --host $(HOST) --port $(PORT)
-
-run-dev:
-	$(MAKE) migrate
-	. .venv/bin/activate && uvicorn app.main:app --reload --host $(HOST) --port $(PORT)
 
 deploy:
 	docker build -t $(IMAGE) .
@@ -103,12 +104,15 @@ logs:
 	docker logs -f $(CONTAINER)
 
 lint:
+	test -d .venv || $(MAKE) install
 	. .venv/bin/activate && ruff check app
 
 fmt:
+	test -d .venv || $(MAKE) install
 	. .venv/bin/activate && black app && ruff check app --fix
 
 test:
+	test -d .venv || $(MAKE) install
 	. .venv/bin/activate && pytest
 
 clean:

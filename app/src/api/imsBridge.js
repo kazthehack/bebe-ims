@@ -6,6 +6,7 @@ import {
   getCurrentAuthSession,
   persistAuthSession,
 } from './authSession'
+import { preloadPosCatalogCache } from './posCatalogCache'
 
 const DEFAULT_TENANT_ID = process.env.REACT_APP_TENANT_ID || 'tenant-admin'
 const DEFAULT_STORE_ID = process.env.REACT_APP_DEFAULT_STORE_ID || 'store-admin'
@@ -78,6 +79,10 @@ export const authLogin = async (email, password) => {
     persistAuthSession(authSession)
   } catch (err) {
     // ignore storage errors
+  }
+
+  if (authSession.role === 'user' && !authSession.forcePasswordChange) {
+    preloadPosCatalogCache(authSession.tenantId).catch(() => {})
   }
 
   return {

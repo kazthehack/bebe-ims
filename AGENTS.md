@@ -14,7 +14,20 @@ Use this as the source-of-truth workflow for future migration and implementation
 - `legacy/`: reference implementation (ignored by git).
 - `backend/`: FastAPI + DynamoDB integration.
 - `app/`: React frontend.
+- `pos/`: Android hybrid WebView shell for Web POS hardware integration.
 - Root contains shared commands and project-level files.
+
+## Current System Context
+- Auth/RBAC is local and role-based: `admin`, `manager`, and `user`.
+- Users are login identities. Employees are related person/employee records and are not synonymous with users.
+- Passwords are stored as hashes. Password behavior belongs in auth-focused modules.
+- Authorization/permission checks should stay consolidated in permission-focused modules.
+- `user` role lands directly in Web POS mode.
+- Web POS creates sales only at checkout. Scanning a QR adds an item to the current in-progress cart/receipt only.
+- POS catalog/menu data is cached in WebView/local browser storage to reduce round trips.
+- Inventory counts, receipt creation, stock decrement, and final sale validation remain backend-authoritative.
+- The Android shell in `pos/` only provides native device access: WebView, printer bridge, scanner broadcast bridge.
+- Building/installing the Android APK requires Android Studio or equivalent Gradle + Android SDK tooling.
 
 ## Architecture Standards
 
@@ -37,6 +50,15 @@ Use this as the source-of-truth workflow for future migration and implementation
 - API integration should be REST/FastAPI (no GraphQL dependency for new flow unless required).
 - Keep UI behavior stable while improving reliability and maintainability.
 - API base config must come from environment configuration, not hardcoded in view logic.
+- Put reusable data access, caching, and transformation logic in hooks/services/modules, not inline view code.
+
+### Hybrid POS
+- Keep Web POS usable in a normal browser. Android hardware paths must gracefully skip when `window.BebeHardware` is absent.
+- Treat native scanned QR data as input to the current cart only. Do not create a sale or decrement inventory on scan.
+- Resolve QR from local POS catalog cache first when possible; backend lookup is fallback/validation.
+- Use `REFRESH MENU` semantics for catalog cache refresh and current site stock snapshot refresh.
+- Keep volatile inventory quantities separate from cached menu/catalog listings.
+- Do not put business rules in the Android shell. The shell should not decide sale validity, inventory availability, RBAC, or receipt persistence.
 
 ## BAU Workflow (Required)
 1. Discovery
@@ -197,12 +219,41 @@ Use this exact structure for inventory detail pages unless user requests otherwi
 ## Commands
 - Root build check: `make`
 - Root dev runtime: `make dev`
+- Root local runtime: `make run`
+- Root Docker startup: `make up`
 - Backend run: `make run-backend`
 - App run: `make run-app`
+- Backend module build: `cd backend && make`
+- App module build: `cd app && make`
+- POS APK build: `cd pos && make` only when Gradle + Android SDK tooling are installed.
+- Target convention: `make run` means local runtime, `make deploy` means deployment, and `make up` is reserved for Docker/container startup.
 
 ## Environment
 - App API base should be configured via `REACT_APP_REST_API_ENDPOINT` (in app env).
 - Keep local defaults documented in env template files, not hardcoded in UI components.
+- CDK deployment config belongs in `infra/cdk/deploy.env`; do not commit secrets.
+- Hybrid POS WebView target is configured in `pos/app/build.gradle` using `WEB_POS_URL` and `ALLOWED_WEB_POS_HOSTS`.
+
+## Practical Do / Don't
+
+### Do
+- Read the touched module before editing.
+- Keep changes bounded to the user's latest request.
+- Preserve all existing visible controls and workflows unless removal is explicitly requested.
+- Use existing templates and page patterns before inventing new UI structures.
+- Keep scan/add-to-cart fast and local-cache-friendly, but keep checkout backend-authoritative.
+- Use `apply_patch` for manual file edits.
+- Run root `make` after changes and report any unverified runtime/device pieces.
+
+### Don't
+- Do not silently remove legacy capability.
+- Do not create direct sales from QR scans.
+- Do not decrement inventory before checkout.
+- Do not hardcode app API endpoints in view components.
+- Do not move permission checks away from permission-focused modules.
+- Do not move password/hash logic away from auth-focused modules.
+- Do not make Android shell code responsible for business logic.
+- Do not claim Android APK validation is complete without Android Studio/SDK and the physical Soonpos device.
 
 ## Non-Negotiables
 - No silent scope reduction of legacy capability.
