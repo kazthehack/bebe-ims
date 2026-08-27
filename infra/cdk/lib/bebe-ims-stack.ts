@@ -107,6 +107,9 @@ export class BebeImsStack extends cdk.Stack {
                 fs.cpSync(path.join(backendDir, "app"), path.join(outputDir, "app"), {
                   recursive: true,
                 });
+                fs.cpSync(path.join(backendDir, "data"), path.join(outputDir, "data"), {
+                  recursive: true,
+                });
                 fs.writeFileSync(
                   path.join(outputDir, "lambda_handler.py"),
                   'from mangum import Mangum\nfrom app.main import app\nhandler = Mangum(app, lifespan="off")\n',
@@ -124,6 +127,7 @@ export class BebeImsStack extends cdk.Stack {
             [
               "pip install --no-cache-dir -r requirements.txt mangum -t /asset-output",
               "cp -R app /asset-output/app",
+              "cp -R data /asset-output/data",
               "printf 'from mangum import Mangum\\nfrom app.main import app\\nhandler = Mangum(app, lifespan=\"off\")\\n' > /asset-output/lambda_handler.py",
             ].join(" && "),
           ],
@@ -146,6 +150,11 @@ export class BebeImsStack extends cdk.Stack {
       restApiName: `${projectName}-${environmentName}-api`,
       handler: backendFunction,
       proxy: true,
+      binaryMediaTypes: [
+        "application/vnd.ms-excel.sheet.macroEnabled.12",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/octet-stream",
+      ],
       deployOptions: {
         stageName: environmentName,
         metricsEnabled: true,

@@ -517,7 +517,17 @@ export const useInventoryResource = (tenantId = 'tenant-admin', options = {}) =>
   }
 
   const exportInventoryWorkbook = async () => {
-    const { blob, headers } = await getBlob(`/stock/inventory/export?${tenantQuery(tenantId)}`)
+    const { blob, headers } = await getBlob(`/stock/inventory/export?${tenantQuery(tenantId)}`, {
+      headers: {
+        Accept: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+      },
+    })
+    const contentType = String(blob.type || headers.get('content-type') || '').toLowerCase()
+    const header = await blob.slice(0, 4).arrayBuffer()
+    const signature = Array.from(new Uint8Array(header)).map((byte) => String.fromCharCode(byte)).join('')
+    if (contentType.includes('text/html') || signature !== 'PK\u0003\u0004') {
+      throw new Error('Inventory export returned a web page instead of an XLSM workbook. Please verify the production API deployment.')
+    }
     const contentDisposition = headers.get('content-disposition') || ''
     const match = contentDisposition.match(/filename="?([^";]+)"?/i)
     const fileName = (match && match[1]) || `bebe_inventory_export_${Date.now()}.xlsm`
